@@ -1,0 +1,19 @@
+{
+    "test_case": {
+        "cmd": [
+            "${project_root}/${app}/bin/main2d.lite",
+            "${project_root}/${app}/input/linadv-2d.input"
+        ],
+        "envs": {
+            "JASMIN_NUM_DSM_THREADS": 1,
+            "JASMIN_NUM_SMP_THREADS": 1
+        },
+        "run": {
+            "nnodes": 1,
+            "procs_per_node": 12,
+            "nprocs": 12,
+            "tasks_per_proc": 1
+        },
+        "results": ["LinAdvSL-linadv_2d.log"]
+    }
+}

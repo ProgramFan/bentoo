@@ -1,0 +1,18 @@
+{
+    "test_matrix": {
+        "dimensions": {
+            "names": ["intra_node"],
+            "values": {
+                "intra_node": ["12x1x1", "1x2x6"]
+            }
+        },
+        "test_case_generator": "custom",
+        "custom_generator": {
+            "import": ["make_case"],
+            "func": "make_case",
+            "args": {
+                "case_name": "lite"
+            }
+        }
+    }
+}
