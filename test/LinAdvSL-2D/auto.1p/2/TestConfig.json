@@ -8,7 +8,7 @@
         },
         "test_case_generator": "custom",
         "custom_generator": {
-            "import": ["make_case"],
+            "import": "make_case.py",
             "func": "make_case",
             "args": {
                 "case_name": "lite"

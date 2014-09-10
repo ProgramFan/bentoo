@@ -1,27 +1,27 @@
 {
-    "test_matrix": {
-        "dimensions": {
-            "names": ["intra_node"],
-            "values": {
-                "intra_node": ["12x1x1", "1x2x6"]
-            }
-        },
-        "test_case_generator": "template",
-        "template": {
-            "cmd": [
-                "${project_root}/${app}/bin/main2d",
-                "${project_root}/${app}/input/linadv-2d.input.${intra_node}"
-            ],
-            "envs": {
-                "GLEX_USE_ZC_RNDV": "0"
-            },
-            "run": {
-                "nnodes": "${nnodes}",
-                "procs_per_node": 1,
-                "cores_per_proc": 12,
-                "nprocs": "${nnodes}"
-            }
-            "results": ["LinAdvSL-linadv_2d.log.${intra_node}"]
-        }
+  "test_matrix": {
+    "dimensions": {
+      "names": ["intra_node"],
+      "values": {
+        "intra_node": ["12x1x1", "1x2x6"]
+      }
+    },
+    "test_case_generator": "template",
+    "template": {
+      "cmd": [
+        "${project_root}/${app}/bin/main2d",
+        "${project_root}/${app}/input/linadv-2d.input.${intra_node}"
+      ],
+      "envs": {
+        "GLEX_USE_ZC_RNDV": "0"
+      },
+      "run": {
+        "nnodes": "${nnodes}",
+        "procs_per_node": 1,
+        "cores_per_proc": 12,
+        "nprocs": "${nnodes}"
+      },
+      "results": ["LinAdvSL-linadv_2d.log.${intra_node}"]
     }
+  }
 }
