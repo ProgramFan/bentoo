@@ -11,6 +11,8 @@ easy.
 import os
 import sys
 import argparse
+import re
+import fnmatch
 import json
 import itertools
 import string
@@ -66,6 +68,8 @@ def substitute_nested_template(template, subs):
     elif isinstance(template, str) or isinstance(template, unicode):
         t = string.Template(template)
         result = t.safe_substitute(subs)
+        if re.match(r"^[\d\s+\-*/()]+$", result):
+            result = eval(result)
     else:
         result = template
     return result
@@ -166,7 +170,61 @@ def parse_project_config(project_dir):
     project_info = cfg["project"]
     dims = project_info["dimensions"]
     vpath = OrderedDict()
-    return recursively_parse_config(project_dir, dims, vpath, project_dir)
+    cases = recursively_parse_config(project_dir, dims, vpath, project_dir)
+    return {"dim_names": dims, "cases": cases}
+
+def parse_filter_spec(spec):
+    assert isinstance(spec, str) or isinstance(spec, unicode)
+    segs = spec.split("/")
+    def parse_seg(seg):
+        # Supported grammar: {ID1, ID2, ID3, ...} or ID, where ID can be any
+        # unix wildcards as specified in fnmatch module
+        ptn = re.compile("\{(.*?)\}")
+        m = ptn.match(seg)
+        if m:
+            s = [s.strip() for s in m.group(1).split(",")]
+        else:
+            s = [seg]
+        return s
+    return [parse_seg(seg) for seg in segs]
+
+def vpath_match(vpath, spec):
+    def match_in_ptn(dim_value, ptn):
+        for p in ptn:
+            if fnmatch.fnmatch(dim_value, p):
+                return True
+        return False
+    for i, seg in enumerate(vpath.values()):
+        if not match_in_ptn(seg, spec[i]):
+            return False
+    return True
+
+def flattern_cases(cases, dim_names, vpath, result):
+    if len(vpath) == len(dim_names):
+        case = {"vpath": vpath, "spec": cases}
+        result.append(case)
+        return
+    for k, v in cases.iteritems():
+        new_vpath = OrderedDict(vpath)
+        new_vpath[dim_names[len(vpath)]] = k
+        flattern_cases(v, dim_names, new_vpath, result)
+
+def filter_cases(proj, filter_spec, exclude):
+    parsed_spec = parse_filter_spec(filter_spec)
+    flat_cases = []
+    flattern_cases(proj["cases"], proj["dim_names"], OrderedDict(), flat_cases)
+    result = []
+    for case in flat_cases:
+        match = vpath_match(case["vpath"], parsed_spec)
+        choose = not match if exclude else match
+        if choose:
+            result.append(case)
+    return result
+
+def run_cases(cases):
+    print cases
+
+    pass
 
 
 def main():
@@ -179,7 +237,7 @@ def main():
                     help="Directory for test results")
 
     ag = parser.add_argument_group("Filter options")
-    ag.add_argument("--except",
+    ag.add_argument("--except1",
                     help="Test cases to exclude, support wildcards")
     ag.add_argument("--only",
                     help="Test cases to include, support wildcards")
@@ -192,8 +250,17 @@ def main():
 
     config = parser.parse_args()
 
-    cfg = parse_project_config(config.project_dir)
-    pprint.pprint(cfg)
+    proj = parse_project_config(config.project_dir)
+    if config.except1:
+        new_cases = filter_cases(proj, config.except1, True)
+    elif config.only:
+        new_cases = filter_cases(proj, config.only, False)
+    else:
+        new_cases = []
+        flattern_cases(proj["cases"], proj["dim_names"],
+                       OrderedDict(), new_cases)
+    pprint.pprint(new_cases)
+    # run_cases(new_cases)
 
 if __name__ == "__main__":
     main()
