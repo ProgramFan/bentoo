@@ -16,6 +16,7 @@ import fnmatch
 import json
 import itertools
 import string
+import subprocess
 import pprint
 from collections import OrderedDict
 
@@ -171,7 +172,7 @@ def parse_project_config(project_dir):
     dims = project_info["dimensions"]
     vpath = OrderedDict()
     cases = recursively_parse_config(project_dir, dims, vpath, project_dir)
-    return {"dim_names": dims, "cases": cases}
+    return {"root": project_dir, "dim_names": dims, "cases": cases}
 
 def parse_filter_spec(spec):
     assert isinstance(spec, str) or isinstance(spec, unicode)
@@ -199,20 +200,21 @@ def vpath_match(vpath, spec):
             return False
     return True
 
-def flattern_cases(cases, dim_names, vpath, result):
+def flattern_cases(project_root, cases, dim_names, vpath, result):
     if len(vpath) == len(dim_names):
-        case = {"vpath": vpath, "spec": cases}
+        case = {"project_root": project_root, "vpath": vpath, "spec": cases}
         result.append(case)
         return
     for k, v in cases.iteritems():
         new_vpath = OrderedDict(vpath)
         new_vpath[dim_names[len(vpath)]] = k
-        flattern_cases(v, dim_names, new_vpath, result)
+        flattern_cases(project_root, v, dim_names, new_vpath, result)
 
 def filter_cases(proj, filter_spec, exclude):
     parsed_spec = parse_filter_spec(filter_spec)
     flat_cases = []
-    flattern_cases(proj["cases"], proj["dim_names"], OrderedDict(), flat_cases)
+    flattern_cases(proj["root"], proj["cases"], proj["dim_names"],
+                   OrderedDict(), flat_cases)
     result = []
     for case in flat_cases:
         match = vpath_match(case["vpath"], parsed_spec)
@@ -221,11 +223,40 @@ def filter_cases(proj, filter_spec, exclude):
             result.append(case)
     return result
 
+def run_mpirun(case_spec):
+    root = case_spec["project_root"]
+    vpath = case_spec["vpath"]
+    cfg = case_spec["spec"]
+    work_dir = os.path.join(root, *vpath.values())
+    if not os.path.exists(work_dir):
+        os.makedirs(work_dir)
+    cmd = map(str, cfg["cmd"])
+    env = dict(os.environ)
+    for k, v in cfg["envs"].iteritems():
+        env[k] = str(v)
+    run = cfg["run"]
+    # mpirun only uses nprocs
+    nprocs = str(run["nprocs"])
+    final_cmd = ["mpirun", "-np", nprocs] + cmd
+    out_fn = os.path.join(work_dir, "STDOUT")
+    err_fn = os.path.join(work_dir, "STDERR")
+    ret = subprocess.call(final_cmd, env=env, cwd=work_dir,
+                          stdout=file(out_fn, "w"), stderr=file(err_fn, "w"))
+    return ret == 0
+
 def run_cases(cases):
-    print cases
-
-    pass
-
+    '''Run a collection of test cases'''
+    print "Running {0} cases".format(len(cases))
+    failed_cases = []
+    finished_cases = []
+    for case in cases:
+        ok = run_mpirun(case)
+        if ok:
+            finished_cases.append(case)
+        else:
+            failed_cases.append(case)
+    print "Run done."
+    print "Finished {0} out of {1} cases, failed {2} cases.".format(len(finished_cases), len(cases), len(failed_cases))
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -237,9 +268,9 @@ def main():
                     help="Directory for test results")
 
     ag = parser.add_argument_group("Filter options")
-    ag.add_argument("--except1",
+    ag.add_argument("--exclude",
                     help="Test cases to exclude, support wildcards")
-    ag.add_argument("--only",
+    ag.add_argument("--include",
                     help="Test cases to include, support wildcards")
 
     ag = parser.add_argument_group("Case runner options")
@@ -251,16 +282,16 @@ def main():
     config = parser.parse_args()
 
     proj = parse_project_config(config.project_dir)
-    if config.except1:
-        new_cases = filter_cases(proj, config.except1, True)
-    elif config.only:
-        new_cases = filter_cases(proj, config.only, False)
+    if config.exclude:
+        new_cases = filter_cases(proj, config.exclude, True)
+    elif config.include:
+        new_cases = filter_cases(proj, config.include, False)
     else:
         new_cases = []
-        flattern_cases(proj["cases"], proj["dim_names"],
+        flattern_cases(proj["root"], proj["cases"], proj["dim_names"],
                        OrderedDict(), new_cases)
-    pprint.pprint(new_cases)
-    # run_cases(new_cases)
+    #pprint.pprint(new_cases)
+    run_cases(new_cases)
 
 if __name__ == "__main__":
     main()
