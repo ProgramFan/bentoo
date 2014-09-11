@@ -1,16 +1,28 @@
 import string
 
-def make_case(case_id, case_name):
-    ''' make case for (app, model, nnodes, intra_node) case_id where intra_node
-        is similar to "12x1x1"
-    '''
-    project_root = case_id["project_root"]
-    app = case_id["app"]
-    nnodes = case_id["nnodes"]
-    intra_node = case_id["intra_node"]
+# project_root, cfg_vpath and case_vpath are predefined and mandatory, other
+# arguments are user defined and shall coincide with 'args' object in
+# TestConfig.json.
+#
+# Here, each case is defined by (app, model, nnodes, intra_node), binary is
+# located at ${app}/bin, input is located at ${app}/input. input is postfixed to
+# distiguish between different models, and openmp cases has different inputs.
+#
+def make_case(project_root, cfg_vpath, case_vpath, bin_name):
+    variables = dict(cfg_vpath.items() + case_vpath.items())
+    variables["project_root"] = project_root
+    variables["bin_name"] = bin_name
+    nnodes = variables["nnodes"]
+    intra_node = variables["intra_node"]
     procs_per_node, ndsm, nsmp = map(int, intra_node.split("x"))
-    tpl = string.Template("${project_root}/${app}/bin/main3d.lite")
-    cmd = [tpl.safe_substitute(case_id), "linadv-3d.input"]
+    tpl_exe = string.Template("${project_root}/${app}/bin/${bin_name}")
+    exe = tpl_exe.safe_substitute(variables)
+    tpl_inp = string.Template("${project_root}/${app}/input/linadv-3d.input.${model}")
+    inp = tpl_inp.safe_substitute(variables)
+    if ndsm * nsmp == 12:
+        # Pure OpenMP case, postfix input with $nn.omp
+        inp = "{0}.{1}.omp".format(inp, nnodes)
+    cmd = [exe, inp]
     envs = {
         "JASMIN_NUM_DSM_THREADS": ndsm,
         "JASMIN_NUM_SMP_THREADS": nsmp

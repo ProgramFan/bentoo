@@ -13,7 +13,7 @@
       "import": "make_case.py",
       "func": "make_case",
       "args": {
-        "case_name": "lite"
+        "bin_name": "main3d.lite"
       }
     }
   }

@@ -78,17 +78,19 @@ def make_case_template(project_root, cfg_vpath, case_vpath, template):
 def make_case_custom(project_root, cfg_vpath, case_vpath, cfg):
     python_fn = cfg["import"]
     assert isinstance(python_fn, str) or isinstance(python_fn, unicode)
-    func_name = cfg["func"]
-    func_args = cfg["args"] if "args" in cfg else {}
+    # substitute template variables since we support it.
+    variables = dict(cfg_vpath.items() + case_vpath.items())
+    variables["project_root"] = project_root
+    python_fn = string.Template(python_fn).safe_substitute(variables)
     if not os.path.isabs(python_fn):
         cwd = os.path.join(project_root, *cfg_vpath.values())
         python_fn = os.path.abspath(os.path.join(cwd, python_fn))
     python_result = {}
     execfile(python_fn, python_result)
+    func_name = cfg["func"]
+    func_args = cfg["args"] if "args" in cfg else {}
     func = python_result[func_name]
-    vp = OrderedDict(cfg_vpath.items() + case_vpath.items())
-    vp["project_root"] = project_root
-    result = func(vp, **func_args)
+    result = func(project_root, cfg_vpath, case_vpath, **func_args)
     return result
 
 def make_case(project_root, cfg_vpath, case_vpath, config):
@@ -103,59 +105,69 @@ def make_case(project_root, cfg_vpath, case_vpath, config):
         raise RuntimeError("Unknown generator type: {0}".format(generator_type))
 
 def generate_test_matrix(project_root, vpath, cfg):
-    dims = []
+    dim_values = []
     for n in cfg["dimensions"]["names"]:
-        dims.append(cfg["dimensions"]["values"][n])
+        dim_values.append(cfg["dimensions"]["values"][n])
     result = {}
-    for k in itertools.product(*dims):
+    for k in itertools.product(*dim_values):
         case_vpath = OrderedDict(zip(cfg["dimensions"]["names"], k))
         test_case = make_case(project_root, vpath, case_vpath, cfg)
-        dict_assign(result, k, test_case)
+        dict_assign(result, map(str, k), test_case)
     return result
+
 
 def recursively_parse_config(project_root, dim_names, vpath, current_dir):
     fn = os.path.join(current_dir, "TestConfig.json")
-    cnt = parse_json(fn)
+    cfg = parse_json(fn)
     result = None
-    if "sub_directories" in cnt:
+    if "sub_directories" in cfg:
         # For subdirectories, we support two grammars:
         # 1. simple list: [dir0, dir1, dir2, ...]
         # 2. descriptive dict:
         #    {"dimension": dim, "directories": [dir0, ...]}
         #result = OrderedDict()
-        result = {}
-        if isinstance(cnt["sub_directories"], list):
-            dir_list = cnt["sub_directories"]
-        elif isinstance(cnt["sub_directories"], dict):
-            dir_list = cnt["sub_directories"]["directories"]
+        if isinstance(cfg["sub_directories"], list):
+            dir_list = cfg["sub_directories"]
+        elif isinstance(cfg["sub_directories"], dict):
+            dir_list = cfg["sub_directories"]["directories"]
         else:
-            raise RuntimeError("Invalid subdirectory spec.")
+            errmsg = "Invalid sub_directories spec in '{0}'".format(fn)
+            raise RuntimeError(errmsg)
+        result = dict() # TODO(zyang): change to OrderedDict when mature
         for sub_dir in dir_list:
             p = os.path.join(current_dir, sub_dir)
             new_vpath = OrderedDict(vpath)
             vpath_key = dim_names[len(vpath)]
             new_vpath[vpath_key] = sub_dir
-            result[sub_dir] = recursively_parse_config(project_root, dim_names, new_vpath, p)
-    elif "test_matrix" in cnt:
+            r = recursively_parse_config(project_root, dim_names, new_vpath, p)
+            result[sub_dir] = r
+    elif "test_matrix" in cfg:
         # For test_matrix, it has the following format:
         #     {"dimensions": {names, values}, "test_case_generator": gen,
         #      generator_ralated_config}
-        result = generate_test_matrix(project_root, vpath, cnt["test_matrix"])
-    elif "test_case" in cnt:
-        result = cnt["test_case"]
+        result = generate_test_matrix(project_root, vpath, cfg["test_matrix"])
+    elif "test_case" in cfg:
+        # For single test case, it can use predefined template variables:
+        # project_root and all avaliable vpath values.
+        subs = dict(vpath)
+        subs["project_root"] = project_root
+        result = substitute_nested_template(cfg["test_case"], subs)
     else:
-        raise RuntimeError("Unsupported config type")
+        # Other type is not supported.
+        errmsg = "Invalid TestConfig file: '{0}'".format(fn)
+        raise RuntimeError(errmsg)
     return result
 
 
 def parse_project_config(project_dir):
+    project_dir = os.path.abspath(project_dir)
     fn = os.path.join(project_dir, "TestConfig.json")
-    cnt = parse_json(fn)
-    project_info = cnt["project"]
+    cfg = parse_json(fn)
+    project_info = cfg["project"]
     dims = project_info["dimensions"]
-    pos = OrderedDict()
-    test_config = recursively_parse_config(project_dir, dims, pos, project_dir)
-    return test_config
+    vpath = OrderedDict()
+    return recursively_parse_config(project_dir, dims, vpath, project_dir)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

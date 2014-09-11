@@ -1,8 +1,9 @@
-def make_case(case_id, case_name):
+def make_case(project_root, cfg_vpath, case_vpath, bin_name):
     ''' make case for (app, model, nnodes, intra_node) case_id where intra_node
         is similar to "12x1x1"
     '''
-    project_root = case_id["project_root"]
+    case_id = dict(cfg_vpath.items() + case_vpath.items())
+    case_id["project_root"] = project_root
     app = case_id["app"]
     nnodes = case_id["nnodes"]
     intra_node = case_id["intra_node"]
