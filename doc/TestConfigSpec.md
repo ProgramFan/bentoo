@@ -17,7 +17,6 @@ A test project is organized as a hierarchy of directories, each directory
 contains a specification file `TestConfig.json` which specifies the content of
 the directory. The directory hierarchy shall be a complete tree, i.e., each leaf
 directory shall be on the same level in the hierarchy. for example:
-
 ```
 user@localhost # tree .
 .
