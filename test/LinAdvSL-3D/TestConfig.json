@@ -1,20 +1,20 @@
 {
-  "test_matrix": {
-    "dimensions": {
-      "names": ["model", "nnodes", "intra_node"],
-      "values": {
-        "model": ["auto.1p", "fixed.2p", "fixed.16p"],
-        "nnodes": [1, 2, 4],
-        "intra_node": ["12x1x1", "1x2x6"]
-      }
-    },
-    "test_case_generator": "custom",
-    "custom_generator": {
-      "import": "make_case.py",
-      "func": "make_case",
-      "args": {
-        "bin_name": "main3d.lite"
-      }
+    "test_matrix": {
+        "dimensions": {
+            "names": ["model", "nnodes", "intra_node"],
+            "values": {
+                "model": ["auto.1p", "fixed.2p", "fixed.16p"],
+                "nnodes": [1, 2, 4],
+                "intra_node": ["12x1x1", "1x2x6"]
+            }
+        },
+        "test_case_generator": "custom",
+        "custom_generator": {
+            "import": "make_case.py",
+            "func": "make_case",
+            "args": {
+                "bin_name": "main3d.lite"
+            }
+        }
     }
-  }
 }
