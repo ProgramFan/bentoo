@@ -174,6 +174,12 @@ def parse_project_config(project_dir):
     cases = recursively_parse_config(project_dir, dims, vpath, project_dir)
     return {"root": project_dir, "dim_names": dims, "cases": cases}
 
+class TestProjectScanner:
+    def __init__(self, project_dir):
+        self.project_dir = project_dir
+    def scan(self):
+        return parse_project_config(self.project_dir)
+
 # Data structure
 #
 # Test Project: The following dictionary:
@@ -233,25 +239,38 @@ class TestCaseFilter:
         return result
 
 
-class TestProjectTransformer:
+class TestProjectUtility:
     def __init__(self):
         pass
 
     def flatten(self, project_info):
         root = project_info["root"]
         dim_names = project_info["dim_names"]
-        def recursive_flatten(node, vpath, result):
+        cases = []
+        def recursive_flatten(node, vpath):
             if len(vpath) == len(dim_names):
                 case = {"project_root": root, "vpath": vpath, "spec": node}
-                result.append(case)
+                cases.append(case)
                 return
             for k, v in node.iteritems():
                 new_vpath = OrderedDict(vpath)
                 new_vpath[dim_names[len(vpath)]] = k
-                recursive_flatten(v, new_vpath, result)
-        cases = []
-        recursive_flatten(project_info["cases"], OrderedDict(), cases)
+                recursive_flatten(v, new_vpath)
+        recursive_flatten(project_info["cases"], OrderedDict())
         return {"root": root, "dim_names": dim_names, "cases": cases}
+
+    def gather_dim_values(self, project_info):
+        dim_names = project_info["dim_names"]
+        values = [set() for i in dim_names]
+        gathered_values = OrderedDict(zip(dim_names, values))
+        def recursive_gather(node, level):
+            if level == len(dim_names): # this is the leaf level
+                return
+            for k, v in node.iteritems():
+                gathered_values[dim_names[level]].add(k)
+                recursive_gather(v, level + 1)
+        recursive_gather(project_info["cases"], 0)
+        return gathered_values
 
 
 class TestCaseRunner:
@@ -369,11 +388,15 @@ def main():
 
     config = parser.parse_args()
 
-    proj = parse_project_config(config.project_dir)
-    flat_proj = TestProjectTransformer().flatten(proj)
+    proj = TestProjectScanner(config.project_dir).scan()
+    util = TestProjectUtility()
+    flat_proj = util.flatten(proj)
+    dim_values = util.gather_dim_values(proj)
     print "Test project information: "
     print "  project root: {0}".format(flat_proj["root"])
     print "  dimensions: {0}".format("/".join(flat_proj["dim_names"]))
+    for k, v in dim_values.iteritems():
+        print "    {0}: {1}".format(k, ", ".join(v))
     print "  total cases: {0}".format(len(flat_proj["cases"]))
     exec_part = flat_proj["cases"]
     if config.exclude:
