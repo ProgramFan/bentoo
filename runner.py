@@ -255,9 +255,10 @@ class TestProjectTransformer:
 
 
 class TestCaseRunner:
-    def __init__(self, runner, timeout=None):
+    def __init__(self, runner, timeout=None, progress=None):
         self.runner = runner
         self.timeout = timeout
+        self.progress = progress
         if runner == "mpirun":
             def make_cmd(case, timeout):
                 exec_cmd = map(str, case["cmd"])
@@ -318,9 +319,14 @@ class TestCaseRunner:
         out_fn = os.path.join(work_dir, "STDOUT")
         err_fn = os.path.join(work_dir, "STDERR")
         cmd = self.make_cmd(cfg, self.timeout)
+        if self.progress:
+            self.progress.begin_case(case_spec)
         ret = subprocess.call(cmd, env=env, cwd=work_dir,
                               stdout=file(out_fn, "w"), stderr=file(err_fn, "w"))
-        return self.check_ret(ret)
+        stat = self.check_ret(ret)
+        if self.progress:
+            self.progress.end_case(case_spec, stat)
+        return stat
 
     def run_batch(self, cases):
         '''Run a collection of test cases'''
@@ -365,12 +371,31 @@ def main():
 
     proj = parse_project_config(config.project_dir)
     flat_proj = TestProjectTransformer().flatten(proj)
+    print "Test project information: "
+    print "  project root: {0}".format(flat_proj["root"])
+    print "  dimensions: {0}".format("/".join(flat_proj["dim_names"]))
+    print "  total cases: {0}".format(len(flat_proj["cases"]))
     exec_part = flat_proj["cases"]
     if config.exclude:
         exec_part = TestCaseFilter(config.exclude).filter(exec_part, True)
+        print "  exclude pattern: {0}".format(config.exclude)
     elif config.include:
         exec_part = TestCaseFilter(config.include).filter(exec_part, False)
-    runner = TestCaseRunner("mpirun")
+        print "  include pattern: {0}".format(config.include)
+    print "  cases in the run: {0}".format(len(exec_part))
+    class MyProgress:
+        def begin_case(self, case_spec):
+            print "  Run {0} ...".format("/".join(case_spec["vpath"].values())),
+        def end_case(self, case_spec, stat):
+            if stat == 0:
+                s = "Done."
+            elif stat == 1:
+                s = "Timeout."
+            else:
+                s = "Failed."
+            print s
+    runner = TestCaseRunner("mpirun", progress=MyProgress())
+    print "Run progress:"
     stats = runner.run_batch(exec_part)
     print "Run finished. {0} cases in total, of which".format(len(exec_part))
     print "  {0} finished, {1} failed".format(len(stats["finished"]), len(stats["failed"]))
