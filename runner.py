@@ -174,89 +174,171 @@ def parse_project_config(project_dir):
     cases = recursively_parse_config(project_dir, dims, vpath, project_dir)
     return {"root": project_dir, "dim_names": dims, "cases": cases}
 
-def parse_filter_spec(spec):
-    assert isinstance(spec, str) or isinstance(spec, unicode)
-    segs = spec.split("/")
-    def parse_seg(seg):
-        # Supported grammar: {ID1, ID2, ID3, ...} or ID, where ID can be any
-        # unix wildcards as specified in fnmatch module
-        ptn = re.compile("\{(.*?)\}")
-        m = ptn.match(seg)
-        if m:
-            s = [s.strip() for s in m.group(1).split(",")]
-        else:
-            s = [seg]
-        return s
-    return [parse_seg(seg) for seg in segs]
+# Data structure
+#
+# Test Project: The following dictionary:
+# {"root": "PATH", "dim_names": [n1, n2], "cases": test_cases}
+# Test cases can be recursively organized or flat, the following is the flat case:
+# Test Case: The following dictionary
+# ```python
+# {
+#      "project_root": "PATH"                     # Absolute path for the project root
+#      "vpath": OrderedDict([(k1, v1), (k2, v2)]) # Virtual path for the case
+#      "sepc": {
+#          "cmd": ["exe", "args"]   # Command list to run the case
+#          "envs": {k1: v1, k2: v2} # Environment variables
+#          "run": {
+#              "nprocs": 4,      # Number for procs for the case
+#              "nnodes": 1,      # Number of nodes for the case
+#              "procs_per_node": # Number of process per node
+#              "tasks_per_proc": # Number of tasks per process
+#          }
+#          "results": ["fn1", "fn2"] # Files containing results
+#      }
+# }
+#
+class TestCaseFilter:
+    '''TestCaseFilter - Filter test cases using path-like strings'''
+    def __init__(self, filter_spec):
+        assert isinstance(filter_spec, str) or isinstance(filter_spec, unicode)
+        compiled_filter = []
+        ptn = re.compile(r"\{(.*?)\}")
+        for seg in filter_spec.split("/"):
+            m = ptn.match(seg)
+            if m:
+                s = [s.strip() for s in m.group(1).split(",")]
+            else:
+                s = [seg]
+            compiled_filter.append(s)
+        self.compiled_filter = compiled_filter
 
-def vpath_match(vpath, spec):
-    def match_in_ptn(dim_value, ptn):
-        for p in ptn:
-            if fnmatch.fnmatch(dim_value, p):
-                return True
-        return False
-    for i, seg in enumerate(vpath.values()):
-        if not match_in_ptn(seg, spec[i]):
+    def match(self, vpath):
+        def seg_match(seg, compiled_spec):
+            for ptn in compiled_spec:
+                if fnmatch.fnmatch(seg, ptn):
+                    return True
             return False
-    return True
+        for i, seg in enumerate(vpath.values()):
+            if not seg_match(seg, self.compiled_filter[i]):
+                return False
+        return True
 
-def flattern_cases(project_root, cases, dim_names, vpath, result):
-    if len(vpath) == len(dim_names):
-        case = {"project_root": project_root, "vpath": vpath, "spec": cases}
-        result.append(case)
-        return
-    for k, v in cases.iteritems():
-        new_vpath = OrderedDict(vpath)
-        new_vpath[dim_names[len(vpath)]] = k
-        flattern_cases(project_root, v, dim_names, new_vpath, result)
+    def filter(self, flat_cases, exclude=False):
+        result = []
+        for case in flat_cases:
+            match = self.match(case["vpath"])
+            choose = not match if exclude else match
+            if choose:
+                result.append(case)
+        return result
 
-def filter_cases(proj, filter_spec, exclude):
-    parsed_spec = parse_filter_spec(filter_spec)
-    flat_cases = []
-    flattern_cases(proj["root"], proj["cases"], proj["dim_names"],
-                   OrderedDict(), flat_cases)
-    result = []
-    for case in flat_cases:
-        match = vpath_match(case["vpath"], parsed_spec)
-        choose = not match if exclude else match
-        if choose:
-            result.append(case)
-    return result
 
-def run_mpirun(case_spec):
-    root = case_spec["project_root"]
-    vpath = case_spec["vpath"]
-    cfg = case_spec["spec"]
-    work_dir = os.path.join(root, *vpath.values())
-    if not os.path.exists(work_dir):
-        os.makedirs(work_dir)
-    cmd = map(str, cfg["cmd"])
-    env = dict(os.environ)
-    for k, v in cfg["envs"].iteritems():
-        env[k] = str(v)
-    run = cfg["run"]
-    # mpirun only uses nprocs
-    nprocs = str(run["nprocs"])
-    final_cmd = ["mpirun", "-np", nprocs] + cmd
-    out_fn = os.path.join(work_dir, "STDOUT")
-    err_fn = os.path.join(work_dir, "STDERR")
-    ret = subprocess.call(final_cmd, env=env, cwd=work_dir,
-                          stdout=file(out_fn, "w"), stderr=file(err_fn, "w"))
-    return ret == 0
+class TestProjectTransformer:
+    def __init__(self):
+        pass
 
-def run_cases(cases):
-    '''Run a collection of test cases'''
-    print "Running {0} cases".format(len(cases))
-    failed_cases = []
-    finished_cases = []
-    for case in cases:
-        ok = run_mpirun(case)
-        if ok:
-            finished_cases.append(case)
+    def flatten(self, project_info):
+        root = project_info["root"]
+        dim_names = project_info["dim_names"]
+        def recursive_flatten(node, vpath, result):
+            if len(vpath) == len(dim_names):
+                case = {"project_root": root, "vpath": vpath, "spec": node}
+                result.append(case)
+                return
+            for k, v in node.iteritems():
+                new_vpath = OrderedDict(vpath)
+                new_vpath[dim_names[len(vpath)]] = k
+                recursive_flatten(v, new_vpath, result)
+        cases = []
+        recursive_flatten(project_info["cases"], OrderedDict(), cases)
+        return {"root": root, "dim_names": dim_names, "cases": cases}
+
+
+class TestCaseRunner:
+    def __init__(self, runner, timeout=None):
+        self.runner = runner
+        self.timeout = timeout
+        if runner == "mpirun":
+            def make_cmd(case, timeout):
+                exec_cmd = map(str, case["cmd"])
+                nprocs = str(case["run"]["nprocs"])
+                timeout_cmd = []
+                if timeout:
+                    timeout_cmd = ["/usr/bin/timeout", "{0}m".format(timeout)]
+                mpirun_cmd = ["mpirun", "-np", nprocs]
+                return timeout_cmd + mpirun_cmd + exec_cmd
+            def check_ret(ret_code):
+                if ret_code == 0:
+                    return 0  # success
+                elif ret_code == 124:
+                    return 1  # timeout
+                else:
+                    return -1 # application terminated error
+            self.make_cmd = make_cmd
+            self.check_ret = check_ret
+        elif runner_name == "yhrun":
+            def make_cmd(case, timeout):
+                exec_cmd = map(str, case["cmd"])
+                run = case["run"]
+                nprocs = str(run["nprocs"])
+                nnodes = run["nnodes"] if "nnodes" in run else None
+                tasks_per_proc = run.value("tasks_per_proc", None)
+                yhrun_cmd = ["yhrun"]
+                if nnodes:
+                    yhrun_cmd.extend(["-N", nnodes])
+                yhrun_cmd.extend(["-n", nprocs])
+                if tasks_per_proc:
+                    yhrun_cmd.extend(["-c", tasks_per_proc])
+                if timeout:
+                    yhrun_cmd.extend(["-t", str(timeout)])
+                yhrun_cmd.extend(["-p", "Super_zh"])
+                return yhrun_cmd + exec_cmd
+            def check_ret(ret_code):
+                if ret_code == 0:
+                    return "success"
+                elif ret_code == 124:
+                    return "timeout"
+                else:
+                    return "failed"
+            self.make_cmd = make_cmd
+            self.check_ret = check_ret
         else:
-            failed_cases.append(case)
-    print "Run done."
-    print "Finished {0} out of {1} cases, failed {2} cases.".format(len(finished_cases), len(cases), len(failed_cases))
+            raise RuntimeError("Unsupport runner: " + runner)
+
+    def run(self, case_spec):
+        root = case_spec["project_root"]
+        vpath = case_spec["vpath"]
+        cfg = case_spec["spec"]
+        work_dir = os.path.join(root, *vpath.values())
+        if not os.path.exists(work_dir):
+            os.makedirs(work_dir)
+        env = dict(os.environ)
+        for k, v in cfg["envs"].iteritems():
+            env[k] = str(v)
+        out_fn = os.path.join(work_dir, "STDOUT")
+        err_fn = os.path.join(work_dir, "STDERR")
+        cmd = self.make_cmd(cfg, self.timeout)
+        ret = subprocess.call(cmd, env=env, cwd=work_dir,
+                              stdout=file(out_fn, "w"), stderr=file(err_fn, "w"))
+        return self.check_ret(ret)
+
+    def run_batch(self, cases):
+        '''Run a collection of test cases'''
+        finished_cases = []
+        timeout_cases = []
+        failed_cases = []
+        for case in cases:
+            status = self.run(case)
+            if status == 0:
+                finished_cases.append(case)
+            elif status == 1:
+                timeout_cases.append(case)
+                failed_cases.append(case)
+            else:
+                failed_cases.append(case)
+        return {"finished": finished_cases,
+                "failed": failed_cases,
+                "timeout": timeout_cases}
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -282,16 +364,17 @@ def main():
     config = parser.parse_args()
 
     proj = parse_project_config(config.project_dir)
+    flat_proj = TestProjectTransformer().flatten(proj)
+    exec_part = flat_proj["cases"]
     if config.exclude:
-        new_cases = filter_cases(proj, config.exclude, True)
+        exec_part = TestCaseFilter(config.exclude).filter(exec_part, True)
     elif config.include:
-        new_cases = filter_cases(proj, config.include, False)
-    else:
-        new_cases = []
-        flattern_cases(proj["root"], proj["cases"], proj["dim_names"],
-                       OrderedDict(), new_cases)
-    #pprint.pprint(new_cases)
-    run_cases(new_cases)
+        exec_part = TestCaseFilter(config.include).filter(exec_part, False)
+    runner = TestCaseRunner("mpirun")
+    stats = runner.run_batch(exec_part)
+    print "Run finished. {0} cases in total, of which".format(len(exec_part))
+    print "  {0} finished, {1} failed".format(len(stats["finished"]), len(stats["failed"]))
+    print "  {0} failed due to timeout".format(len(stats["timeout"]))
 
 if __name__ == "__main__":
     main()
