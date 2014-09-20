@@ -20,6 +20,7 @@ import subprocess
 import pprint
 from collections import OrderedDict
 
+
 def ununicodify(obj):
     '''Turn every unicode instance in an object into str
 
@@ -44,8 +45,10 @@ def ununicodify(obj):
         result = obj
     return result
 
+
 def parse_json(fn):
     return ununicodify(json.load(file(fn)))
+
 
 def dict_assign(dict_like, keys, val):
     assert isinstance(dict_like, dict)
@@ -55,6 +58,7 @@ def dict_assign(dict_like, keys, val):
             r[k] = {}
         r = r[k]
     r[keys[-1]] = val
+
 
 def substitute_nested_template(template, subs):
     result = None
@@ -75,10 +79,12 @@ def substitute_nested_template(template, subs):
         result = template
     return result
 
+
 def make_case_template(project_root, cfg_vpath, case_vpath, template):
     subs = dict(cfg_vpath.items() + case_vpath.items())
     subs["project_root"] = project_root
     return substitute_nested_template(template, subs)
+
 
 def make_case_custom(project_root, cfg_vpath, case_vpath, cfg):
     python_fn = cfg["import"]
@@ -98,6 +104,7 @@ def make_case_custom(project_root, cfg_vpath, case_vpath, cfg):
     result = func(project_root, cfg_vpath, case_vpath, **func_args)
     return result
 
+
 def make_case(project_root, cfg_vpath, case_vpath, config):
     generator_type = config["test_case_generator"]
     if generator_type == "template":
@@ -108,6 +115,7 @@ def make_case(project_root, cfg_vpath, case_vpath, config):
         return make_case_custom(project_root, cfg_vpath, case_vpath, custom_cfg)
     else:
         raise RuntimeError("Unknown generator type: {0}".format(generator_type))
+
 
 def generate_test_matrix(project_root, vpath, cfg):
     dim_values = []
@@ -130,7 +138,6 @@ def recursively_parse_config(project_root, dim_names, vpath, current_dir):
         # 1. simple list: [dir0, dir1, dir2, ...]
         # 2. descriptive dict:
         #    {"dimension": dim, "directories": [dir0, ...]}
-        #result = OrderedDict()
         if isinstance(cfg["sub_directories"], list):
             dir_list = cfg["sub_directories"]
         elif isinstance(cfg["sub_directories"], dict):
@@ -138,7 +145,7 @@ def recursively_parse_config(project_root, dim_names, vpath, current_dir):
         else:
             errmsg = "Invalid sub_directories spec in '{0}'".format(fn)
             raise RuntimeError(errmsg)
-        result = dict() # TODO(zyang): change to OrderedDict when mature
+        result = OrderedDict()
         for sub_dir in dir_list:
             p = os.path.join(current_dir, sub_dir)
             new_vpath = OrderedDict(vpath)
@@ -174,21 +181,24 @@ def parse_project_config(project_dir):
     cases = recursively_parse_config(project_dir, dims, vpath, project_dir)
     return {"root": project_dir, "dim_names": dims, "cases": cases}
 
+
 class TestProjectScanner:
     def __init__(self, project_dir):
         self.project_dir = project_dir
+
     def scan(self):
         return parse_project_config(self.project_dir)
+
 
 # Data structure
 #
 # Test Project: The following dictionary:
 # {"root": "PATH", "dim_names": [n1, n2], "cases": test_cases}
-# Test cases can be recursively organized or flat, the following is the flat case:
+# Test cases can be recursively organized or flat, the following is flat case:
 # Test Case: The following dictionary
 # ```python
 # {
-#      "project_root": "PATH"                     # Absolute path for the project root
+#      "project_root": "PATH"                     # Absolute path for root
 #      "vpath": OrderedDict([(k1, v1), (k2, v2)]) # Virtual path for the case
 #      "sepc": {
 #          "cmd": ["exe", "args"]   # Command list to run the case
@@ -202,7 +212,6 @@ class TestProjectScanner:
 #          "results": ["fn1", "fn2"] # Files containing results
 #      }
 # }
-#
 class TestCaseFilter:
     '''TestCaseFilter - Filter test cases using path-like strings'''
     def __init__(self, filter_spec):
@@ -247,6 +256,7 @@ class TestProjectUtility:
         root = project_info["root"]
         dim_names = project_info["dim_names"]
         cases = []
+
         def recursive_flatten(node, vpath):
             if len(vpath) == len(dim_names):
                 case = {"project_root": root, "vpath": vpath, "spec": node}
@@ -263,8 +273,9 @@ class TestProjectUtility:
         dim_names = project_info["dim_names"]
         values = [set() for i in dim_names]
         gathered_values = OrderedDict(zip(dim_names, values))
+
         def recursive_gather(node, level):
-            if level == len(dim_names): # this is the leaf level
+            if level == len(dim_names):   # this is the leaf level
                 return
             for k, v in node.iteritems():
                 gathered_values[dim_names[level]].add(k)
@@ -287,13 +298,14 @@ class TestCaseRunner:
                     timeout_cmd = ["/usr/bin/timeout", "{0}m".format(timeout)]
                 mpirun_cmd = ["mpirun", "-np", nprocs]
                 return timeout_cmd + mpirun_cmd + exec_cmd
+
             def check_ret(ret_code):
                 if ret_code == 0:
                     return 0  # success
                 elif ret_code == 124:
                     return 1  # timeout
                 else:
-                    return -1 # application terminated error
+                    return -1  # application terminated error
             self.make_cmd = make_cmd
             self.check_ret = check_ret
         elif runner_name == "yhrun":
@@ -313,6 +325,7 @@ class TestCaseRunner:
                     yhrun_cmd.extend(["-t", str(timeout)])
                 yhrun_cmd.extend(["-p", "Super_zh"])
                 return yhrun_cmd + exec_cmd
+
             def check_ret(ret_code):
                 if ret_code == 0:
                     return "success"
@@ -341,7 +354,8 @@ class TestCaseRunner:
         if self.progress:
             self.progress.begin_case(case_spec)
         ret = subprocess.call(cmd, env=env, cwd=work_dir,
-                              stdout=file(out_fn, "w"), stderr=file(err_fn, "w"))
+                              stdout=file(out_fn, "w"),
+                              stderr=file(err_fn, "w"))
         stat = self.check_ret(ret)
         if self.progress:
             self.progress.end_case(case_spec, stat)
@@ -364,6 +378,7 @@ class TestCaseRunner:
         return {"finished": finished_cases,
                 "failed": failed_cases,
                 "timeout": timeout_cases}
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -406,9 +421,11 @@ def main():
         exec_part = TestCaseFilter(config.include).filter(exec_part, False)
         print "  include pattern: {0}".format(config.include)
     print "  cases in the run: {0}".format(len(exec_part))
+
     class MyProgress:
         def begin_case(self, case_spec):
             print "  Run {0} ...".format("/".join(case_spec["vpath"].values())),
+
         def end_case(self, case_spec, stat):
             if stat == 0:
                 s = "Done."
@@ -421,7 +438,8 @@ def main():
     print "Run progress:"
     stats = runner.run_batch(exec_part)
     print "Run finished. {0} cases in total, of which".format(len(exec_part))
-    print "  {0} finished, {1} failed".format(len(stats["finished"]), len(stats["failed"]))
+    print "  {0} finished, {1} failed".format(len(stats["finished"]),
+                                              len(stats["failed"]))
     print "  {0} failed due to timeout".format(len(stats["timeout"]))
 
 if __name__ == "__main__":
