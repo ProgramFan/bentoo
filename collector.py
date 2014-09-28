@@ -7,6 +7,7 @@ import os
 import sys
 import re
 import string
+import argparse
 from collections import OrderedDict
 
 
@@ -184,8 +185,73 @@ def parse_jasmin4log(fn):
     return result
 
 
+def substitute_nested_template(template, subs):
+    result = None
+    if isinstance(template, dict):
+        result = {}
+        for k, v in template.iteritems():
+            result[k] = substitute_nested_template(v, subs)
+    elif isinstance(template, list):
+        result = []
+        for v in template:
+            result.append(substitute_nested_template(v, subs))
+    elif isinstance(template, str) or isinstance(template, unicode):
+        t = string.Template(template)
+        result = t.safe_substitute(subs)
+        if re.match(r"^[\d\s+\-*/()]+$", result):
+            result = eval(result)
+    else:
+        result = template
+    return result
+
+
+def recursively_parse_config(project_root, dim_names, vpath, current_dir):
+    fn = os.path.join(current_dir, "TestConfig.json")
+    cfg = parse_json(fn)
+    result = None
+    if "sub_directories" in cfg:
+        # For subdirectories, we support two grammars:
+        # 1. simple list: [dir0, dir1, dir2, ...]
+        # 2. descriptive dict:
+        #    {"dimension": dim, "directories": [dir0, ...]}
+        if isinstance(cfg["sub_directories"], list):
+            dir_list = cfg["sub_directories"]
+        elif isinstance(cfg["sub_directories"], dict):
+            dir_list = cfg["sub_directories"]["directories"]
+        else:
+            errmsg = "Invalid sub_directories spec in '{0}'".format(fn)
+            raise RuntimeError(errmsg)
+        result = OrderedDict()
+        for sub_dir in dir_list:
+            p = os.path.join(current_dir, sub_dir)
+            new_vpath = OrderedDict(vpath)
+            vpath_key = dim_names[len(vpath)]
+            new_vpath[vpath_key] = sub_dir
+            r = recursively_parse_config(project_root, dim_names, new_vpath, p)
+            result[sub_dir] = r
+    elif "test_case" in cfg:
+        # For single test case, it can use predefined template variables:
+        # project_root and all avaliable vpath values.
+        subs = dict(vpath)
+        subs["project_root"] = project_root
+        result = substitute_nested_template(cfg["test_case"], subs)
+    else:
+        # Other type is not supported.
+        errmsg = "Invalid TestConfig file: '{0}'".format(fn)
+        raise RuntimeError(errmsg)
+    return result
+
+
+def scan_project(project_dir):
+    pass
+
+
 def main():
-    content = parse_jasmin4log(sys.argv[1])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("project_dir", help="Directory for test project")
+
+    args = parser.parse_args()
+    content = parse_jasmin4log(args.project_dir)
     print content
 
 
