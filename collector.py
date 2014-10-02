@@ -8,6 +8,7 @@ import sys
 import re
 import string
 import argparse
+import json
 from collections import OrderedDict
 
 
@@ -185,74 +186,80 @@ def parse_jasmin4log(fn):
     return result
 
 
-def substitute_nested_template(template, subs):
-    result = None
-    if isinstance(template, dict):
-        result = {}
-        for k, v in template.iteritems():
-            result[k] = substitute_nested_template(v, subs)
-    elif isinstance(template, list):
-        result = []
-        for v in template:
-            result.append(substitute_nested_template(v, subs))
-    elif isinstance(template, str) or isinstance(template, unicode):
-        t = string.Template(template)
-        result = t.safe_substitute(subs)
-        if re.match(r"^[\d\s+\-*/()]+$", result):
-            result = eval(result)
-    else:
-        result = template
-    return result
+class TestProjectScanner:
+    '''TestProjectScanner - Scan a test project for test cases'''
+    def __init__(self, project_root):
+        '''Create a scanner object for project at 'project_dir' '''
+        self.project_root = os.path.abspath(project_root)
+        conf_fn = os.path.join(self.project_root, "TestConfig.json")
+        if not os.path.exists(conf_fn):
+            raise RuntimeError("Invalid project directory: %s" % project_root)
+        conf = json.load(file(conf_fn))
+        assert "project" in conf
+        project_info = conf["project"]
+        self.dim_names = project_info["dimensions"]
 
+    def scan(self):
+        '''Scan the project directory and return a list of test cases
 
-def recursively_parse_config(project_root, dim_names, vpath, current_dir):
-    fn = os.path.join(current_dir, "TestConfig.json")
-    cfg = parse_json(fn)
-    result = None
-    if "sub_directories" in cfg:
-        # For subdirectories, we support two grammars:
-        # 1. simple list: [dir0, dir1, dir2, ...]
-        # 2. descriptive dict:
-        #    {"dimension": dim, "directories": [dir0, ...]}
-        if isinstance(cfg["sub_directories"], list):
-            dir_list = cfg["sub_directories"]
-        elif isinstance(cfg["sub_directories"], dict):
-            dir_list = cfg["sub_directories"]["directories"]
-        else:
-            errmsg = "Invalid sub_directories spec in '{0}'".format(fn)
-            raise RuntimeError(errmsg)
-        result = OrderedDict()
-        for sub_dir in dir_list:
-            p = os.path.join(current_dir, sub_dir)
-            new_vpath = OrderedDict(vpath)
-            vpath_key = dim_names[len(vpath)]
-            new_vpath[vpath_key] = sub_dir
-            r = recursively_parse_config(project_root, dim_names, new_vpath, p)
-            result[sub_dir] = r
-    elif "test_case" in cfg:
-        # For single test case, it can use predefined template variables:
-        # project_root and all avaliable vpath values.
-        subs = dict(vpath)
-        subs["project_root"] = project_root
-        result = substitute_nested_template(cfg["test_case"], subs)
-    else:
-        # Other type is not supported.
-        errmsg = "Invalid TestConfig file: '{0}'".format(fn)
-        raise RuntimeError(errmsg)
-    return result
+        Return: A dict containing the following fields:
+            {'root': string, 'dim_names': list, 'cases': list}
 
+        Each case in 'cases' is the following dict:
+            {'project_root': string, 'vpath': OrderedDict, 'spec': dict}
+        '''
+        test_cases = []
 
-def scan_project(project_dir):
-    pass
+        def do_scan(vpath, level):
+            curr_dir = os.path.join(self.project_root, *vpath.values())
+            conf_fn = os.path.join(curr_dir, "TestConfig.json")
+            assert os.path.exists(conf_fn)
+            conf = json.load(file(conf_fn))
+            if level == len(self.dim_names):
+                assert "test_case" in conf
+                case = {"spec": conf["test_case"], "vpath": vpath,
+                        "project_root": self.project_root}
+                test_cases.append(case)
+            else:
+                assert "sub_directories" in conf
+                dirs = conf["sub_directories"]
+                dir_list = []
+                if isinstance(dirs, list):
+                    dir_list = dirs
+                elif isinstance(dirs, dict):
+                    assert "directories" in dirs
+                    dir_list = dirs["directories"]
+                else:
+                    raise RuntimeError("Invalid sub_directory spec")
+                for path in dir_list:
+                    new_vpath = OrderedDict(vpath)
+                    new_vpath[self.dim_names[level]] = path
+                    do_scan(new_vpath, level+1)
+
+        do_scan(OrderedDict(), 0)
+        return {"root": self.project_root, "dim_names": self.dim_names,
+                "cases": test_cases}
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("project_dir", help="Directory for test project")
+    parser.add_argument("result_file", help="Result filename")
+    parser.add_argument("--format", default="sqlite3", action="store",
+                        help="File format for result database")
 
     args = parser.parse_args()
-    content = parse_jasmin4log(args.project_dir)
-    print content
+    project = TestProjectScanner(args.project_dir)
+    info = project.scan()
+
+    all_results = []
+    for case in info["cases"]:
+        result_dir = os.path.join(info["root"], *case["vpath"].values())
+        result_file = os.path.join(result_dir, case["spec"]["results"][0])
+        content = parse_jasminlong(result_file)
+        all_results.append((case["vpath"], content))
+
+    print all_results
 
 
 if __name__ == "__main__":
