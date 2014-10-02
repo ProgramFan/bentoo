@@ -14,204 +14,67 @@ import argparse
 import re
 import fnmatch
 import json
-import itertools
 import string
 import subprocess
 import pprint
 from collections import OrderedDict
 
 
-def ununicodify(obj):
-    '''Turn every unicode instance in an object into str
-
-    Python 2 deserializes json strings into unicode objects, which is different
-    than str. This makes indexing and comparing these object hard. This function
-    call str on every unicode instance of obj and keeps other parts untouched,
-    returns a new object without any unicode instances.
-    '''
-    result = None
-    if isinstance(obj, dict):
-        result = dict()
-        for k, v in obj.iteritems():
-            k1 = str(k) if isinstance(k, unicode) else k
-            result[k1] = ununicodify(v)
-    elif isinstance(obj, list):
-        result = []
-        for v in obj:
-            result.append(ununicodify(v))
-    elif isinstance(obj, unicode):
-        result = str(obj)
-    else:
-        result = obj
-    return result
-
-
-def parse_json(fn):
-    return ununicodify(json.load(file(fn)))
-
-
-def dict_assign(dict_like, keys, val):
-    assert isinstance(dict_like, dict)
-    r = dict_like
-    for k in keys[:-1]:
-        if k not in r:
-            r[k] = {}
-        r = r[k]
-    r[keys[-1]] = val
-
-
-def substitute_nested_template(template, subs):
-    result = None
-    if isinstance(template, dict):
-        result = {}
-        for k, v in template.iteritems():
-            result[k] = substitute_nested_template(v, subs)
-    elif isinstance(template, list):
-        result = []
-        for v in template:
-            result.append(substitute_nested_template(v, subs))
-    elif isinstance(template, str) or isinstance(template, unicode):
-        t = string.Template(template)
-        result = t.safe_substitute(subs)
-        if re.match(r"^[\d\s+\-*/()]+$", result):
-            result = eval(result)
-    else:
-        result = template
-    return result
-
-
-def make_case_template(project_root, cfg_vpath, case_vpath, template):
-    subs = dict(cfg_vpath.items() + case_vpath.items())
-    subs["project_root"] = project_root
-    return substitute_nested_template(template, subs)
-
-
-def make_case_custom(project_root, cfg_vpath, case_vpath, cfg):
-    python_fn = cfg["import"]
-    assert isinstance(python_fn, str) or isinstance(python_fn, unicode)
-    # substitute template variables since we support it.
-    variables = dict(cfg_vpath.items() + case_vpath.items())
-    variables["project_root"] = project_root
-    python_fn = string.Template(python_fn).safe_substitute(variables)
-    if not os.path.isabs(python_fn):
-        cwd = os.path.join(project_root, *cfg_vpath.values())
-        python_fn = os.path.abspath(os.path.join(cwd, python_fn))
-    python_result = {}
-    execfile(python_fn, python_result)
-    func_name = cfg["func"]
-    func_args = cfg["args"] if "args" in cfg else {}
-    func = python_result[func_name]
-    result = func(project_root, cfg_vpath, case_vpath, **func_args)
-    return result
-
-
-def make_case(project_root, cfg_vpath, case_vpath, config):
-    generator_type = config["test_case_generator"]
-    if generator_type == "template":
-        template = config["template"]
-        return make_case_template(project_root, cfg_vpath, case_vpath, template)
-    elif generator_type == "custom":
-        custom_cfg = config["custom_generator"]
-        return make_case_custom(project_root, cfg_vpath, case_vpath, custom_cfg)
-    else:
-        raise RuntimeError("Unknown generator type: {0}".format(generator_type))
-
-
-def generate_test_matrix(project_root, vpath, cfg):
-    dim_values = []
-    for n in cfg["dimensions"]["names"]:
-        dim_values.append(cfg["dimensions"]["values"][n])
-    result = {}
-    for k in itertools.product(*dim_values):
-        case_vpath = OrderedDict(zip(cfg["dimensions"]["names"], k))
-        test_case = make_case(project_root, vpath, case_vpath, cfg)
-        dict_assign(result, map(str, k), test_case)
-    return result
-
-
-def recursively_parse_config(project_root, dim_names, vpath, current_dir):
-    fn = os.path.join(current_dir, "TestConfig.json")
-    cfg = parse_json(fn)
-    result = None
-    if "sub_directories" in cfg:
-        # For subdirectories, we support two grammars:
-        # 1. simple list: [dir0, dir1, dir2, ...]
-        # 2. descriptive dict:
-        #    {"dimension": dim, "directories": [dir0, ...]}
-        if isinstance(cfg["sub_directories"], list):
-            dir_list = cfg["sub_directories"]
-        elif isinstance(cfg["sub_directories"], dict):
-            dir_list = cfg["sub_directories"]["directories"]
-        else:
-            errmsg = "Invalid sub_directories spec in '{0}'".format(fn)
-            raise RuntimeError(errmsg)
-        result = OrderedDict()
-        for sub_dir in dir_list:
-            p = os.path.join(current_dir, sub_dir)
-            new_vpath = OrderedDict(vpath)
-            vpath_key = dim_names[len(vpath)]
-            new_vpath[vpath_key] = sub_dir
-            r = recursively_parse_config(project_root, dim_names, new_vpath, p)
-            result[sub_dir] = r
-    elif "test_matrix" in cfg:
-        # For test_matrix, it has the following format:
-        #     {"dimensions": {names, values}, "test_case_generator": gen,
-        #      generator_ralated_config}
-        result = generate_test_matrix(project_root, vpath, cfg["test_matrix"])
-    elif "test_case" in cfg:
-        # For single test case, it can use predefined template variables:
-        # project_root and all avaliable vpath values.
-        subs = dict(vpath)
-        subs["project_root"] = project_root
-        result = substitute_nested_template(cfg["test_case"], subs)
-    else:
-        # Other type is not supported.
-        errmsg = "Invalid TestConfig file: '{0}'".format(fn)
-        raise RuntimeError(errmsg)
-    return result
-
-
-def parse_project_config(project_dir):
-    project_dir = os.path.abspath(project_dir)
-    fn = os.path.join(project_dir, "TestConfig.json")
-    cfg = parse_json(fn)
-    project_info = cfg["project"]
-    dims = project_info["dimensions"]
-    vpath = OrderedDict()
-    cases = recursively_parse_config(project_dir, dims, vpath, project_dir)
-    return {"root": project_dir, "dim_names": dims, "cases": cases}
-
-
 class TestProjectScanner:
-    def __init__(self, project_dir):
-        self.project_dir = project_dir
+    '''TestProjectScanner - Scan a test project for test cases'''
+    def __init__(self, project_root):
+        '''Create a scanner object for project at 'project_dir' '''
+        self.project_root = os.path.abspath(project_root)
+        conf_fn = os.path.join(self.project_root, "TestConfig.json")
+        if not os.path.exists(conf_fn):
+            raise RuntimeError("Invalid project directory: %s" % project_root)
+        conf = json.load(file(conf_fn))
+        assert "project" in conf
+        project_info = conf["project"]
+        self.dim_names = project_info["dimensions"]
 
     def scan(self):
-        return parse_project_config(self.project_dir)
+        '''Scan the project directory and return a list of test cases
+
+        Return: A dict containing the following fields:
+            {'root': string, 'dim_names': list, 'cases': list}
+
+        Each case in 'cases' is the following dict:
+            {'project_root': string, 'vpath': OrderedDict, 'spec': dict}
+        '''
+        test_cases = []
+
+        def do_scan(vpath, level):
+            curr_dir = os.path.join(self.project_root, *vpath.values())
+            conf_fn = os.path.join(curr_dir, "TestConfig.json")
+            assert os.path.exists(conf_fn)
+            conf = json.load(file(conf_fn))
+            if level == len(self.dim_names):
+                assert "test_case" in conf
+                case = {"spec": conf["test_case"], "vpath": vpath,
+                        "project_root": self.project_root}
+                test_cases.append(case)
+            else:
+                assert "sub_directories" in conf
+                dirs = conf["sub_directories"]
+                dir_list = []
+                if isinstance(dirs, list):
+                    dir_list = dirs
+                elif isinstance(dirs, dict):
+                    assert "directories" in dirs
+                    dir_list = dirs["directories"]
+                else:
+                    raise RuntimeError("Invalid sub_directory spec")
+                for path in dir_list:
+                    new_vpath = OrderedDict(vpath)
+                    new_vpath[self.dim_names[level]] = path
+                    do_scan(new_vpath, level+1)
+
+        do_scan(OrderedDict(), 0)
+        return {"root": self.project_root, "dim_names": self.dim_names,
+                "cases": test_cases}
 
 
-# Data structure
-#
-# Test Project: The following dictionary:
-# {"root": "PATH", "dim_names": [n1, n2], "cases": test_cases}
-# Test cases can be recursively organized or flat, the following is flat case:
-# Test Case: The following dictionary
-# ```python
-# {
-#      "project_root": "PATH"                     # Absolute path for root
-#      "vpath": OrderedDict([(k1, v1), (k2, v2)]) # Virtual path for the case
-#      "sepc": {
-#          "cmd": ["exe", "args"]   # Command list to run the case
-#          "envs": {k1: v1, k2: v2} # Environment variables
-#          "run": {
-#              "nprocs": 4,      # Number for procs for the case
-#              "nnodes": 1,      # Number of nodes for the case
-#              "procs_per_node": # Number of process per node
-#              "tasks_per_proc": # Number of tasks per process
-#          }
-#          "results": ["fn1", "fn2"] # Files containing results
-#      }
-# }
 class TestCaseFilter:
     '''TestCaseFilter - Filter test cases using path-like strings'''
     def __init__(self, filter_spec):
@@ -252,35 +115,14 @@ class TestProjectUtility:
     def __init__(self):
         pass
 
-    def flatten(self, project_info):
-        root = project_info["root"]
-        dim_names = project_info["dim_names"]
-        cases = []
-
-        def recursive_flatten(node, vpath):
-            if len(vpath) == len(dim_names):
-                case = {"project_root": root, "vpath": vpath, "spec": node}
-                cases.append(case)
-                return
-            for k, v in node.iteritems():
-                new_vpath = OrderedDict(vpath)
-                new_vpath[dim_names[len(vpath)]] = k
-                recursive_flatten(v, new_vpath)
-        recursive_flatten(project_info["cases"], OrderedDict())
-        return {"root": root, "dim_names": dim_names, "cases": cases}
-
     def gather_dim_values(self, project_info):
         dim_names = project_info["dim_names"]
         values = [set() for i in dim_names]
         gathered_values = OrderedDict(zip(dim_names, values))
-
-        def recursive_gather(node, level):
-            if level == len(dim_names):   # this is the leaf level
-                return
-            for k, v in node.iteritems():
-                gathered_values[dim_names[level]].add(k)
-                recursive_gather(v, level + 1)
-        recursive_gather(project_info["cases"], 0)
+        for case in project_info["cases"]:
+            vpath = case['vpath']
+            for k, v in vpath.iteritems():
+                gathered_values[k].add(v)
         return gathered_values
 
 
@@ -403,10 +245,10 @@ def main():
 
     config = parser.parse_args()
 
-    proj = TestProjectScanner(config.project_dir).scan()
+    proj = TestProjectScanner(config.project_dir)
     util = TestProjectUtility()
-    flat_proj = util.flatten(proj)
-    dim_values = util.gather_dim_values(proj)
+    flat_proj = proj.scan()
+    dim_values = util.gather_dim_values(flat_proj)
     print "Test project information: "
     print "  project root: {0}".format(flat_proj["root"])
     print "  dimensions: {0}".format("/".join(flat_proj["dim_names"]))
