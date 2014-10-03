@@ -1,4 +1,4 @@
-def make_case(conf_root, dest_root, cfg_vpath, case_vpath, bin_name):
+def make_case(conf_root, dest_root, cfg_vpath, case_vpath):
     ''' make case for (app, model, nnodes, intra_node) case_id where intra_node
         is similar to "12x1x1"
     '''
@@ -7,7 +7,7 @@ def make_case(conf_root, dest_root, cfg_vpath, case_vpath, bin_name):
     nnodes = case_id["nnodes"]
     intra_node = case_id["intra_node"]
     procs_per_node, ndsm, nsmp = map(int, intra_node.split("x"))
-    cmd = ["${project_root}/"+app+"/bin/main2d.lite", "linadv-2d.input"]
+    cmd = ["../../../bin/main2d.lite", "../../../input/linadv-2d.input"]
     envs = {
         "JASMIN_NUM_DSM_THREADS": ndsm,
         "JASMIN_NUM_SMP_THREADS": nsmp

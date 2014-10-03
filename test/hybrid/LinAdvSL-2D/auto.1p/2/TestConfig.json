@@ -9,10 +9,7 @@
         "test_case_generator": "custom",
         "custom_generator": {
             "import": "make_case.py",
-            "func": "make_case",
-            "args": {
-                "bin_name": "lite"
-            }
+            "func": "make_case"
         }
     }
 }

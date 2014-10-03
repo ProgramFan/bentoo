@@ -2,5 +2,6 @@
     "sub_directories": {
         "dimension_name": "model",
         "directories": ["auto.1p"]
-    }
+    },
+    "data_files": ["bin", "input"]
 }

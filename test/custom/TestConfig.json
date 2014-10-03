@@ -1,0 +1,24 @@
+{
+    "project": {
+        "name": "TemplateGeneration",
+        "comment": "Demo for template-based test case generation",
+        "dimensions": ["nnodes", "nthreads"]
+    },
+    "test_matrix": {
+        "dimensions": {
+            "names": ["nnodes", "nthreads"],
+            "values": {
+                "nnodes": [1, 2, 4, 8],
+                "nthreads": [1, 6]
+            }
+        },
+        "test_case_generator": "custom",
+        "custom_generator": {
+            "import": "make_case.py",
+            "func": "make_case",
+            "args": {
+                "cmd": ["ls", "-l"]
+            }
+        }
+    }
+}
