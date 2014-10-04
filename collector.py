@@ -9,8 +9,63 @@ import re
 import string
 import argparse
 import json
-from collections import OrderedDict
 import sqlite3
+from collections import OrderedDict
+
+
+class TestProjectScanner:
+    '''TestProjectScanner - Scan a test project for test cases'''
+    def __init__(self, project_root):
+        '''Create a scanner object for project at 'project_dir' '''
+        self.project_root = os.path.abspath(project_root)
+        conf_fn = os.path.join(self.project_root, "TestConfig.json")
+        if not os.path.exists(conf_fn):
+            raise RuntimeError("Invalid project directory: %s" % project_root)
+        conf = json.load(file(conf_fn))
+        assert "project" in conf
+        project_info = conf["project"]
+        self.dim_names = project_info["dimensions"]
+
+    def scan(self):
+        '''Scan the project directory and return a list of test cases
+
+        Return: A dict containing the following fields:
+            {'root': string, 'dim_names': list, 'cases': list}
+
+        Each case in 'cases' is the following dict:
+            {'project_root': string, 'vpath': OrderedDict, 'spec': dict}
+        '''
+        test_cases = []
+
+        def do_scan(vpath, level):
+            curr_dir = os.path.join(self.project_root, *vpath.values())
+            conf_fn = os.path.join(curr_dir, "TestConfig.json")
+            assert os.path.exists(conf_fn)
+            conf = json.load(file(conf_fn))
+            if level == len(self.dim_names):
+                assert "test_case" in conf
+                case = {"spec": conf["test_case"], "vpath": vpath,
+                        "project_root": self.project_root}
+                test_cases.append(case)
+            else:
+                assert "sub_directories" in conf
+                dirs = conf["sub_directories"]
+                dir_list = []
+                if isinstance(dirs, list):
+                    dir_list = dirs
+                elif isinstance(dirs, dict):
+                    assert "directories" in dirs
+                    dir_list = dirs["directories"]
+                else:
+                    raise RuntimeError("Invalid sub_directory spec")
+                for path in dir_list:
+                    new_vpath = OrderedDict(vpath)
+                    new_vpath[self.dim_names[level]] = path
+                    do_scan(new_vpath, level+1)
+
+        do_scan(OrderedDict(), 0)
+        return {"root": self.project_root, "dim_names": self.dim_names,
+                "cases": test_cases}
 
 
 def parse_jasminlog(fn):
@@ -104,6 +159,11 @@ def parse_jasminlog(fn):
     return result
 
 
+class JasminParser:
+    def parse(self, fn):
+        return parse_jasminlog(fn)
+
+
 def parse_jasmin4log(fn):
     '''parse_jasmin4log - jasmin 4.0 time manager log parser
 
@@ -187,133 +247,116 @@ def parse_jasmin4log(fn):
     return result
 
 
-class TestProjectScanner:
-    '''TestProjectScanner - Scan a test project for test cases'''
-    def __init__(self, project_root):
-        '''Create a scanner object for project at 'project_dir' '''
-        self.project_root = os.path.abspath(project_root)
-        conf_fn = os.path.join(self.project_root, "TestConfig.json")
-        if not os.path.exists(conf_fn):
-            raise RuntimeError("Invalid project directory: %s" % project_root)
-        conf = json.load(file(conf_fn))
-        assert "project" in conf
-        project_info = conf["project"]
-        self.dim_names = project_info["dimensions"]
-
-    def scan(self):
-        '''Scan the project directory and return a list of test cases
-
-        Return: A dict containing the following fields:
-            {'root': string, 'dim_names': list, 'cases': list}
-
-        Each case in 'cases' is the following dict:
-            {'project_root': string, 'vpath': OrderedDict, 'spec': dict}
-        '''
-        test_cases = []
-
-        def do_scan(vpath, level):
-            curr_dir = os.path.join(self.project_root, *vpath.values())
-            conf_fn = os.path.join(curr_dir, "TestConfig.json")
-            assert os.path.exists(conf_fn)
-            conf = json.load(file(conf_fn))
-            if level == len(self.dim_names):
-                assert "test_case" in conf
-                case = {"spec": conf["test_case"], "vpath": vpath,
-                        "project_root": self.project_root}
-                test_cases.append(case)
-            else:
-                assert "sub_directories" in conf
-                dirs = conf["sub_directories"]
-                dir_list = []
-                if isinstance(dirs, list):
-                    dir_list = dirs
-                elif isinstance(dirs, dict):
-                    assert "directories" in dirs
-                    dir_list = dirs["directories"]
-                else:
-                    raise RuntimeError("Invalid sub_directory spec")
-                for path in dir_list:
-                    new_vpath = OrderedDict(vpath)
-                    new_vpath[self.dim_names[level]] = path
-                    do_scan(new_vpath, level+1)
-
-        do_scan(OrderedDict(), 0)
-        return {"root": self.project_root, "dim_names": self.dim_names,
-                "cases": test_cases}
+class Jasmin4Parser:
+    def parse(self, fn):
+        return parse_jasmin4log(fn)
 
 
 class SqliteSerializer:
-    def __init__(self, fn):
-        if os.path.exists(fn):
-            os.remove(fn)
-        self.file_name = fn
+    typemap = {
+        None: "NULL",
+        int: "INTEGER",
+        long: "INTEGER",
+        float: "REAL",
+        str: "TEXT",
+        unicode: "TEXT",
+        buffer: "BLOB"
+    }
 
-    def serialize(self, test_result):
-        conn = sqlite3.connect(self.file_name)
-        cur = conn.cursor()
-        # Build table structure
-        typemap = {
-            int: "INTEGER",
-            long: "INTEGER",
-            float: "REAL",
-            None: "NULL",
-            str: "TEXT",
-            unicode: "TEXT",
-            buffer: "BLOB"
-        }
-        vpath0 = test_result[0][0]
-        cols = test_result[0][1][-1]["columns"]
-        col_types = test_result[0][1][-1]["column_types"]
-        a = ["{0} TEXT".format(x) for x in vpath0.keys()]
-        b = ["{0} {1}".format(x, typemap[col_types[x]]) for x in cols]
-        # Create table
-        cur.execute("CREATE TABLE result ({0})".format(", ".join(a + b)))
-
-        # Insert data
-        def table_item_generator():
-            for rec in test_result:
-                vp, tb = rec
-                cols = tb[-1]["columns"]
-                for row in tb[-1]["data"]:
-                    t2 = [row.get(x, None) for x in cols]
-                    yield tuple(vp.values() + t2)
-        cur.executemany("INSERT INTO result VALUES ({0})".format(",".join(["?"]*(len(a) + len(b)))), table_item_generator())
+    def __init__(self, db):
+        conn = sqlite3.connect(db)
+        obj = conn.execute("DROP TABLE IF EXISTS result")
         conn.commit()
-        conn.close()
+        self.conn = conn
+
+    def serialize(self, columns, column_types, data):
+        # Build table creation and insertion SQL statements
+        table_columns = []
+        for c in columns:
+            t = column_types.get(c, str)
+            assert t in SqliteSerializer.typemap
+            tn = SqliteSerializer.typemap[t]
+            table_columns.append("{0} {1}".format(c, tn))
+        table_columns_sql = ", ".join(table_columns)
+        create_table_sql = "CREATE TABLE result ({0})".format(table_columns_sql)
+        ph_sql = ", ".join(["?"] * len(columns))
+        insert_row_sql = "INSERT INTO result VALUES ({0})".format(ph_sql)
+        # Create table and insert data items
+        cur = self.conn.cursor()
+        cur.execute(create_table_sql)
+        for item in data:
+            assert isinstance(item, list) or isinstance(item, tuple)
+            assert len(item) == len(columns)
+            cur.execute(insert_row_sql, item)
+        self.conn.commit()
+        self.conn.close()
 
 
 class TestResultCollector:
     '''TestResultCollector - Collect test results and save them'''
-    def __init__(self, project_root):
-        self.project_root = os.path.abspath(project_root)
-        self.project_info = TestProjectScanner(project_root).scan()
+    def __init__(self, serializer):
+        self.serializer = serializer
 
-    def collect(self, format="jasmin"):
+    def collect(self, project_root, parser):
+        project_info = TestProjectScanner(project_root).scan()
         all_results = []
-        for case in self.project_info["cases"]:
-            result_dir = os.path.join(case["project_root"], *case["vpath"].values())
-            result_fn = os.path.join(result_dir, case["spec"]["results"][0])
-            content = parse_jasminlog(result_fn)
+        for case in project_info["cases"]:
+            cwd = os.path.join(case["project_root"], *case["vpath"].values())
+            # TODO: support collecting from multiple result file
+            result_fn = os.path.join(cwd, case["spec"]["results"][0])
+            content = parser.parse(result_fn)
             all_results.append((case["vpath"], content))
-        return all_results
 
-    def save(self, fn, result, format="sqlite3"):
-        assert format in ["sqlite3", "excel", "pandas"]
-        serializer = SqliteSerializer(fn)
-        serializer.serialize(result)
+        def data_item_generator():
+            for vpath, content in all_results:
+                # Only use the last record, TODO: use all records
+                data = content[-1]
+                for row in data["data"]:
+                    row_list = [row.get(x, None) for x in data["columns"]]
+                    yield vpath.values() + row_list
+
+        ref_vpath, ref_content = all_results[0]
+        columns = ref_vpath.keys()
+        column_types = {x: type(ref_vpath[x]) for x in ref_vpath.keys()}
+        for c in ref_content[0]["columns"]:
+            columns.append(c)
+            column_types[c] = ref_content[0]["column_types"].get(c, str)
+
+        self.serializer.serialize(columns, column_types, data_item_generator())
+
+
+def make_parser(name, *args, **kwargs):
+    if name == "jasmin3":
+        return JasminParser(*args, **kwargs)
+    elif name == "jasmin4":
+        return Jasmin4Parser(*args, **kwargs)
+    else:
+        raise RuntimeError("Unsupported parser: %s" % name)
+
+
+def make_serializer(name, *args, **kwargs):
+    if name == "sqlite3":
+        return SqliteSerializer(*args, **kwargs)
+    else:
+        raise RuntimeError("Unsupported serializer: %s" % name)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("project_dir", help="Directory for test project")
-    parser.add_argument("result_file", help="Result filename")
-    parser.add_argument("--format", default="sqlite3", action="store",
-                        help="File format for result database")
+    parser.add_argument("project_root", help="Test project root directory")
+    parser.add_argument("data_file", help="Data file to save results")
+    parser.add_argument("--serializer",
+                        choices=["sqlite3"], default="sqlite3",
+                        help="Serializer to dump results, default sqlite3")
+    parser.add_argument("--parser",
+                        choices=["jasmin3", "jasmin4"], default="jasmin3",
+                        help="Parser for raw result files, default jasmin3")
 
     args = parser.parse_args()
-    collector = TestResultCollector(args.project_dir)
-    result = collector.collect()
-    collector.save(args.result_file, result)
+    parser = make_parser(args.parser)
+    serializer = make_serializer(args.serializer, args.data_file)
+    collector = TestResultCollector(serializer)
+    collector.collect(args.project_root, parser)
 
 if __name__ == "__main__":
     main()
