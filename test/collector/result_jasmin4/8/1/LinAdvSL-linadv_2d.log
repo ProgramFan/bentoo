@@ -1,0 +1,633 @@
+Runtime environment: 
+The number of processes is 1, and the number of threads per process is 2.
+Machine: thinkpad, Date: Sun Jul 13 13:39:41 2014
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/SimpleHierarchyTimeIntegrator.C:673
+WARNING MESSAGE: 
+HierarchyTimeIntegrator:  Key data `dt_max_reduction_ratio' not found in input.Default values used.  See class header for details.
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/SimpleHierarchyTimeIntegrator.C:683
+WARNING MESSAGE: 
+HierarchyTimeIntegrator:  Key data `remap_interval' not found in input.Default values used.  See class header for details.
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/SimpleHierarchyTimeIntegrator.C:711
+WARNING MESSAGE: 
+HierarchyTimeIntegrator:  Key data `remap_tag_buffer' not found in input.  Default values used.  See class header for details.
+ --- d_load_balancing_threshold 0.95
+i: 0
+boxes: 1
+n_mapping_partitions: 1
+n_virtual_partitions: 1
+DirectGridPartitioningAlgorithm<DIM>::gridPartitioning LBE: 1
+i: 0
+boxes: 2
+n_mapping_partitions: 2
+n_virtual_partitions: 2
+DirectGridPartitioningAlgorithm<DIM>::gridPartitioning LBE: 1
+i: 0
+boxes: 1
+n_mapping_partitions: 1
+n_virtual_partitions: 1
+DirectGridPartitioningAlgorithm<DIM>::gridPartitioning LBE: 1
+i: 0
+boxes: 1
+n_mapping_partitions: 1
+n_virtual_partitions: 1
+DirectGridPartitioningAlgorithm<DIM>::gridPartitioning LBE: 1
+LBE by load_model: 1
+domain surface size by load_model: 8004
+region surface size by load_model: 12008
+patch surface size by load_model: 12008
+surface size by load_model: 12008
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+Check input data and variables before simulation:
+Input database...
+input_db {
+   Main {
+      log_file_name               = "LinAdvSL-linadv_2d.log" // input used
+      log_all_nodes               = FALSE                   // input used
+      javis_dump_interval         = 0                       // input used
+      javis_dump_dirname          = "javis_linadv2d"        // input not used
+      javis_number_procs_per_file = 1                       // input not used
+      restart_dump_interval       = 0                       // input used
+      restart_dump_dirname        = "restart_linadv2d"      // input not used
+   }
+   CartesianGeometry {
+      domain_boxes       = [(0,0),(1999,1999)]              // input used
+      x_lo               = 0, 0                             // input used
+      x_dx               = 0.00625, 0.00625                 // input used
+      periodic_dimension = 0, 1                             // input used
+      number_clones      = 0                                // from default
+   }
+   LinAdv {
+      constant_x_velocity = 0.1                             // input used
+   }
+   HierarchyTimeIntegrator {
+      start_time               = 0                          // input used
+      end_time                 = 70                         // input used
+      max_integrator_steps     = 20                         // input used
+      max_dt                   = 1                          // input used
+      grow_dt                  = 1.2                        // input used
+      regrid_interval          = 2                          // input not used
+      use_nonuniform_workload  = FALSE                      // input used
+      load_balancing_threshold = 0.95                       // input used
+      print_balance_efficiency = FALSE                      // input used
+      load_balance_interval    = 0                          // from default
+      GriddingAlgorithm {
+         max_levels = 1                                     // input not used
+         largest_patch_size {
+            level_0 = 128, 128                              // input not used
+         }
+         smallest_patch_size {
+            level_0 = 64, 16                                // input not used
+         }
+      }
+      LoadBalancer {
+         grid_partitioning_algorithm          = "nested"    // input used
+         print_model_LBE                      = TRUE        // input used
+         print_model_surface_size             = TRUE        // input used
+         bin_pack_sort_method                 = "MortonSFC" // from default
+         bin_pack_mapping_method              = "RECURSIVE" // from default
+         ignore_level_box_union_is_single_box = FALSE       // from default
+         work_load_threshold_ratio            = -1          // from default
+         work_number_threshold_ratio          = -1          // from default
+         Np                                   = 1           // from default
+         Ndsm                                 = 2           // from default
+         Nsmp                                 = 1           // from default
+         contral_parameter                    = ""          // from default
+         check_validity                       = FALSE       // from default
+      }
+   }
+   TimerManager {
+      timer_list   = "load::*::*", "hier::*::*", "*::*::*"  // input used
+      print_summed = TRUE                                   // input not used
+      print_max    = TRUE                                   // input not used
+   }
+}
+
+Variable database...
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Printing hier::VariableDatabase<DIM> information...
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Variable Contexts registered with database:
+Context id = 0 : Context name = CURRENT
+Context id = 1 : Context name = NEW
+Context id = 2 : Context name = SCRATCH
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Variables registered with database:
+Variable instance = 0
+   Variable name = uval
+   Variable type = N6JASMIN4pdat12CellVariableILi2EdEE
+Variable instance = 1
+   Variable name = flux
+   Variable type = N6JASMIN4pdat12SideVariableILi2EdEE
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Variable-Context pairs mapping to Patch Data Indices in database:
+Variable name = uval
+   context id = 0, name = CURRENT :  patch data id = 0
+   context id = 1, name = NEW :  patch data id = 1
+   context id = 2, name = SCRATCH :  patch data id = 3
+Variable name = flux
+   context id = 0 UNDEFINED for this variable
+   context id = 1, name = NEW :  patch data id = 2
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Mapping from Patch Data Indices to Variables:
+Patch data id = 0 -- data factory name = uval##CURRENT
+Patch data id = 1 -- data factory name = uval##NEW
+Patch data id = 2 -- data factory name = flux##NEW
+Patch data id = 3 -- data factory name = uval##SCRATCH
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Printing contents of patch descriptor for comparison to database...
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Printing PatchDescriptor<DIM> state ...
+this = 0x258fcd0
+d_max_number_registered_components = 4
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Patch Data Index=0
+   Patch Data Factory Name = uval##CURRENT
+   Patch Data Factory = N6JASMIN4pdat16JCellDataFactoryILi2EdEE
+Patch Data Index=1
+   Patch Data Factory Name = uval##NEW
+   Patch Data Factory = N6JASMIN4pdat16JCellDataFactoryILi2EdEE
+Patch Data Index=2
+   Patch Data Factory Name = flux##NEW
+   Patch Data Factory = N6JASMIN4pdat16JSideDataFactoryILi2EdEE
+Patch Data Index=3
+   Patch Data Factory Name = uval##SCRATCH
+   Patch Data Factory = N6JASMIN4pdat16JCellDataFactoryILi2EdEE
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 0
+Simulation time is 0
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 0
+Dt = 0.05, Simulation time is 0.05
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 1
+Simulation time is 0.05
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 1
+Dt = 0.05, Simulation time is 0.1
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 2
+Simulation time is 0.1
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 2
+Dt = 0.05, Simulation time is 0.15
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 3
+Simulation time is 0.15
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 3
+Dt = 0.05, Simulation time is 0.2
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 4
+Simulation time is 0.2
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 4
+Dt = 0.05, Simulation time is 0.25
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 5
+Simulation time is 0.25
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 5
+Dt = 0.05, Simulation time is 0.3
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 6
+Simulation time is 0.3
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 6
+Dt = 0.05, Simulation time is 0.35
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 7
+Simulation time is 0.35
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 7
+Dt = 0.05, Simulation time is 0.4
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 8
+Simulation time is 0.4
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 8
+Dt = 0.05, Simulation time is 0.45
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 9
+Simulation time is 0.45
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 9
+Dt = 0.05, Simulation time is 0.5
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 10
+Simulation time is 0.5
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 10
+Dt = 0.05, Simulation time is 0.55
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 11
+Simulation time is 0.55
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 11
+Dt = 0.05, Simulation time is 0.6
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 12
+Simulation time is 0.6
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 12
+Dt = 0.05, Simulation time is 0.65
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 13
+Simulation time is 0.65
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 13
+Dt = 0.05, Simulation time is 0.7
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 14
+Simulation time is 0.7
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 14
+Dt = 0.05, Simulation time is 0.75
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 15
+Simulation time is 0.75
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 15
+Dt = 0.05, Simulation time is 0.8
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 16
+Simulation time is 0.8
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 16
+Dt = 0.05, Simulation time is 0.85
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 17
+Simulation time is 0.85
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 17
+Dt = 0.05, Simulation time is 0.9
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 18
+Simulation time is 0.9
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 18
+Dt = 0.05, Simulation time is 0.95
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At begining of timestep # 19
+Simulation time is 0.95
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+Warning at /home/zyang/Workspace/jasmin-dev/src/jasmin-lite-refactor/build/include/PatchLevel.I:62
+WARNING MESSAGE: 
+Local patches.
+
+
+
+++++++++++++++++++++++++++++++++++++++++++++
+At end of timestep # 19
+Dt = 0.05, Simulation time is 1
+++++++++++++++++++++++++++++++++++++++++++++
+
+
+******************************************************** TIME STATISTICS *********************************************************
+----------------------------------------------------------------------------------------------------------------------------------
+                                                      Name           MaxTime           AvgTime   LoadBalance   Accesses   Overhead
+----------------------------------------------------------------------------------------------------------------------------------
+                                            TOTAL RUN TIME   0.9065(100.00%)   0.9065(100.00%)       100.00%          1     0.0000
+   algs::SimpleHierarchyTimeIntegrator::advanceHierarchy()    0.8624(95.14%)    0.8624(95.14%)       100.00%         20     0.0000
+    algs::SimpleHierarchyTimeIntegrator::std_advance_level    0.7724(85.21%)    0.7724(85.21%)       100.00%         20     0.0000
+                           algs::NumericalComponent::total    0.5647(62.30%)    0.5647(62.30%)       100.00%         43     0.0000
+                     algs::NumericalComponent::computing()    0.4309(47.54%)    0.4309(47.54%)       100.00%         40     0.0000
+                              algs::MemoryComponent::total    0.2071(22.84%)    0.2071(22.84%)       100.00%         41     0.0000
+                      algs::NumericalComponent::fillData()    0.1331(14.69%)    0.1331(14.69%)       100.00%         40     0.0000
+                            xfer::CopySchedule::fillData()    0.1330(14.67%)    0.1330(14.67%)       100.00%         60     0.0001
+                                      tbox::Schedule::comm    0.1277(14.09%)    0.1277(14.09%)       100.00%         21     0.0000
+                                algs::CopyComponent::total     0.0900(9.92%)     0.0900(9.92%)       100.00%         20     0.0000
+algs::SimpleHierarchyTimeIntegrator::initializeHierarchy()     0.0269(2.97%)     0.0269(2.97%)       100.00%          1     0.0000
+                          algs::InitializeComponent::total     0.0253(2.79%)     0.0253(2.79%)       100.00%          1     0.0000
+                    algs::InitializeComponent::computing()     0.0039(0.43%)     0.0039(0.43%)       100.00%          1     0.0000
+                                   tbox::Schedule::prepare     0.0008(0.08%)     0.0008(0.08%)       100.00%         21     0.0000
+                   load::JLoadBalancer::gridPartitioning()     0.0006(0.07%)     0.0006(0.07%)       100.00%          1     0.0000
+ load::NestedGridPartitioningAlgorithm::gridPartitioning()     0.0006(0.06%)     0.0006(0.06%)       100.00%          1     0.0000
+ load::DirectGridPartitioningAlgorithm::gridPartitioning()     0.0005(0.06%)     0.0005(0.06%)       100.00%          4     0.0000
+                                  algs::DtComponent::total     0.0005(0.05%)     0.0005(0.05%)       100.00%         21     0.0000
+                            algs::DtComponent::computing()     0.0003(0.04%)     0.0003(0.04%)       100.00%         20     0.0000
+       xfer::CopySchedule::generateCommunicationSchedule()     0.0003(0.04%)     0.0003(0.04%)       100.00%          1     0.0000
+                       hier::BoxGraphBuilder::buildGraph()     0.0003(0.03%)     0.0003(0.03%)       100.00%          1     0.0000
+     load::BoxPartitioningAlgorithm::virtualPartitioning()     0.0002(0.02%)     0.0002(0.02%)       100.00%          4     0.0000
+                                      tbox::Schedule::init     0.0002(0.02%)     0.0002(0.02%)       100.00%         21     0.0000
+                 hier::BoxGraphBuilder::communicateBoxes()     0.0001(0.02%)     0.0001(0.02%)       100.00%          1     0.0000
+           hier::BoxGraphBuilder::constructDomainOverlap()     0.0001(0.01%)     0.0001(0.01%)       100.00%          1     0.0000
+                             algs::DtComponent::fillData()     0.0001(0.01%)     0.0001(0.01%)       100.00%         40     0.0000
+           hier::PatchLevel::findPatchesTouchingBoundaries     0.0000(0.01%)     0.0000(0.01%)       100.00%          1     0.0000
+     load::SFCPartitioningAlgorithm::mappingPartitioning()     0.0000(0.00%)     0.0000(0.00%)       100.00%          4     0.0000
+              hier::BoxGraphBuilder::prepareSendingBoxes()     0.0000(0.00%)     0.0000(0.00%)       100.00%          1     0.0000
+                   hier::PatchLevel::computeShiftsForLevel     0.0000(0.00%)     0.0000(0.00%)       100.00%          1     0.0000
+                    hier::PatchLevel::setGeometryOnPatches     0.0000(0.00%)     0.0000(0.00%)       100.00%          1     0.0000
+                          load::LoadModel::buildSubModel()     0.0000(0.00%)     0.0000(0.00%)       100.00%          7     0.0000
+           hier::PatchLevel::setPatchTouchesBoundaryArrays     0.0000(0.00%)     0.0000(0.00%)       100.00%          1     0.0000
+      load::DirectPartition::boxesAndMappingConstructing()     0.0000(0.00%)     0.0000(0.00%)       100.00%          2     0.0000
+                                  tbox::Schedule::finalize     0.0000(0.00%)     0.0000(0.00%)       100.00%         21     0.0000
+                 algs::ReductionIntegratorComponent::total     0.0000(0.00%)     0.0000(0.00%)       100.00%          1     0.0000
+                            apps::main::write_restart_data     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+       algs::SimpleHierarchyTimeIntegrator::std_sync_level     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+       algs::SimpleHierarchyTimeIntegrator::imp_sync_level     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+            algs::SimpleHierarchyTimeIntegrator::remapping     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+                     algs::InitializeComponent::fillData()     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+                       algs::InitializeComponent::regrid()     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+                               algs::DtComponent::regrid()     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+                        algs::NumericalComponent::regrid()     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+            algs::ReductionIntegratorComponent::fillData()     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+    algs::ReductionIntegratorComponent::reductionOnPatch()     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+              algs::ReductionIntegratorComponent::regrid()     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+            algs::ReductionIntegratorComponent::mpi_reduct     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+                                 tbox::Schedule::pack_send     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+                               tbox::Schedule::unpack_recv     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+                                      tbox::Schedule::copy     0.0000(0.00%)       -nan(-nan%)         -nan%          0     0.0000
+----------------------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,16 @@
+{
+    "project": {
+        "comment": "Demo for template-based test case generation", 
+        "name": "TemplateGeneration", 
+        "dimensions": [
+            "nnodes", 
+            "nthreads"
+        ]
+    }, 
+    "sub_directories": [
+        "1", 
+        "2", 
+        "4", 
+        "8"
+    ]
+}

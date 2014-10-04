@@ -10,6 +10,7 @@ import string
 import argparse
 import json
 from collections import OrderedDict
+import sqlite3
 
 
 def parse_jasminlog(fn):
@@ -241,6 +242,67 @@ class TestProjectScanner:
                 "cases": test_cases}
 
 
+class SqliteSerializer:
+    def __init__(self, fn):
+        if os.path.exists(fn):
+            os.remove(fn)
+        self.file_name = fn
+
+    def serialize(self, test_result):
+        conn = sqlite3.connect(self.file_name)
+        cur = conn.cursor()
+        # Build table structure
+        typemap = {
+            int: "INTEGER",
+            long: "INTEGER",
+            float: "REAL",
+            None: "NULL",
+            str: "TEXT",
+            unicode: "TEXT",
+            buffer: "BLOB"
+        }
+        vpath0 = test_result[0][0]
+        cols = test_result[0][1][-1]["columns"]
+        col_types = test_result[0][1][-1]["column_types"]
+        a = ["{0} TEXT".format(x) for x in vpath0.keys()]
+        b = ["{0} {1}".format(x, typemap[col_types[x]]) for x in cols]
+        # Create table
+        cur.execute("CREATE TABLE result ({0})".format(", ".join(a + b)))
+
+        # Insert data
+        def table_item_generator():
+            for rec in test_result:
+                vp, tb = rec
+                cols = tb[-1]["columns"]
+                for row in tb[-1]["data"]:
+                    t2 = [row.get(x, None) for x in cols]
+                    yield tuple(vp.values() + t2)
+        cur.executemany("INSERT INTO result VALUES ({0})".format(",".join(["?"]*(len(a) + len(b)))), table_item_generator())
+        conn.commit()
+        conn.close()
+
+
+class TestResultCollector:
+    '''TestResultCollector - Collect test results and save them'''
+    def __init__(self, project_root):
+        self.project_root = os.path.abspath(project_root)
+        self.project_info = TestProjectScanner(project_root).scan()
+
+    def collect(self, format="jasmin"):
+        all_results = []
+        for case in self.project_info["cases"]:
+            result_dir = os.path.join(case["project_root"], *case["vpath"].values())
+            result_fn = os.path.join(result_dir, case["spec"]["results"][0])
+            content = parse_jasminlog(result_fn)
+            all_results.append((case["vpath"], content))
+        return all_results
+
+    def save(self, fn, result, format="sqlite3"):
+        assert format in ["sqlite3", "excel", "pandas"]
+        serializer = SqliteSerializer(fn)
+        serializer.serialize(result)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("project_dir", help="Directory for test project")
@@ -249,18 +311,9 @@ def main():
                         help="File format for result database")
 
     args = parser.parse_args()
-    project = TestProjectScanner(args.project_dir)
-    info = project.scan()
-
-    all_results = []
-    for case in info["cases"]:
-        result_dir = os.path.join(info["root"], *case["vpath"].values())
-        result_file = os.path.join(result_dir, case["spec"]["results"][0])
-        content = parse_jasminlong(result_file)
-        all_results.append((case["vpath"], content))
-
-    print all_results
-
+    collector = TestResultCollector(args.project_dir)
+    result = collector.collect()
+    collector.save(args.result_file, result)
 
 if __name__ == "__main__":
     main()

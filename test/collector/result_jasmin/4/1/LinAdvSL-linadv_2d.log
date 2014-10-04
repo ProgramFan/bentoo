@@ -1,0 +1,29 @@
+Runtime environment: 
+The number of processes is 1, and the number of threads per process is 4.
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+TOTAL 
+WALLCLOCK TIME
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Timer Name                                                         Proc: 0          Summed           Max              Proc             
+algs::HierarchyTimeIntegrator::advanceHierarchy()                  5.01393 (97%)    15.01393 (97%)    7.01993 (97%)    1              
+algs::HierarchyTimeIntegrator::std_advance_level                   5.0138 (97%)     5.0138 (97%)     5.0138 (97%)     0              
+algs::NumericalComponent::total                                    4.7194 (91%)     4.7194 (91%)     4.7194 (91%)     0              
+algs::NumericalComponent::computing()_0                            4.07011 (79%)    4.07011 (79%)    4.07011 (79%)    0              
+xfer::JRefineSchedule::fillData()                                  0.708237 (13%)   0.708237 (13%)   0.708237 (13%)   0              
+tbox::Schedule::comm_total                                         0.677372 (13%)   0.677372 (13%)   0.677372 (13%)   0              
+tbox::Schedule::comm_pack_unpack                                   0.66306 (12%)    0.66306 (12%)    0.66306 (12%)    0              
+algs::NumericalComponent::fillData()                               0.627313 (12%)   0.627313 (12%)   0.627313 (12%)   0              
+algs::ReductionIntegratorComponent::total                          0.214041 (4%)    0.214041 (4%)    0.214041 (4%)    0              
+algs::ReductionIntegratorComponent::reductionOnPatch()             0.211853 (4%)    0.211853 (4%)    0.211853 (4%)    0              
+algs::HierarchyTimeIntegrator::initializeHierarchy()               0.117512 (2%)    0.117512 (2%)    0.117512 (2%)    0              
+adpt::FederationGriddingAlgorithm<DIM>::makeCoarsestLevel()        0.117149 (2%)    0.117149 (2%)    0.117149 (2%)    0              
+algs::InitializeComponent::total                                   0.110887 (2%)    0.110887 (2%)    0.110887 (2%)    0              
+algs::InitializeComponent::fillData()                              0.073905 (1%)    0.073905 (1%)    0.073905 (1%)    0              
+algs::DirectTridiagEquations::total                                0.0530152 (1%)   0.0530152 (1%)   0.0530152 (1%)   0              
+Trisolv::Trisolv::Trisolv                                          0.0501914 (0%)   0.0501914 (0%)   0.0501914 (0%)   0              
+algs::InitializeComponent::computing()                             0.0338368 (0%)   0.0338368 (0%)   0.0338368 (0%)   0              
+algs::DirectTridiagEquations::computing()                          0.0320449 (0%)   0.0320449 (0%)   0.0320449 (0%)   0              
+algs::DirectTridiagEquations::fillData()                           0.0135829 (0%)   0.0135829 (0%)   0.0135829 (0%)   0              
+TOTAL RUN TIME:                                                    5.14626 (100%)   5.14626 (100%)   5.14626 (100%)   
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
