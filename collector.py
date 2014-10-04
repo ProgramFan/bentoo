@@ -304,6 +304,8 @@ class TestResultCollector:
             cwd = os.path.join(case["project_root"], *case["vpath"].values())
             # TODO: support collecting from multiple result file
             result_fn = os.path.join(cwd, case["spec"]["results"][0])
+            if not os.path.exists(result_fn):
+                continue
             content = parser.parse(result_fn)
             all_results.append((case["vpath"], content))
 

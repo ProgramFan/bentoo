@@ -239,8 +239,9 @@ def main():
 
     ag = parser.add_argument_group("Case runner options")
     ag.add_argument("--case-runner",
-                    help="Runner to choose, can be mpirun and yhrun")
-    ag.add_argument("--timeout",
+                    choices=["mpirun", "yhrun", default="mpirun",
+                    help="Runner to choose, default to mpirun")
+    ag.add_argument("--timeout", default=5,
                     help="Timeout for each case, in minites")
 
     config = parser.parse_args()
