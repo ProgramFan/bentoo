@@ -1,7 +1,19 @@
 #!/usr/bin/env python2.7
 #
-# Tool to collect test results and save them into a database
-#
+
+'''Collector - Test results collector
+
+Collector scans a test project directory, parses all result files found and
+saves all parsed results as a self-described data sheet in a file. One can then
+use Analyser or other tools to investigate the resultant data sheet.
+
+To use collector, simply following the argument document. To use the generated
+data sheet, keep in mind that the data sheet is ralational database table alike
+and the concrete format is backend specific. For sqlite3 backend, the result is
+stored in a table named 'result'. The data sheet is designed to be easily
+parsable by pandas, so the recommendation is to use pandas to investigate the
+data.
+'''
 
 import os
 import sys
@@ -252,6 +264,35 @@ class Jasmin4Parser:
         return parse_jasmin4log(fn)
 
 
+class UnifiedJasminParser:
+    def __init__(self):
+        jasmin4_ptn = re.compile(r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n"
+                                 + r"^(?P<header>^.*?$)\n-{10,}\n"
+                                 + r"(?P<content>.*?)^-{10,}\n", re.M+re.S)
+        jasmin3_ptn = re.compile("^\+{80}$(?P<name>.*?)^\+{80}$"
+                                 + ".*?(?P<header>^.*?$)"
+                                 + "(?P<content>.*?)^\+{80}$", re.M+re.S)
+
+        def detector(fn):
+            content = file(fn).read()
+            if jasmin3_ptn.search(content):
+                return "jasmin3"
+            elif jasmin4_ptn.search(content):
+                return "jasmin4"
+            else:
+                msg = "File %s is neither jasmin 3 nor jasmin 4 log" % fn
+                raise RuntimeError(msg)
+
+        self.filetype_detector = detector
+        self.parser_funcs = {
+            "jasmin3": parse_jasminlog,
+            "jasmin4": parse_jasmin4log
+        }
+
+    def parse(self, fn):
+        return self.parser_funcs[self.filetype_detector(fn)](fn)
+
+
 class SqliteSerializer:
     typemap = {
         None: "NULL",
@@ -332,27 +373,32 @@ def make_parser(name, *args, **kwargs):
         return JasminParser(*args, **kwargs)
     elif name == "jasmin4":
         return Jasmin4Parser(*args, **kwargs)
+    elif name == "jasmin":
+        return UnifiedJasminParser(*args, **kwargs)
     else:
-        raise RuntimeError("Unsupported parser: %s" % name)
+        raise ValueError("Unsupported parser: %s" % name)
 
 
 def make_serializer(name, *args, **kwargs):
     if name == "sqlite3":
         return SqliteSerializer(*args, **kwargs)
     else:
-        raise RuntimeError("Unsupported serializer: %s" % name)
+        raise ValueError("Unsupported serializer: %s" % name)
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
     parser.add_argument("--serializer",
                         choices=["sqlite3"], default="sqlite3",
-                        help="Serializer to dump results, default sqlite3")
+                        help="Serializer to dump results (default: sqlite3)")
     parser.add_argument("--parser",
-                        choices=["jasmin3", "jasmin4"], default="jasmin3",
-                        help="Parser for raw result files, default jasmin3")
+                        choices=["jasmin3", "jasmin4", "jasmin"],
+                        default="jasmin",
+                        help="Parser for raw result files (default: jasmin)")
 
     args = parser.parse_args()
     parser = make_parser(args.parser)
