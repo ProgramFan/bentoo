@@ -24,8 +24,8 @@ def parse_json(fn):
     def ununicodify(obj):
         '''Turn every unicode instance in an json object into str'''
         result = None
-        if isinstance(obj, dict):
-            result = dict()
+        if isinstance(obj, OrderedDict):
+            result = OrderedDict()
             for k, v in obj.iteritems():
                 k1 = str(k) if isinstance(k, unicode) else k
                 result[k1] = ununicodify(v)
@@ -40,7 +40,7 @@ def parse_json(fn):
         return result
     content = file(fn).read()
     content = re.sub(r"\s+//.*$", "", content)
-    return ununicodify(json.loads(content))
+    return ununicodify(json.loads(content, object_pairs_hook=OrderedDict))
 
 
 def substitute_and_evaluate(template, subs):
