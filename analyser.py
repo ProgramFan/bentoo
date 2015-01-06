@@ -3,10 +3,10 @@
 
 '''Analyser - Test project result analyser
 
-Analyser provides command line interface to extract and display test result data
-collected by Collector. It provided options to filter result, to choose display
-table fields and to pivot resultant table. It provides a simple and intuitive
-syntax.
+Analyser provides command line interface to extract and display test result
+data collected by Collector. It provided options to filter result, to choose
+display table fields and to pivot resultant table. It provides a simple and
+intuitive syntax.
 
 To use the analyser, one invokes analyser.py with -m for matcher/filter, -f for
 fields selection and -p for pivoting. For example, one can display how all
@@ -15,9 +15,9 @@ process using the following command line:
     ./analyser.py result.sqlite -m nthreads=1 -m timer_name~algs::Numerical*,
     algs::Copy* -f timer_name,nnodes,max,summed -p timer_name,nnodes
 
-Analyser tries to provide a simple CLI interface of pandas for simple use cases,
-namely tasks need to be done quick and often in command line. More sphosticated
-analysis need to be done directly in python using pandas etc.
+Analyser tries to provide a simple CLI interface of pandas for simple use
+cases, namely tasks need to be done quick and often in command line. More
+sphosticated analysis need to be done directly in python using pandas etc.
 '''
 
 
@@ -107,6 +107,8 @@ def main():
                         help="Data record matcher, name[~=]value")
     parser.add_argument("-p", "--pivot",
                         help="Pivoting fields, 2 or 3 element list")
+    parser.add_argument("-s", "--save",
+                        help="Save result to a CSV file")
 
     args = parser.parse_args()
     data = SqliteReader().read_frame(args.data_file)
@@ -123,6 +125,8 @@ def main():
         fields = [x.strip() for x in args.pivot.split(",")]
         v = v.pivot(*fields)
     print v.to_string()
+    if args.save:
+        v.to_csv(args.save, index=False)
 
 
 if __name__ == "__main__":
