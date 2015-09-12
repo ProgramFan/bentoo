@@ -1,6 +1,5 @@
 #!/usr/bin/env python2.7
 #
-
 '''Collector - Test results collector
 
 Collector scans a test project directory, parses all result files found and
@@ -27,6 +26,7 @@ from collections import OrderedDict
 
 class TestProjectScanner:
     '''TestProjectScanner - Scan a test project for test cases'''
+
     def __init__(self, project_root):
         '''Create a scanner object for project at 'project_dir' '''
         self.project_root = os.path.abspath(project_root)
@@ -56,8 +56,11 @@ class TestProjectScanner:
             conf = json.load(file(conf_fn))
             if level == len(self.dim_names):
                 assert "test_case" in conf
-                case = {"spec": conf["test_case"], "vpath": vpath,
-                        "project_root": self.project_root}
+                case = {
+                    "spec": conf["test_case"],
+                    "vpath": vpath,
+                    "project_root": self.project_root
+                }
                 test_cases.append(case)
             else:
                 assert "sub_directories" in conf
@@ -73,11 +76,14 @@ class TestProjectScanner:
                 for path in dir_list:
                     new_vpath = OrderedDict(vpath)
                     new_vpath[self.dim_names[level]] = path
-                    do_scan(new_vpath, level+1)
+                    do_scan(new_vpath, level + 1)
 
         do_scan(OrderedDict(), 0)
-        return {"root": self.project_root, "dim_names": self.dim_names,
-                "cases": test_cases}
+        return {
+            "root": self.project_root,
+            "dim_names": self.dim_names,
+            "cases": test_cases
+        }
 
 
 def parse_jasminlog(fn):
@@ -112,7 +118,7 @@ def parse_jasminlog(fn):
     def tokenlize(s):
         '''Convert string into a valid lower case pythonic token'''
         invalid_chars = ":-+*/#\n"
-        trans_table = string.maketrans(invalid_chars, " "*len(invalid_chars))
+        trans_table = string.maketrans(invalid_chars, " " * len(invalid_chars))
         return "_".join(map(string.lower, s.translate(trans_table).split()))
 
     avail_types = {
@@ -126,9 +132,9 @@ def parse_jasminlog(fn):
         "proc": int
     }
     content = file(fn, "r").read()
-    logtbl_ptn = re.compile("^\+{80}$(?P<name>.*?)^\+{80}$"
-                            + ".*?(?P<header>^.*?$)"
-                            + "(?P<content>.*?)^\+{80}$", re.M+re.S)
+    logtbl_ptn = re.compile(
+        "^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
+        "(?P<content>.*?)^\+{80}$", re.M + re.S)
     result = []
     for match in logtbl_ptn.finditer(content):
         log_table = match.groupdict()
@@ -165,8 +171,11 @@ def parse_jasminlog(fn):
                 header.append(k)
         # Make final result
         types = {x: avail_types[x] for x in header}
-        table = {"columns": header, "column_types": types,
-                 "data": table_contents}
+        table = {
+            "columns": header,
+            "column_types": types,
+            "data": table_contents
+        }
         result.append(table)
     return result
 
@@ -216,9 +225,9 @@ def parse_jasmin4log(fn):
         "Overhead": float
     }
     content = file(fn, "r").read()
-    logtbl_ptn = re.compile(r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n"
-                            + r"^(?P<header>^.*?$)\n-{10,}\n"
-                            + r"(?P<content>.*?)^-{10,}\n", re.M+re.S)
+    logtbl_ptn = re.compile(
+        r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" + r"^(?P<header>^.*?$)\n-{10,}\n"
+        + r"(?P<content>.*?)^-{10,}\n", re.M + re.S)
     result = []
     for match in logtbl_ptn.finditer(content):
         log_table = match.groupdict()
@@ -253,8 +262,11 @@ def parse_jasmin4log(fn):
                 header.append(k)
         # Make final result
         types = {x: avail_types[x] for x in header}
-        table = {"columns": header, "column_types": types,
-                 "data": table_contents}
+        table = {
+            "columns": header,
+            "column_types": types,
+            "data": table_contents
+        }
         result.append(table)
     return result
 
@@ -266,12 +278,13 @@ class Jasmin4Parser:
 
 class UnifiedJasminParser:
     def __init__(self):
-        jasmin4_ptn = re.compile(r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n"
-                                 + r"^(?P<header>^.*?$)\n-{10,}\n"
-                                 + r"(?P<content>.*?)^-{10,}\n", re.M+re.S)
-        jasmin3_ptn = re.compile("^\+{80}$(?P<name>.*?)^\+{80}$"
-                                 + ".*?(?P<header>^.*?$)"
-                                 + "(?P<content>.*?)^\+{80}$", re.M+re.S)
+        jasmin4_ptn = re.compile(
+            r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" +
+            r"^(?P<header>^.*?$)\n-{10,}\n" + r"(?P<content>.*?)^-{10,}\n",
+            re.M + re.S)
+        jasmin3_ptn = re.compile(
+            "^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
+            "(?P<content>.*?)^\+{80}$", re.M + re.S)
 
         def detector(fn):
             content = file(fn).read()
@@ -319,7 +332,8 @@ class SqliteSerializer:
             tn = SqliteSerializer.typemap[t]
             table_columns.append("{0} {1}".format(c, tn))
         table_columns_sql = ", ".join(table_columns)
-        create_table_sql = "CREATE TABLE result ({0})".format(table_columns_sql)
+        create_table_sql = "CREATE TABLE result ({0})".format(
+            table_columns_sql)
         ph_sql = ", ".join(["?"] * len(columns))
         insert_row_sql = "INSERT INTO result VALUES ({0})".format(ph_sql)
         # Create table and insert data items
@@ -335,6 +349,7 @@ class SqliteSerializer:
 
 class TestResultCollector:
     '''TestResultCollector - Collect test results and save them'''
+
     def __init__(self, serializer):
         self.serializer = serializer
 
@@ -393,7 +408,8 @@ def main():
     parser.add_argument("project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
     parser.add_argument("--serializer",
-                        choices=["sqlite3"], default="sqlite3",
+                        choices=["sqlite3"],
+                        default="sqlite3",
                         help="Serializer to dump results (default: sqlite3)")
     parser.add_argument("--parser",
                         choices=["jasmin3", "jasmin4", "jasmin"],
@@ -405,6 +421,7 @@ def main():
     serializer = make_serializer(args.serializer, args.data_file)
     collector = TestResultCollector(serializer)
     collector.collect(args.project_root, parser)
+
 
 if __name__ == "__main__":
     main()

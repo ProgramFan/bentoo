@@ -17,6 +17,7 @@ A test project is organized as a hierarchy of directories, each directory
 contains a specification file `TestConfig.json` which specifies the content of
 the directory. The directory hierarchy shall be a complete tree, i.e., each leaf
 directory shall be on the same level in the hierarchy. for example:
+
 ```
 user@localhost # tree .
 .
@@ -49,6 +50,7 @@ user@localhost # tree .
 
 The top level directory corresponds to a test project and the project
 information is specified in its `TestConfig.json` as the following:
+
 ```json
 {
     "project": {
@@ -67,12 +69,15 @@ Intermediate directories corresponds to test levels, they are named according to
 `dimensions` field in project information and the name of the directory
 corresponds to the value for a specific case. It contains sublevel specification
 as the following:
+
 ```json
 {
     "sub_directories": ["1", "2", "4"]
 }
 ```
+
 or
+
 ```json
 {
     "sub_directories": {
@@ -81,6 +86,7 @@ or
     }
 }
 ```
+
 The latter is provided to be self-document and the `dimension` field shall be
 the same value according to the level of the subdirectories as specified in
 project information.
@@ -90,6 +96,7 @@ contains the same `sub_directory` specification.
 
 Each leaf directory corresponds to a test case, whose detail is specified in its
 `TestConfig.json` file:
+
 ```json
 {
     "test_case": {
@@ -136,15 +143,18 @@ generate remaining sub-directories as well as final test cases.
 
 Test matrix denotes a cartetian product of different test factors. For example,
 we want to test an algorithm with variable models and nnodes, where:
+
 ```python
 models = ["auto.1p", "fixed.2p", "fixed.16p"]
 nnodes = [1, 2, 4, 8, 16, 32]
 ```
+
 The the test matrix contains all cases from `itertools.product(models, nnodes)`.
 It saves us from manually making sub-directories and writting `TestConfig.json`
 for test cases.
 
 Test matrix is specified as the following:
+
 ```json
 {
     "test_matrix": {
@@ -174,6 +184,7 @@ Currently supported generators are "template" and "custom".
 
 `template` generator simply do template substitution over each case. It requires
 the `template` field in `test_matrix`:
+
 ```json
 {
     "test_matrix": {
@@ -195,6 +206,7 @@ the `template` field in `test_matrix`:
     }
 }
 ```
+
 `template` field has the same format as test case specification, it uses the
 same set of template variables. Moreover, it supports simple arithmetic in field
 values, for example `${nnodes} * 12`. template is firstly substituted and then
@@ -207,6 +219,7 @@ where users define their own generator.
 
 Custom generator calls user-defined functions over each case to generate test
 cases. It requires the `custom_generator` field in `test_matrix`:
+
 ```json
 {
     "test_matrix": {
@@ -227,6 +240,7 @@ Currently only python is supported as the generator customization language.
 `func` is the global function name in the script to be used for case generation.
 The function shall accepts the following predefined arguments and extra
 arguments are specified as keyword arguments in `args` field:
+
 ```python
 # Arguments:
 #   project_root - String for the absolute path of the project top level dir

@@ -1,6 +1,5 @@
 #!/usr/bin/env python2.7
 #
-
 ''' Runner - Versatile testcase runner
 
 Runner run a hierarchy of test cases and store the results in another hierarchy.
@@ -22,6 +21,7 @@ from collections import OrderedDict
 
 class TestProjectScanner:
     '''TestProjectScanner - Scan a test project for test cases'''
+
     def __init__(self, project_root):
         '''Create a scanner object for project at 'project_dir' '''
         self.project_root = os.path.abspath(project_root)
@@ -51,8 +51,11 @@ class TestProjectScanner:
             conf = json.load(file(conf_fn))
             if level == len(self.dim_names):
                 assert "test_case" in conf
-                case = {"spec": conf["test_case"], "vpath": vpath,
-                        "project_root": self.project_root}
+                case = {
+                    "spec": conf["test_case"],
+                    "vpath": vpath,
+                    "project_root": self.project_root
+                }
                 test_cases.append(case)
             else:
                 assert "sub_directories" in conf
@@ -68,15 +71,19 @@ class TestProjectScanner:
                 for path in dir_list:
                     new_vpath = OrderedDict(vpath)
                     new_vpath[self.dim_names[level]] = path
-                    do_scan(new_vpath, level+1)
+                    do_scan(new_vpath, level + 1)
 
         do_scan(OrderedDict(), 0)
-        return {"root": self.project_root, "dim_names": self.dim_names,
-                "cases": test_cases}
+        return {
+            "root": self.project_root,
+            "dim_names": self.dim_names,
+            "cases": test_cases
+        }
 
 
 class TestCaseFilter:
     '''TestCaseFilter - Filter test cases using path-like strings'''
+
     def __init__(self, filter_spec):
         assert isinstance(filter_spec, str) or isinstance(filter_spec, unicode)
         compiled_filter = []
@@ -96,6 +103,7 @@ class TestCaseFilter:
                 if fnmatch.fnmatch(seg, ptn):
                     return True
             return False
+
         for i, seg in enumerate(vpath.values()):
             if not seg_match(seg, self.compiled_filter[i]):
                 return False
@@ -132,6 +140,7 @@ class TestCaseRunner:
         self.timeout = timeout
         self.progress = progress
         if runner == "mpirun":
+
             def make_cmd(case, timeout):
                 exec_cmd = map(str, case["cmd"])
                 nprocs = str(case["run"]["nprocs"])
@@ -148,9 +157,11 @@ class TestCaseRunner:
                     return 1  # timeout
                 else:
                     return -1  # application terminated error
+
             self.make_cmd = make_cmd
             self.check_ret = check_ret
         elif runner_name == "yhrun":
+
             def make_cmd(case, timeout):
                 exec_cmd = map(str, case["cmd"])
                 run = case["run"]
@@ -175,6 +186,7 @@ class TestCaseRunner:
                     return "timeout"
                 else:
                     return "failed"
+
             self.make_cmd = make_cmd
             self.check_ret = check_ret
         else:
@@ -195,7 +207,9 @@ class TestCaseRunner:
         cmd = self.make_cmd(cfg, self.timeout)
         if self.progress:
             self.progress.begin_case(case_spec)
-        ret = subprocess.call(cmd, env=env, cwd=work_dir,
+        ret = subprocess.call(cmd,
+                              env=env,
+                              cwd=work_dir,
                               stdout=file(out_fn, "w"),
                               stderr=file(err_fn, "w"))
         stat = self.check_ret(ret)
@@ -217,19 +231,21 @@ class TestCaseRunner:
                 failed_cases.append(case)
             else:
                 failed_cases.append(case)
-        return {"finished": finished_cases,
-                "failed": failed_cases,
-                "timeout": timeout_cases}
+        return {
+            "finished": finished_cases,
+            "failed": failed_cases,
+            "timeout": timeout_cases
+        }
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
 
     ag = parser.add_argument_group("Global options")
-    ag.add_argument("project_dir", metavar="PROJECT_DIR",
+    ag.add_argument("project_dir",
+                    metavar="PROJECT_DIR",
                     help="Directory of the test project")
-    ag.add_argument("--result-dir",
-                    help="Directory for test results")
+    ag.add_argument("--result-dir", help="Directory for test results")
 
     ag = parser.add_argument_group("Filter options")
     ag.add_argument("--exclude",
@@ -239,9 +255,11 @@ def main():
 
     ag = parser.add_argument_group("Case runner options")
     ag.add_argument("--case-runner",
-                    choices=["mpirun", "yhrun"], default="mpirun",
+                    choices=["mpirun", "yhrun"],
+                    default="mpirun",
                     help="Runner to choose, default to mpirun")
-    ag.add_argument("--timeout", default=5,
+    ag.add_argument("--timeout",
+                    default=5,
                     help="Timeout for each case, in minites")
 
     config = parser.parse_args()
@@ -267,7 +285,8 @@ def main():
 
     class MyProgress:
         def begin_case(self, case_spec):
-            print "  Run {0} ...".format("/".join(case_spec["vpath"].values())),
+            print "  Run {0} ...".format("/".join(case_spec["vpath"].values(
+            ))),
 
         def end_case(self, case_spec, stat):
             if stat == 0:
@@ -277,6 +296,7 @@ def main():
             else:
                 s = "Failed."
             print s
+
     runner = TestCaseRunner("mpirun", progress=MyProgress())
     print "Run progress:"
     stats = runner.run_batch(exec_part)
@@ -284,6 +304,7 @@ def main():
     print "  {0} finished, {1} failed".format(len(stats["finished"]),
                                               len(stats["failed"]))
     print "  {0} failed due to timeout".format(len(stats["timeout"]))
+
 
 if __name__ == "__main__":
     main()
