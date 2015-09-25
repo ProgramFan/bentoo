@@ -92,7 +92,26 @@ def make_case(conf_root, dest_root, cfg_vpath, case_vpath, cfg):
         result = func(conf_root, dest_root, cfg_vpath, case_vpath, **func_args)
         return result
     else:
-        raise RuntimeError("Unknown generator type: {0}".format(generator_type))
+        raise RuntimeError(
+            "Unknown generator type: {0}".format(generator_type))
+
+
+def make_path(vpath):
+    '''Build the correct path according the vpath
+
+    Parameters
+    ----------
+    vpath: OrderedDict, the virtual path
+
+    Returns
+    -------
+    The directory according to the vpath
+
+    '''
+    if not vpath:
+        return ""
+    segs = ["{0}-{1}".format(k, v) for k, v in vpath.iteritems()]
+    return os.path.join(*segs)
 
 
 def make_test_matrix(conf_root, dest_root, cfg_vpath, cfg):
@@ -103,8 +122,8 @@ def make_test_matrix(conf_root, dest_root, cfg_vpath, cfg):
     assert dim_values is not None
 
     def do_generate(case_vpath, level):
-        dest_dir = os.path.join(dest_root, *cfg_vpath.values())
-        dest_dir = os.path.join(dest_dir, *case_vpath.values())
+        dest_dir = os.path.join(dest_root, make_path(cfg_vpath),
+                                make_path(case_vpath))
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
         if level == len(dim_names):
@@ -126,7 +145,9 @@ def make_test_matrix(conf_root, dest_root, cfg_vpath, cfg):
 
 
 class TestProjectGenerator:
-    '''TestProjectGenerator - Create standard test project from specification'''
+
+    '''Create standard test project from specification'''
+
     def __init__(self, conf_dir, link_files=False, force_overwrite=False):
         self.conf_path = os.path.abspath(conf_dir)
         self.link_files = link_files
@@ -145,7 +166,7 @@ class TestProjectGenerator:
 
     def _do_write(self, vpath):
         # Read "TestConfig.json"
-        curr_dir = os.path.join(self.conf_path, *vpath.values())
+        curr_dir = os.path.join(self.conf_path, make_path(vpath))
         conf_fn = os.path.join(curr_dir, "TestConfig.json")
         assert os.path.exists(conf_fn)
         conf = parse_json(conf_fn)
@@ -154,7 +175,7 @@ class TestProjectGenerator:
         if "project" in conf:
             new_conf["project"] = conf["project"]
         # Make dest directory
-        dest_dir = os.path.join(self.dest_path, *vpath.values())
+        dest_dir = os.path.join(self.dest_path, make_path(vpath))
         if not os.path.exists(dest_dir):
             os.makedirs(dest_dir)
         # Handle "data_files" specification
@@ -179,8 +200,8 @@ class TestProjectGenerator:
         # Handle test suite specification: currently only support 'test_case',
         # 'test_matrix' and 'sub_directories'.
         if "sub_directories" in conf:
-            # For subdirectories, we iterate over each directory and recursively
-            # handle their content.
+            # For subdirectories, we iterate over each directory and
+            # recursively handle their content.
             spec = conf["sub_directories"]
             if isinstance(spec, list):
                 dir_list = spec
