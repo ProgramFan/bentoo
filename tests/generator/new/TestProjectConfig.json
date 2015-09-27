@@ -1,0 +1,30 @@
+{
+    "format": 1,
+    "project": {
+        "name": "test project",
+        "test_factors": ["nnodes", "nmics", "test_id"],
+        "test_vector_generator": "cart_product",
+        "test_case_generator": "custom",
+        "data_files": ["bin", "database"]
+    },
+    "cart_product_vector_generator": {
+        "test_factor_values": {
+            "nnodes": [1, 2, 4, 8],
+            "nmics": [0, 1, 2, 3],
+            "test_id": [1, 2, 3]
+        }
+    },
+    "simple_vector_generator": {
+        "test_vectors": [
+            [1, 0, [0, 1, 2, 3]],
+            [2, [0, 1], 0]
+        ]
+    },
+    "custom_case_generator": {
+        "import": "make_case.py",
+        "func": "make_case",
+        "args": {
+            "cmd": ["ls", "-l"]
+        }
+    }
+}

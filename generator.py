@@ -1,28 +1,30 @@
 #!/usr/bin/env python2.7
-#
+# coding: utf-8
 
-import sys
-import os
 import argparse
-import string
-import re
+import itertools
 import json
-import shutil
-import glob
+import os
+import re
+
 from collections import OrderedDict
 
 
 def parse_json(fn):
-    '''Parse a json file and return python objects
+    '''Parse json object
 
-    Difference from builtin json module:
-    1. Accepts file name instead of file object
-    2. Support "//" like comments in json file
-    3. Objects does not contains unicode objects.
+    This function parses a JSON file. Unlike the builtin `json` module, it
+    supports "//" like comments, uses 'str' for string representation and
+    preserves the key orders.
+
+    Args:
+        fn (str): Name of the file to parse.
+
+    Returns:
+        OrderedDict: A dict representing the file content.
+
     '''
-
     def ununicodify(obj):
-        '''Turn every unicode instance in an json object into str'''
         result = None
         if isinstance(obj, OrderedDict):
             result = OrderedDict()
@@ -43,219 +45,214 @@ def parse_json(fn):
     return ununicodify(json.loads(content, object_pairs_hook=OrderedDict))
 
 
-def substitute_and_evaluate(template, subs):
-    result = None
-    if isinstance(template, dict):
-        result = {}
-        for k, v in template.iteritems():
-            result[k] = substitute_and_evaluate(v, subs)
-    elif isinstance(template, list):
-        result = []
-        for v in template:
-            result.append(substitute_and_evaluate(v, subs))
-    elif isinstance(template, str) or isinstance(template, unicode):
-        t = string.Template(template)
-        result = t.safe_substitute(subs)
-        if re.match(r"^[\d\s+\-*/()]+$", result):
-            result = eval(result)
-    else:
-        result = template
-    return result
+class SimpleVectorGenerator:
+
+    def __init__(self, test_factors, raw_vectors=None):
+        self.test_factors = test_factors
+        self.raw_vectors = raw_vectors if raw_vectors else []
+
+    def iteritems(self):
+        # expand each vector to support `[0, [1, 2], [3, 4]]`
+        for item in self.raw_vectors:
+            iters = [x if isinstance(x, list) else [x] for x in item]
+            for v in itertools.product(*iters):
+                yield OrderedDict(zip(self.test_factors, v))
 
 
-def make_case(conf_root, dest_root, cfg_vpath, case_vpath, cfg):
-    generator_type = cfg["test_case_generator"]
-    if generator_type == "template":
-        template = cfg["template"]
-        subs = dict(cfg_vpath.items() + case_vpath.items())
-        p = os.path.join(conf_root, *cfg_vpath.values())
-        p = os.path.join(p, *case_vpath.values())
-        project_root = os.path.relpath(conf_root, p)
-        subs["project_root"] = project_root
-        return substitute_and_evaluate(template, subs)
-    elif generator_type == "custom":
-        custom_cfg = cfg["custom_generator"]
-        python_fn = custom_cfg["import"]
-        assert isinstance(python_fn, str) or isinstance(python_fn, unicode)
-        # substitute template variables since we support it.
-        variables = dict(cfg_vpath.items() + case_vpath.items())
-        variables["project_root"] = conf_root
-        python_fn = string.Template(python_fn).safe_substitute(variables)
-        if not os.path.isabs(python_fn):
-            cwd = os.path.join(conf_root, *cfg_vpath.values())
-            python_fn = os.path.abspath(os.path.join(cwd, python_fn))
-        python_result = {}
-        execfile(python_fn, python_result)
-        func_name = custom_cfg["func"]
-        func_args = custom_cfg["args"] if "args" in custom_cfg else {}
-        func = python_result[func_name]
-        result = func(conf_root, dest_root, cfg_vpath, case_vpath, **func_args)
-        return result
-    else:
-        raise RuntimeError(
-            "Unknown generator type: {0}".format(generator_type))
+class CartProductVectorGenerator:
+
+    def __init__(self, test_factors, factor_values):
+        self.test_factors = test_factors
+        self.factor_values = factor_values
+
+    def iteritems(self):
+        factor_values = [self.factor_values[k] for k in self.test_factors]
+        for v in itertools.product(*factor_values):
+            yield OrderedDict(zip(self.test_factors, v))
 
 
-def make_path(vpath):
-    '''Build the correct path according the vpath
+class CustomCaseGenerator:
 
-    Parameters
-    ----------
-    vpath: OrderedDict, the virtual path
+    def __init__(self, module, func, args):
+        if not os.path.exists(module):
+            raise RuntimeError("Module '%s' does not exists" % module)
+        import_result = {}
+        execfile(module, import_result)
+        if func not in import_result:
+            raise RuntimeError("Can not find function '%s' in '%s'"
+                               % (func, module))
+        self.func = import_result[func]
+        self.args = args
 
-    Returns
-    -------
-    The directory according to the vpath
+    def make_case(self, conf_root, output_root, case_path, test_vector):
+        '''Generate a test case according to the specified test vector
 
-    '''
-    if not vpath:
-        return ""
-    segs = ["{0}-{1}".format(k, v) for k, v in vpath.iteritems()]
-    return os.path.join(*segs)
+        Args:
+            conf_root (str): Absolute path containing the project config.
+            output_root (str): Absolute path for the output root.
+            case_path (str): Absolute path for the test case.
+            test_vector (OrderedDict): Test case identification.
 
+        Returns:
+            dict: Test case specification
 
-def make_test_matrix(conf_root, dest_root, cfg_vpath, cfg):
-    dim_names = cfg["dimensions"]["names"]
-    dim_values = []
-    for n in dim_names:
-        dim_values.append(map(str, cfg["dimensions"]["values"][n]))
-    assert dim_values is not None
+            Test case specification containing the following information to run
+            a test case:
 
-    def do_generate(case_vpath, level):
-        dest_dir = os.path.join(dest_root, make_path(cfg_vpath),
-                                make_path(case_vpath))
-        if not os.path.exists(dest_dir):
-            os.makedirs(dest_dir)
-        if level == len(dim_names):
-            case = make_case(conf_root, dest_root, cfg_vpath, case_vpath, cfg)
-            dest_fn = os.path.join(dest_dir, "TestConfig.json")
-            conf = {"test_case": case}
-            json.dump(conf, file(dest_fn, "w"), indent=4)
-        else:
-            conf = {"sub_directories": dim_values[level]}
-            for new_dir in dim_values[level]:
-                new_vpath = OrderedDict(case_vpath)
-                new_vpath[dim_names[level]] = new_dir
-                do_generate(new_vpath, level + 1)
-            dest_fn = os.path.join(dest_dir, "TestConfig.json")
-            json.dump(conf, file(dest_fn, "w"), indent=4)
+                {
+                    "cmd": ["ls", "-l"]       # The command and its arguments
+                    "envs": {"K": "V", ...}   # Environment variables to set
+                    "results": ["STDOUT"]     # The result files to preserve
+                    "run": {"nprocs": 1, ...} # The runner specific information
+                }
 
-    do_generate(OrderedDict(), 0)
-    return dim_values[0]
+        '''
+        args = dict(self.args)
+        args["conf_root"] = conf_root
+        args["output_root"] = output_root
+        args["case_path"] = case_path
+        args["test_vector"] = test_vector
+        case_spec = self.func(**args)
+
+        return case_spec
 
 
-class TestProjectGenerator:
+class OutputOrganizer:
 
-    '''Create standard test project from specification'''
+    def __init__(self, version=1):
+        if version != 1:
+            raise RuntimeError(
+                "Unsupported output version '%s': only allow 1" %
+                version)
+        self.version = version
 
-    def __init__(self, conf_dir, link_files=False, force_overwrite=False):
-        self.conf_path = os.path.abspath(conf_dir)
-        self.link_files = link_files
-        self.force_overwrite = force_overwrite
-        conf_fn = os.path.join(self.conf_path, "TestConfig.json")
-        assert os.path.exists(conf_fn)
-        conf = parse_json(conf_fn)
-        assert "project" in conf
-        self.dim_names = conf["project"]["dimensions"]
+    def get_case_path(self, test_vector):
+        segs = ["{0}-{1}".format(k, v) for k, v in test_vector.iteritems()]
+        return os.path.join(*segs)
 
-    def save(self, dest_dir):
-        self.dest_path = os.path.abspath(dest_dir)
-        if self.dest_path == self.conf_path:
-            raise RuntimeError("Dest path can not be conf path")
-        self._do_write(OrderedDict())
+    def get_project_info_path(self):
+        return "TestProject.json"
 
-    def _do_write(self, vpath):
-        # Read "TestConfig.json"
-        curr_dir = os.path.join(self.conf_path, make_path(vpath))
-        conf_fn = os.path.join(curr_dir, "TestConfig.json")
-        assert os.path.exists(conf_fn)
-        conf = parse_json(conf_fn)
-        # Special case for top level directory: also save project information
-        new_conf = {}
-        if "project" in conf:
-            new_conf["project"] = conf["project"]
-        # Make dest directory
-        dest_dir = os.path.join(self.dest_path, make_path(vpath))
-        if not os.path.exists(dest_dir):
-            os.makedirs(dest_dir)
-        # Handle "data_files" specification
-        if "data_files" in conf:
-            file_lists = []
-            # TODO: support shell-like wildcards
-            for n in conf["data_files"]:
-                file_lists.append(n)
-            for path in file_lists:
-                src = os.path.join(curr_dir, path)
-                dst = os.path.join(dest_dir, path)
-                # TODO: support link file and force write option
-                if os.path.isfile(src):
-                    shutil.copyfile(src, dst)
-                elif os.path.isdir(src):
-                    if os.path.exists(dst):
-                        shutil.rmtree(dst)
-                    shutil.copytree(src, dst)
-                else:
-                    raise ValueError("Unsupported file: %s" % src)
-            new_conf["data_files"] = file_lists
-        # Handle test suite specification: currently only support 'test_case',
-        # 'test_matrix' and 'sub_directories'.
-        if "sub_directories" in conf:
-            # For subdirectories, we iterate over each directory and
-            # recursively handle their content.
-            spec = conf["sub_directories"]
-            if isinstance(spec, list):
-                dir_list = spec
-            elif isinstance(spec, dict):
-                assert "directories" in spec
-                assert "dimension_name" in spec
-                dir_list = spec["directories"]
+    def get_case_spec_path(self, test_vector):
+        return os.path.join(self.get_case_path(test_vector), "TestCase.json")
+
+
+class TestProject:
+
+    def __init__(self, conf_root):
+        if not os.path.isabs(conf_root):
+            conf_root = os.path.abspath(conf_root)
+        self.conf_root = conf_root
+
+        spec_file = os.path.join(self.conf_root, "TestProjectConfig.json")
+        spec = parse_json(spec_file)
+
+        # TODO: Refactor to support multiple versions in the future.
+        project_format = spec["format"]
+        if int(project_format) != 1:
+            raise RuntimeError(
+                "Unsupported project format '%s': only allow '1'" %
+                project_format)
+
+        # basic project information
+        project_info = spec["project"]
+        self.name = project_info["name"]
+        self.test_factors = project_info["test_factors"]
+        data_files = project_info.get("data_files", [])
+        self.data_files = []
+        for item in data_files:
+            if os.path.isabs(item):
+                self.data_files.append(item)
             else:
-                errmsg = "Invalid sub_directories spec: '{0}'".format(spec)
-                raise RuntimeError(errmsg)
-            dim_name = self.dim_names[len(vpath)]
-            for path in dir_list:
-                new_vpath = OrderedDict(vpath)
-                new_vpath[dim_name] = path
-                self._do_write(new_vpath)
-            new_conf["sub_directories"] = dir_list
-        elif "test_matrix" in conf:
-            # For test matrix, we generate test cases in dest_path, and also
-            # reconstruct directory hierarchy there.
-            spec = conf["test_matrix"]
-            d = make_test_matrix(self.conf_path, self.dest_path, vpath, spec)
-            new_conf["sub_directories"] = d
-        elif "test_case" in conf:
-            spec = conf["test_case"]
-            subs = dict(vpath)
-            p = os.path.join(self.conf_path, *vpath.values())
-            project_root = os.path.relpath(self.conf_path, p)
-            subs["project_root"] = project_root
-            result = substitute_and_evaluate(spec, subs)
-            new_conf["test_case"] = result
+                path = os.path.normpath(os.path.join(self.conf_root, item))
+                self.data_files.append(path)
+
+        # build test vector generator
+        test_vector_generator_name = project_info["test_vector_generator"]
+        if test_vector_generator_name == "cart_product":
+            args = spec["cart_product_vector_generator"]
+            test_factor_values = args["test_factor_values"]
+            self.test_vector_generator = CartProductVectorGenerator(
+                self.test_factors,
+                test_factor_values)
+        elif test_vector_generator_name == "simple":
+            args = spec["simple_vector_generator"]
+            test_vectors = args["test_vectors"]
+            self.test_vector_generator = SimpleVectorGenerator(
+                self.test_factors,
+                test_vectors)
         else:
-            # Other type is not supported.
-            errmsg = "Invalid TestConfig file: '{0}'".format(conf_fn)
-            raise RuntimeError(errmsg)
-        dest_fn = os.path.join(dest_dir, "TestConfig.json")
-        json.dump(new_conf, file(dest_fn, "w"), indent=4)
+            raise RuntimeError(
+                "Unknown test vector generator '%s'" %
+                test_vector_generator_name)
+
+        # build test case generator
+        test_case_generator_name = project_info["test_case_generator"]
+        if test_case_generator_name == "custom":
+            info = spec["custom_case_generator"]
+            module = info["import"]
+            if not os.path.isabs(module):
+                module = os.path.normpath(os.path.join(self.conf_root, module))
+            func = info["func"]
+            args = info["args"]
+            self.test_case_generator = CustomCaseGenerator(module, func, args)
+        else:
+            raise RuntimeError(
+                "Unknown test case generator '%s'" %
+                test_case_generator_name)
+
+        # build output organizer
+        self.output_organizer = OutputOrganizer(version=1)
+
+    def write(self, output_root):
+        if not os.path.isabs(output_root):
+            output_root = os.path.abspath(output_root)
+        if not os.path.exists(output_root):
+            os.makedirs(output_root)
+        for case in self.test_vector_generator.iteritems():
+            case_path = self.output_organizer.get_case_path(case)
+            case_fullpath = os.path.join(output_root, case_path)
+            if not os.path.exists(case_fullpath):
+                os.makedirs(case_fullpath)
+            cwd = os.path.abspath(os.getcwd())
+            os.chdir(case_fullpath)
+            try:
+                case_spec = self.test_case_generator.make_case(
+                    self.conf_root,
+                    output_root,
+                    case_fullpath,
+                    case)
+            finally:
+                os.chdir(cwd)
+            case_spec_path = self.output_organizer.get_case_spec_path(case)
+            case_spec_fullpath = os.path.join(output_root, case_spec_path)
+            json.dump(case_spec, file(case_spec_fullpath, "w"), indent=4)
+        # TODO: handle data_files
+        info = [
+            ("name", self.name), ("test_factors", self.test_factors),
+            ("data_files", self.data_files)]
+        info = OrderedDict(info)
+        x = [case.values() for case in self.test_vector_generator.iteritems()]
+        y = [
+            self.output_organizer.get_case_path(case)
+            for case in self.test_vector_generator.iteritems()]
+        test_defs = OrderedDict()
+        test_defs["test_vectors"] = x
+        test_defs["case_paths"] = y
+        info["test_cases"] = test_defs
+        project_info_path = self.output_organizer.get_project_info_path()
+        project_info_fullpath = os.path.join(output_root, project_info_path)
+        json.dump(info, file(project_info_fullpath, "w"), indent=4)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("spec_dir", help="Project specification directory")
-    parser.add_argument("run_dir", help="Project run directory")
-
-    ag = parser.add_argument_group("Generator Options")
-    ag.add_argument("--use-absolute-path",
-                    default=False, action="store_true",
-                    help="Use absolute path for file paths")
-    ag.add_argument("--link-files",
-                    default=False, action="store_true",
-                    help="Link data files instead of copy them")
+    parser.add_argument("conf_root", help="Project configuration directory")
+    parser.add_argument("output_root", help="Output directory")
 
     config = parser.parse_args()
-    generator = TestProjectGenerator(config.spec_dir)
-    generator.save(config.run_dir)
+    project = TestProject(config.conf_root)
+    project.write(config.output_root)
 
 
 if __name__ == "__main__":

@@ -60,13 +60,13 @@ The key concepts in the new spec is "case collection" and "case generator".
 columns of the table represents the test variables. Each case has a unique
 vector of test variable values. That is:
 
-case_id | model | nnodes | nimcs | test_id
-0 | Planewave | 1 | 0 | 0
-0 | Planewave | 1 | 0 | 0
-0 | Planewave | 1 | 0 | 0
-0 | Planewave | 1 | 0 | 0
-0 | Planewave | 1 | 0 | 0
-0 | Planewave | 1 | 0 | 0
+case_id | model     | nnodes | nimcs | test_id
+0       | Planewave | 1      | 0     | 0
+0       | Planewave | 1      | 0     | 0
+0       | Planewave | 1      | 0     | 0
+0       | Planewave | 1      | 0     | 0
+0       | Planewave | 1      | 0     | 0
+0       | Planewave | 1      | 0     | 0
 
 So you see the structure, its simple and straight forward.
 
