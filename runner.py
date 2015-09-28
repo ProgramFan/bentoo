@@ -1,10 +1,10 @@
 #!/usr/bin/env python2.7
-#
+# coding: utf-8
 ''' Runner - Versatile testcase runner
 
-Runner run a hierarchy of test cases and store the results in another hierarchy.
-It provides options such as test case filter, timeout etc, to make repeated test
-easy.
+Runner run a hierarchy of test cases and store the results in another
+hierarchy.  It provides options such as test case filter, timeout etc, to make
+repeated test easy.
 '''
 
 import os
@@ -19,122 +19,66 @@ import pprint
 from collections import OrderedDict
 
 
-class TestProjectScanner:
-    '''TestProjectScanner - Scan a test project for test cases'''
+class TestProjectReader:
+
+    '''Scan a test project for test cases'''
 
     def __init__(self, project_root):
         '''Create a scanner object for project at 'project_dir' '''
         self.project_root = os.path.abspath(project_root)
-        conf_fn = os.path.join(self.project_root, "TestConfig.json")
+        conf_fn = os.path.join(self.project_root, "TestProject.json")
         if not os.path.exists(conf_fn):
             raise RuntimeError("Invalid project directory: %s" % project_root)
         conf = json.load(file(conf_fn))
-        assert "project" in conf
-        project_info = conf["project"]
-        self.dim_names = project_info["dimensions"]
+        self.name = conf["name"]
+        self.test_factors = conf["test_factors"]
+        self.data_files = conf["data_files"]
+        test_cases = conf["test_cases"]
+        self.test_cases = zip(test_cases["test_vectors"],
+                              test_cases["case_paths"])
 
-    def scan(self):
-        '''Scan the project directory and return a list of test cases
+    def check(self):
+        '''Check project's validity
 
-        Return: A dict containing the following fields:
-            {'root': string, 'dim_names': list, 'cases': list}
+        Check project's validity by checking the existance of each case's
+        working directories and specification file. Specification content may
+        be checked in the future.
 
-        Each case in 'cases' is the following dict:
-            {'project_root': string, 'vpath': OrderedDict, 'spec': dict}
+        Exceptions:
+            RuntimeError: Any error found in the check
+
+            This shall be refined in the future.
+
         '''
-        test_cases = []
+        for k, v in self.test_cases.iteritems():
+            case_fullpath = os.path.join(self.project_root, v)
+            if not os.path.exists(case_fullpath):
+                raise RuntimeError(
+                    "Test case '%s' not found in '%s'" %
+                    (k, case_fullpath))
+            case_spec_fullpath = os.path.join(case_fullpath, "TestCase.json")
+            if not os.path.exists(case_spec_fullpath):
+                raise RuntimeError(
+                    "Test case spec for '%s' is not found in '%s'" %
+                    (k, case_fullpath))
+            # TODO: check the content of case spec (better with json-schema)
 
-        def do_scan(vpath, level):
-            curr_dir = os.path.join(self.project_root, *vpath.values())
-            conf_fn = os.path.join(curr_dir, "TestConfig.json")
-            assert os.path.exists(conf_fn)
-            conf = json.load(file(conf_fn))
-            if level == len(self.dim_names):
-                assert "test_case" in conf
-                case = {
-                    "spec": conf["test_case"],
-                    "vpath": vpath,
-                    "project_root": self.project_root
-                }
-                test_cases.append(case)
-            else:
-                assert "sub_directories" in conf
-                dirs = conf["sub_directories"]
-                dir_list = []
-                if isinstance(dirs, list):
-                    dir_list = dirs
-                elif isinstance(dirs, dict):
-                    assert "directories" in dirs
-                    dir_list = dirs["directories"]
-                else:
-                    raise RuntimeError("Invalid sub_directory spec")
-                for path in dir_list:
-                    new_vpath = OrderedDict(vpath)
-                    new_vpath[self.dim_names[level]] = path
-                    do_scan(new_vpath, level + 1)
-
-        do_scan(OrderedDict(), 0)
-        return {
-            "root": self.project_root,
-            "dim_names": self.dim_names,
-            "cases": test_cases
-        }
-
-
-class TestCaseFilter:
-    '''TestCaseFilter - Filter test cases using path-like strings'''
-
-    def __init__(self, filter_spec):
-        assert isinstance(filter_spec, str) or isinstance(filter_spec, unicode)
-        compiled_filter = []
-        ptn = re.compile(r"\{(.*?)\}")
-        for seg in filter_spec.split("/"):
-            m = ptn.match(seg)
-            if m:
-                s = [s.strip() for s in m.group(1).split(",")]
-            else:
-                s = [seg]
-            compiled_filter.append(s)
-        self.compiled_filter = compiled_filter
-
-    def match(self, vpath):
-        def seg_match(seg, compiled_spec):
-            for ptn in compiled_spec:
-                if fnmatch.fnmatch(seg, ptn):
-                    return True
-            return False
-
-        for i, seg in enumerate(vpath.values()):
-            if not seg_match(seg, self.compiled_filter[i]):
-                return False
-        return True
-
-    def filter(self, flat_cases, exclude=False):
-        result = []
-        for case in flat_cases:
-            match = self.match(case["vpath"])
-            choose = not match if exclude else match
-            if choose:
-                result.append(case)
-        return result
-
-
-class TestProjectUtility:
-    def __init__(self):
-        pass
-
-    def gather_dim_values(self, project_info):
-        dim_names = project_info["dim_names"]
-        values = [set() for i in dim_names]
-        gathered_values = OrderedDict(zip(dim_names, values))
-        for case in project_info["cases"]:
-            vpath = case['vpath']
-            for k, v in vpath.iteritems():
-                gathered_values[k].add(v)
-        return gathered_values
+    def itercases(self):
+        for test_vector, case_path in self.test_cases:
+            case_spec_fullpath = os.path.join(
+                self.project_root,
+                case_path,
+                "TestCase.json")
+            case_spec = json.load(file(case_spec_fullpath))
+            yield {
+                "case_path": os.path.join(self.project_root, case_path),
+                "run_spec": case_spec,
+                "test_vector": test_vector
+            }
 
 
 class TestCaseRunner:
+
     def __init__(self, runner, timeout=None, progress=None):
         self.runner = runner
         self.timeout = timeout
@@ -193,23 +137,21 @@ class TestCaseRunner:
             raise RuntimeError("Unsupport runner: " + runner)
 
     def run(self, case_spec):
-        root = case_spec["project_root"]
-        vpath = case_spec["vpath"]
-        cfg = case_spec["spec"]
-        work_dir = os.path.join(root, *vpath.values())
-        if not os.path.exists(work_dir):
-            os.makedirs(work_dir)
+        test_vector = case_spec["test_vector"]
+        case_path = case_spec["case_path"]
+        run_spec = case_spec["run_spec"]
+        assert os.path.isabs(case_path)
         env = dict(os.environ)
-        for k, v in cfg["envs"].iteritems():
+        for k, v in run_spec["envs"].iteritems():
             env[k] = str(v)
-        out_fn = os.path.join(work_dir, "STDOUT")
-        err_fn = os.path.join(work_dir, "STDERR")
-        cmd = self.make_cmd(cfg, self.timeout)
+        out_fn = os.path.join(case_path, "STDOUT")
+        err_fn = os.path.join(case_path, "STDERR")
+        cmd = self.make_cmd(run_spec, self.timeout)
         if self.progress:
             self.progress.begin_case(case_spec)
         ret = subprocess.call(cmd,
                               env=env,
-                              cwd=work_dir,
+                              cwd=case_path,
                               stdout=file(out_fn, "w"),
                               stderr=file(err_fn, "w"))
         stat = self.check_ret(ret)
@@ -238,14 +180,28 @@ class TestCaseRunner:
         }
 
 
+class SimpleProgress:
+
+    def begin_case(self, case_spec):
+        pretty_path = os.path.relpath(case_spec["case_path"])
+        print "  Run {0} ...".format(pretty_path),
+
+    def end_case(self, case_spec, stat):
+        if stat == 0:
+            s = "Done."
+        elif stat == 1:
+            s = "Timeout."
+        else:
+            s = "Failed."
+        print s
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
 
     ag = parser.add_argument_group("Global options")
-    ag.add_argument("project_dir",
-                    metavar="PROJECT_DIR",
-                    help="Directory of the test project")
-    ag.add_argument("--result-dir", help="Directory for test results")
+    ag.add_argument("project_root",
+                    help="Root directory of the test project")
 
     ag = parser.add_argument_group("Filter options")
     ag.add_argument("--exclude",
@@ -264,43 +220,15 @@ def main():
 
     config = parser.parse_args()
 
-    proj = TestProjectScanner(config.project_dir)
-    util = TestProjectUtility()
-    flat_proj = proj.scan()
-    dim_values = util.gather_dim_values(flat_proj)
+    proj = TestProjectReader(config.project_root)
     print "Test project information: "
-    print "  project root: {0}".format(flat_proj["root"])
-    print "  dimensions: {0}".format("/".join(flat_proj["dim_names"]))
-    for k, v in dim_values.iteritems():
-        print "    {0}: {1}".format(k, ", ".join(v))
-    print "  total cases: {0}".format(len(flat_proj["cases"]))
-    exec_part = flat_proj["cases"]
-    if config.exclude:
-        exec_part = TestCaseFilter(config.exclude).filter(exec_part, True)
-        print "  exclude pattern: {0}".format(config.exclude)
-    elif config.include:
-        exec_part = TestCaseFilter(config.include).filter(exec_part, False)
-        print "  include pattern: {0}".format(config.include)
-    print "  cases in the run: {0}".format(len(exec_part))
+    print "  project root: {0}".format(proj.project_root)
+    print "  test factors: {0}".format(", ".join(proj.test_factors))
 
-    class MyProgress:
-        def begin_case(self, case_spec):
-            print "  Run {0} ...".format("/".join(case_spec["vpath"].values(
-            ))),
-
-        def end_case(self, case_spec, stat):
-            if stat == 0:
-                s = "Done."
-            elif stat == 1:
-                s = "Timeout."
-            else:
-                s = "Failed."
-            print s
-
-    runner = TestCaseRunner("mpirun", progress=MyProgress())
+    runner = TestCaseRunner("mpirun", progress=SimpleProgress())
     print "Run progress:"
-    stats = runner.run_batch(exec_part)
-    print "Run finished. {0} cases in total, of which".format(len(exec_part))
+    stats = runner.run_batch(proj.itercases())
+    print "Run finished."
     print "  {0} finished, {1} failed".format(len(stats["finished"]),
                                               len(stats["failed"]))
     print "  {0} failed due to timeout".format(len(stats["timeout"]))
