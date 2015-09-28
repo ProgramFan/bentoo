@@ -24,66 +24,36 @@ import sqlite3
 from collections import OrderedDict
 
 
-class TestProjectScanner:
-    '''TestProjectScanner - Scan a test project for test cases'''
+class TestProjectReader:
+
+    '''Scan a test project for test cases'''
 
     def __init__(self, project_root):
         '''Create a scanner object for project at 'project_dir' '''
         self.project_root = os.path.abspath(project_root)
-        conf_fn = os.path.join(self.project_root, "TestConfig.json")
+        conf_fn = os.path.join(self.project_root, "TestProject.json")
         if not os.path.exists(conf_fn):
             raise RuntimeError("Invalid project directory: %s" % project_root)
         conf = json.load(file(conf_fn))
-        assert "project" in conf
-        project_info = conf["project"]
-        self.dim_names = project_info["dimensions"]
+        self.name = conf["name"]
+        self.test_factors = conf["test_factors"]
+        self.data_files = conf["data_files"]
+        test_cases = conf["test_cases"]
+        self.test_cases = zip(test_cases["test_vectors"],
+                              test_cases["case_paths"])
 
-    def scan(self):
-        '''Scan the project directory and return a list of test cases
-
-        Return: A dict containing the following fields:
-            {'root': string, 'dim_names': list, 'cases': list}
-
-        Each case in 'cases' is the following dict:
-            {'project_root': string, 'vpath': OrderedDict, 'spec': dict}
-        '''
-        test_cases = []
-
-        def do_scan(vpath, level):
-            curr_dir = os.path.join(self.project_root, *vpath.values())
-            conf_fn = os.path.join(curr_dir, "TestConfig.json")
-            assert os.path.exists(conf_fn)
-            conf = json.load(file(conf_fn))
-            if level == len(self.dim_names):
-                assert "test_case" in conf
-                case = {
-                    "spec": conf["test_case"],
-                    "vpath": vpath,
-                    "project_root": self.project_root
-                }
-                test_cases.append(case)
-            else:
-                assert "sub_directories" in conf
-                dirs = conf["sub_directories"]
-                dir_list = []
-                if isinstance(dirs, list):
-                    dir_list = dirs
-                elif isinstance(dirs, dict):
-                    assert "directories" in dirs
-                    dir_list = dirs["directories"]
-                else:
-                    raise RuntimeError("Invalid sub_directory spec")
-                for path in dir_list:
-                    new_vpath = OrderedDict(vpath)
-                    new_vpath[self.dim_names[level]] = path
-                    do_scan(new_vpath, level + 1)
-
-        do_scan(OrderedDict(), 0)
-        return {
-            "root": self.project_root,
-            "dim_names": self.dim_names,
-            "cases": test_cases
-        }
+    def itercases(self):
+        for test_vector, case_path in self.test_cases:
+            case_spec_fullpath = os.path.join(
+                self.project_root,
+                case_path,
+                "TestCase.json")
+            case_spec = json.load(file(case_spec_fullpath))
+            yield {
+                "case_path": os.path.join(self.project_root, case_path),
+                "run_spec": case_spec,
+                "test_vector": test_vector
+            }
 
 
 def parse_jasminlog(fn):
@@ -354,28 +324,28 @@ class TestResultCollector:
         self.serializer = serializer
 
     def collect(self, project_root, parser):
-        project_info = TestProjectScanner(project_root).scan()
+        project = TestProjectReader(project_root)
         all_results = []
-        for case in project_info["cases"]:
-            cwd = os.path.join(case["project_root"], *case["vpath"].values())
+        for case in project.itercases():
+            case_path = case["case_path"]
             # TODO: support collecting from multiple result file
-            result_fn = os.path.join(cwd, case["spec"]["results"][0])
+            result_fn = os.path.join(case_path, case["run_spec"]["results"][0])
             if not os.path.exists(result_fn):
                 continue
             content = parser.parse(result_fn)
-            all_results.append((case["vpath"], content))
+            all_results.append((case["test_vector"], content))
 
         def data_item_generator():
-            for vpath, content in all_results:
+            for test_vector, content in all_results:
                 # Only use the last record, TODO: use all records
                 data = content[-1]
                 for row in data["data"]:
                     row_list = [row.get(x, None) for x in data["columns"]]
-                    yield vpath.values() + row_list
+                    yield test_vector.values() + row_list
 
-        ref_vpath, ref_content = all_results[0]
-        columns = ref_vpath.keys()
-        column_types = {x: type(ref_vpath[x]) for x in ref_vpath.keys()}
+        ref_vector, ref_content = all_results[0]
+        columns = ref_vector.keys()
+        column_types = {x: type(ref_vector[x]) for x in ref_vector.keys()}
         for c in ref_content[0]["columns"]:
             columns.append(c)
             column_types[c] = ref_content[0]["column_types"].get(c, str)
