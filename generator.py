@@ -41,17 +41,48 @@ def parse_json(fn):
             result = obj
         return result
     content = file(fn).read()
-    content = re.sub(r"\s+//.*$", "", content)
+    content = re.sub(r"\s*//.*$", "", content)
     return ununicodify(json.loads(content, object_pairs_hook=OrderedDict))
 
 
 class SimpleVectorGenerator:
+    '''Simple test vector generator
+
+    Generates a collection of test vectors by iterating over provided test
+    vector space and expanding possible compacts.
+
+    Args:
+        test_factors (list): test factor names.
+        raw_vectors (list): test vector collection.
+            Each element shall be a list denoting the factor values. Its
+            element is either a blob or a list. If it's a list, it denotes
+            a range of possible values for the related test factor.
+
+    Examples:
+        A straight forward generator:
+
+            SimpleVectorGenerator(["A", "B"], [[1, 2], [1, 3], [2, 3]])
+
+        A compact representation:
+
+            SimpleVectorGenerator(["A", "B"], [[1, [2, 3]], [2, 3]])
+
+    '''
 
     def __init__(self, test_factors, raw_vectors=None):
         self.test_factors = test_factors
         self.raw_vectors = raw_vectors if raw_vectors else []
 
     def iteritems(self):
+        '''An iterator over the range of test vectors
+
+        Yields:
+            OrderedDict: a test vector.
+
+            OrderedDict.values() is the test factor values and
+            OrderedDict.keys() is the test factor names.
+
+        '''
         # expand each vector to support `[0, [1, 2], [3, 4]]`
         for item in self.raw_vectors:
             iters = [x if isinstance(x, list) else [x] for x in item]
@@ -60,12 +91,31 @@ class SimpleVectorGenerator:
 
 
 class CartProductVectorGenerator:
+    '''Cartetian product test vector generator
 
+    Generate a collection of test vectors by iterating a Cartetian product
+    of possible test factor values.
+
+    Args:
+        test_factors (list): test factor names.
+        factor_values (list): test factor value ranges.
+            (k, v) denotes (test factor name, test factor values)
+
+    '''
     def __init__(self, test_factors, factor_values):
         self.test_factors = test_factors
         self.factor_values = factor_values
 
     def iteritems(self):
+        '''An iterator over the range of test vectors
+
+        Yields:
+            OrderedDict: a test vector.
+
+            OrderedDict.values() is the test factor values and
+            OrderedDict.keys() is the test factor names.
+
+        '''
         factor_values = [self.factor_values[k] for k in self.test_factors]
         for v in itertools.product(*factor_values):
             yield OrderedDict(zip(self.test_factors, v))
@@ -137,7 +187,7 @@ class OutputOrganizer:
         return os.path.join(self.get_case_path(test_vector), "TestCase.json")
 
 
-class TestProject:
+class TestProjectBuilder:
 
     def __init__(self, conf_root):
         if not os.path.isabs(conf_root):
@@ -251,7 +301,7 @@ def main():
     parser.add_argument("output_root", help="Output directory")
 
     config = parser.parse_args()
-    project = TestProject(config.conf_root)
+    project = TestProjectBuilder(config.conf_root)
     project.write(config.output_root)
 
 
