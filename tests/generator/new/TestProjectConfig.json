@@ -1,5 +1,5 @@
 {
-    "format": 1,
+    "version": 1,
     "project": {
         "name": "test project",
         "test_factors": ["nnodes", "nmics", "test_id"],

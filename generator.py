@@ -6,6 +6,7 @@ import itertools
 import json
 import os
 import re
+import shutil
 
 from collections import OrderedDict
 
@@ -102,6 +103,7 @@ class CartProductVectorGenerator:
             (k, v) denotes (test factor name, test factor values)
 
     '''
+
     def __init__(self, test_factors, factor_values):
         self.test_factors = test_factors
         self.factor_values = factor_values
@@ -197,27 +199,21 @@ class TestProjectBuilder:
         spec_file = os.path.join(self.conf_root, "TestProjectConfig.json")
         spec = parse_json(spec_file)
 
-        # TODO: Refactor to support multiple versions in the future.
-        project_format = spec["format"]
-        if int(project_format) != 1:
+        # Do minimal sanity check
+        project_version = spec.get("version", 1)
+        if int(project_version) != 1:
             raise RuntimeError(
-                "Unsupported project format '%s': only allow '1'" %
-                project_format)
+                "Unsupported project version '%s': only allow '1'" %
+                project_version)
 
-        # basic project information
+        # Setup basic project information
         project_info = spec["project"]
         self.name = project_info["name"]
         self.test_factors = project_info["test_factors"]
         data_files = project_info.get("data_files", [])
-        self.data_files = []
-        for item in data_files:
-            if os.path.isabs(item):
-                self.data_files.append(item)
-            else:
-                path = os.path.normpath(os.path.join(self.conf_root, item))
-                self.data_files.append(path)
+        self.data_files = data_files
 
-        # build test vector generator
+        # Build test vector generator
         test_vector_generator_name = project_info["test_vector_generator"]
         if test_vector_generator_name == "cart_product":
             args = spec["cart_product_vector_generator"]
@@ -236,7 +232,7 @@ class TestProjectBuilder:
                 "Unknown test vector generator '%s'" %
                 test_vector_generator_name)
 
-        # build test case generator
+        # Build test case generator
         test_case_generator_name = project_info["test_case_generator"]
         if test_case_generator_name == "custom":
             info = spec["custom_case_generator"]
@@ -251,14 +247,17 @@ class TestProjectBuilder:
                 "Unknown test case generator '%s'" %
                 test_case_generator_name)
 
-        # build output organizer
+        # Build output organizer
         self.output_organizer = OutputOrganizer(version=1)
 
     def write(self, output_root):
+        # Prepare directories
         if not os.path.isabs(output_root):
             output_root = os.path.abspath(output_root)
         if not os.path.exists(output_root):
             os.makedirs(output_root)
+
+        # Generate test cases and write test case config
         for case in self.test_vector_generator.iteritems():
             case_path = self.output_organizer.get_case_path(case)
             case_fullpath = os.path.join(output_root, case_path)
@@ -276,23 +275,45 @@ class TestProjectBuilder:
                 os.chdir(cwd)
             case_spec_path = self.output_organizer.get_case_spec_path(case)
             case_spec_fullpath = os.path.join(output_root, case_spec_path)
-            json.dump(case_spec, file(case_spec_fullpath, "w"), indent=4)
-        # TODO: handle data_files
-        info = [
-            ("name", self.name), ("test_factors", self.test_factors),
-            ("data_files", self.data_files)]
+            json.dump(case_spec, file(case_spec_fullpath, "w"), indent=2)
+
+        # Handle data files: leave absolute path as-is, copy or link relative
+        # path to the output directory
+        for path in self.data_files:
+            if os.path.isabs(path):
+                continue
+            srcpath = os.path.join(self.conf_root, path)
+            dstpath = os.path.join(output_root, path)
+            if not os.path.exists(srcpath):
+                raise RuntimeError(
+                    "Data file specified but not found: '%s'" % path)
+            if os.path.isdir(srcpath):
+                if os.path.exists(dstpath):
+                    shutil.rmtree(dstpath)
+                shutil.copytree(srcpath, dstpath)
+            elif os.path.isfile(srcpath):
+                dstdir = os.path.dirname(dstpath)
+                if not os.path.exists(dstdir):
+                    os.makedirs(dstdir)
+                shutil.copyfile(srcpath, dstpath)
+            else:
+                raise RuntimeError("File type not supported: '%s'" % path)
+
+        # Write project config
+        info = [("version", 1), ("name", self.name),
+                ("test_factors", self.test_factors)]
         info = OrderedDict(info)
-        x = [case.values() for case in self.test_vector_generator.iteritems()]
-        y = [
-            self.output_organizer.get_case_path(case)
-            for case in self.test_vector_generator.iteritems()]
-        test_defs = OrderedDict()
-        test_defs["test_vectors"] = x
-        test_defs["case_paths"] = y
+        info["data_files"] = self.data_files
+        test_defs = []
+        for case in self.test_vector_generator.iteritems():
+            vector = case.values()
+            path = self.output_organizer.get_case_path(case)
+            test_defs.append(OrderedDict(
+                zip(["test_vector", "path"], [vector, path])))
         info["test_cases"] = test_defs
         project_info_path = self.output_organizer.get_project_info_path()
         project_info_fullpath = os.path.join(output_root, project_info_path)
-        json.dump(info, file(project_info_fullpath, "w"), indent=4)
+        json.dump(info, file(project_info_fullpath, "w"), indent=2)
 
 
 def main():

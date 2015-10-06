@@ -30,12 +30,14 @@ class TestProjectReader:
         if not os.path.exists(conf_fn):
             raise RuntimeError("Invalid project directory: %s" % project_root)
         conf = json.load(file(conf_fn))
+        version = conf.get("version", 1)
+        if version != 1:
+            raise RuntimeError(
+                "Unsupported project version '%s': Only 1 " % version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
         self.data_files = conf["data_files"]
-        test_cases = conf["test_cases"]
-        self.test_cases = zip(test_cases["test_vectors"],
-                              test_cases["case_paths"])
+        self.test_cases = conf["test_cases"]
 
     def check(self):
         '''Check project's validity
@@ -64,136 +66,162 @@ class TestProjectReader:
             # TODO: check the content of case spec (better with json-schema)
 
     def itercases(self):
-        for test_vector, case_path in self.test_cases:
+        for case in self.test_cases:
             case_spec_fullpath = os.path.join(
                 self.project_root,
-                case_path,
+                case["path"],
                 "TestCase.json")
             case_spec = json.load(file(case_spec_fullpath))
             yield {
-                "case_path": os.path.join(self.project_root, case_path),
-                "run_spec": case_spec,
-                "test_vector": test_vector
+                "test_vector": case["test_vector"],
+                "path": os.path.join(self.project_root, case["path"]),
+                "spec": case_spec
             }
 
+    def count_cases(self):
+        return len(self.test_cases)
 
-class TestCaseRunner:
 
-    def __init__(self, runner, timeout=None, progress=None):
-        self.runner = runner
-        self.timeout = timeout
-        self.progress = progress
-        if runner == "mpirun":
+class MpirunRunner:
 
-            def make_cmd(case, timeout):
-                exec_cmd = map(str, case["cmd"])
-                nprocs = str(case["run"]["nprocs"])
-                timeout_cmd = []
-                if timeout:
-                    timeout_cmd = ["/usr/bin/timeout", "{0}m".format(timeout)]
-                mpirun_cmd = ["mpirun", "-np", nprocs]
-                return timeout_cmd + mpirun_cmd + exec_cmd
+    @classmethod
+    def register_cmdline_args(cls, argparser):
+        pass
 
-            def check_ret(ret_code):
-                if ret_code == 0:
-                    return 0  # success
-                elif ret_code == 124:
-                    return 1  # timeout
-                else:
-                    return -1  # application terminated error
+    @classmethod
+    def parse_cmdline_args(cls, namespace):
+        return {}
 
-            self.make_cmd = make_cmd
-            self.check_ret = check_ret
-        elif runner_name == "yhrun":
+    def __init__(self, args):
+        self.args = args
 
-            def make_cmd(case, timeout):
-                exec_cmd = map(str, case["cmd"])
-                run = case["run"]
-                nprocs = str(run["nprocs"])
-                nnodes = run["nnodes"] if "nnodes" in run else None
-                tasks_per_proc = run.value("tasks_per_proc", None)
-                yhrun_cmd = ["yhrun"]
-                if nnodes:
-                    yhrun_cmd.extend(["-N", nnodes])
-                yhrun_cmd.extend(["-n", nprocs])
-                if tasks_per_proc:
-                    yhrun_cmd.extend(["-c", tasks_per_proc])
-                if timeout:
-                    yhrun_cmd.extend(["-t", str(timeout)])
-                yhrun_cmd.extend(["-p", "Super_zh"])
-                return yhrun_cmd + exec_cmd
+    def run(self, case, timeout=None, **kwargs):
+        test_vector = case["test_vector"]
+        path = case["path"]
+        spec = case["spec"]
+        assert os.path.isabs(path)
 
-            def check_ret(ret_code):
-                if ret_code == 0:
-                    return "success"
-                elif ret_code == 124:
-                    return "timeout"
-                else:
-                    return "failed"
+        nprocs = str(spec["run"]["nprocs"])
+        mpirun_cmd = ["mpirun", "-np", nprocs]
+        exec_cmd = map(str, spec["cmd"])
+        cmd = mpirun_cmd + exec_cmd
+        if timeout:
+            cmd = ["timeout", "{0}m".format(timeout)] + cmd
 
-            self.make_cmd = make_cmd
-            self.check_ret = check_ret
-        else:
-            raise RuntimeError("Unsupport runner: " + runner)
-
-    def run(self, case_spec):
-        test_vector = case_spec["test_vector"]
-        case_path = case_spec["case_path"]
-        run_spec = case_spec["run_spec"]
-        assert os.path.isabs(case_path)
         env = dict(os.environ)
-        for k, v in run_spec["envs"].iteritems():
+        for k, v in spec["envs"].iteritems():
             env[k] = str(v)
-        out_fn = os.path.join(case_path, "STDOUT")
-        err_fn = os.path.join(case_path, "STDERR")
-        cmd = self.make_cmd(run_spec, self.timeout)
-        if self.progress:
-            self.progress.begin_case(case_spec)
+        out_fn = os.path.join(path, "STDOUT")
+        err_fn = os.path.join(path, "STDERR")
+
         ret = subprocess.call(cmd,
                               env=env,
-                              cwd=case_path,
+                              cwd=path,
                               stdout=file(out_fn, "w"),
                               stderr=file(err_fn, "w"))
-        stat = self.check_ret(ret)
-        if self.progress:
-            self.progress.end_case(case_spec, stat)
-        return stat
 
-    def run_batch(self, cases):
-        '''Run a collection of test cases'''
-        finished_cases = []
-        timeout_cases = []
-        failed_cases = []
-        for case in cases:
-            status = self.run(case)
-            if status == 0:
-                finished_cases.append(case)
-            elif status == 1:
-                timeout_cases.append(case)
-                failed_cases.append(case)
-            else:
-                failed_cases.append(case)
-        return {
-            "finished": finished_cases,
-            "failed": failed_cases,
-            "timeout": timeout_cases
-        }
-
-
-class SimpleProgress:
-
-    def begin_case(self, case_spec):
-        pretty_path = os.path.relpath(case_spec["case_path"])
-        print "  Run {0} ...".format(pretty_path),
-
-    def end_case(self, case_spec, stat):
-        if stat == 0:
-            s = "Done."
-        elif stat == 1:
-            s = "Timeout."
+        if ret == 0:
+            return "success"
+        elif ret_code == 124:
+            return "timeout"
         else:
-            s = "Failed."
-        print s
+            return "failed"
+
+
+class YhrunRunner:
+
+    @classmethod
+    def register_cmdline_args(cls, argparser):
+        argparser.add_argument("-p, --partition",
+                               metavar="PARTITION", dest="partition",
+                               help="Select job partition to use")
+
+    @classmethod
+    def parse_cmdline_args(cls, namespace):
+        return {"partition": namespace.partition}
+
+    def __init__(self, args):
+        self.args = args
+
+    def run(self, case, timeout=None):
+        test_vector = case["test_vector"]
+        path = case["case_path"]
+        spec = case["run_spec"]
+        assert os.path.isabs(path)
+
+        run = spec["run"]
+        nprocs = str(run["nprocs"])
+        nnodes = run.value("nnodes", None)
+        tasks_per_proc = run.value("tasks_per_proc", None)
+        yhrun_cmd = ["yhrun"]
+        if nnodes:
+            yhrun_cmd.extend(["-N", nnodes])
+        yhrun_cmd.extend(["-n", nprocs])
+        if tasks_per_proc:
+            yhrun_cmd.extend(["-c", tasks_per_proc])
+        if timeout:
+            yhrun_cmd.extend(["-t", str(timeout)])
+        if self.args["partition"]:
+            yhrun_cmd.extend(["-p", self.args["partition"]])
+        cmd = yhrun_cmd + exec_cmd
+
+        env = dict(os.environ)
+        for k, v in spec["envs"].iteritems():
+            env[k] = str(v)
+        out_fn = os.path.join(path, "STDOUT")
+        err_fn = os.path.join(path, "STDERR")
+
+        ret = subprocess.call(cmd,
+                              env=env,
+                              cwd=path,
+                              stdout=file(out_fn, "w"),
+                              stderr=file(err_fn, "w"))
+
+        if ret == 0:
+            return "success"
+        elif ret_code == 124:
+            return "timeout"
+        else:
+            return "failed"
+
+
+class SimpleProgressReporter:
+
+    def project_begin(self, project):
+        sys.stdout.write("Start project %s:\n" % project.name)
+        self.total_cases = project.count_cases()
+        self.finished_cases = 0
+
+    def project_end(self, project, stats):
+        sys.stdout.write("Done.\n")
+        sys.stdout.write("%d success, %d failed, %d timeout.\n" % (
+            len(stats["success"]), len(stats["failed"]),
+            len(stats["timeout"])))
+
+    def case_begin(self, project, case):
+        self.finished_cases += 1
+        completed = float(self.finished_cases) / float(self.total_cases) * 100
+        pretty_case = os.path.relpath(case["path"], project.project_root)
+        sys.stdout.write("   [%3.0f%%] Run %s ... " % (completed, pretty_case))
+
+    def case_end(self, project, case, result):
+        sys.stdout.write("%s\n" % result)
+        sys.stdout.flush()
+
+
+def run_project(project, runner, reporter):
+    stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
+
+    reporter.project_begin(project)
+    for case in project.itercases():
+        reporter.case_begin(project, case)
+        result = runner.run(case)
+        reporter.case_end(project, case, result)
+        stats[result].append(case)
+    reporter.project_end(project, stats)
+
+    runlog_path = os.path.join(project.project_root, "run_stats.json")
+    json.dump(stats, file(runlog_path, "w"), indent=2)
 
 
 def main():
@@ -209,7 +237,7 @@ def main():
     ag.add_argument("--include",
                     help="Test cases to include, support wildcards")
 
-    ag = parser.add_argument_group("Case runner options")
+    ag = parser.add_argument_group("Runner options")
     ag.add_argument("--case-runner",
                     choices=["mpirun", "yhrun"],
                     default="mpirun",
@@ -218,20 +246,23 @@ def main():
                     default=5,
                     help="Timeout for each case, in minites")
 
+    ag = parser.add_argument_group("yhrun options")
+    YhrunRunner.register_cmdline_args(ag)
+
+    ag = parser.add_argument_group("mpirun options")
+    MpirunRunner.register_cmdline_args(ag)
+
     config = parser.parse_args()
 
     proj = TestProjectReader(config.project_root)
-    print "Test project information: "
-    print "  project root: {0}".format(proj.project_root)
-    print "  test factors: {0}".format(", ".join(proj.test_factors))
+    if config.case_runner == "mpirun":
+        runner = MpirunRunner(MpirunRunner.parse_cmdline_args(config))
+    elif config.case_runner == "yhrun":
+        runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
+    else:
+        raise NotImplementedError("This is not possible")
 
-    runner = TestCaseRunner("mpirun", progress=SimpleProgress())
-    print "Run progress:"
-    stats = runner.run_batch(proj.itercases())
-    print "Run finished."
-    print "  {0} finished, {1} failed".format(len(stats["finished"]),
-                                              len(stats["failed"]))
-    print "  {0} failed due to timeout".format(len(stats["timeout"]))
+    run_project(proj, runner, SimpleProgressReporter())
 
 
 if __name__ == "__main__":

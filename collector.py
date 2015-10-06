@@ -35,25 +35,30 @@ class TestProjectReader:
         if not os.path.exists(conf_fn):
             raise RuntimeError("Invalid project directory: %s" % project_root)
         conf = json.load(file(conf_fn))
+        version = conf.get("version", 1)
+        if version != 1:
+            raise RuntimeError(
+                "Unsupported project version '%s': Only 1 " % version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
         self.data_files = conf["data_files"]
-        test_cases = conf["test_cases"]
-        self.test_cases = zip(test_cases["test_vectors"],
-                              test_cases["case_paths"])
+        self.test_cases = conf["test_cases"]
 
     def itercases(self):
-        for test_vector, case_path in self.test_cases:
+        for case in self.test_cases:
             case_spec_fullpath = os.path.join(
                 self.project_root,
-                case_path,
+                case["path"],
                 "TestCase.json")
             case_spec = json.load(file(case_spec_fullpath))
             yield {
-                "case_path": os.path.join(self.project_root, case_path),
-                "run_spec": case_spec,
-                "test_vector": test_vector
+                "test_vector": case["test_vector"],
+                "path": os.path.join(self.project_root, case["path"]),
+                "spec": case_spec
             }
+
+    def count_cases(self):
+        return len(self.test_cases)
 
 
 def parse_jasminlog(fn):
