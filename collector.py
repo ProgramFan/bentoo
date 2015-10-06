@@ -147,7 +147,7 @@ def parse_jasminlog(fn):
         # Make final result
         types = {x: avail_types[x] for x in header}
         table = {
-            "columns": header,
+            "column_names": header,
             "column_types": types,
             "data": table_contents
         }
@@ -156,6 +156,7 @@ def parse_jasminlog(fn):
 
 
 class JasminParser:
+
     def parse(self, fn):
         return parse_jasminlog(fn)
 
@@ -238,7 +239,7 @@ def parse_jasmin4log(fn):
         # Make final result
         types = {x: avail_types[x] for x in header}
         table = {
-            "columns": header,
+            "column_names": header,
             "column_types": types,
             "data": table_contents
         }
@@ -247,11 +248,13 @@ def parse_jasmin4log(fn):
 
 
 class Jasmin4Parser:
+
     def parse(self, fn):
         return parse_jasmin4log(fn)
 
 
 class UnifiedJasminParser:
+
     def __init__(self):
         jasmin4_ptn = re.compile(
             r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" +
@@ -292,29 +295,31 @@ class SqliteSerializer:
         buffer: "BLOB"
     }
 
-    def __init__(self, db):
-        conn = sqlite3.connect(db)
+    def __init__(self, dbfile):
+        conn = sqlite3.connect(dbfile)
         obj = conn.execute("DROP TABLE IF EXISTS result")
         conn.commit()
         self.conn = conn
 
-    def serialize(self, columns, column_types, data):
+    def serialize(self, data_items, column_names, column_types):
+        '''Dump content to database
+        '''
         # Build table creation and insertion SQL statements
-        table_columns = []
-        for c in columns:
-            t = column_types.get(c, str)
+        column_segs = []
+        for i, column_name in enumerate(column_names):
+            t = column_types[i]
             assert t in SqliteSerializer.typemap
             tn = SqliteSerializer.typemap[t]
-            table_columns.append("{0} {1}".format(c, tn))
-        table_columns_sql = ", ".join(table_columns)
+            column_segs.append("{0} {1}".format(column_name, tn))
+        create_columns_sql = ", ".join(column_segs)
         create_table_sql = "CREATE TABLE result ({0})".format(
-            table_columns_sql)
-        ph_sql = ", ".join(["?"] * len(columns))
+            create_columns_sql)
+        ph_sql = ", ".join(["?"] * len(column_names))
         insert_row_sql = "INSERT INTO result VALUES ({0})".format(ph_sql)
         # Create table and insert data items
         cur = self.conn.cursor()
         cur.execute(create_table_sql)
-        for item in data:
+        for item in data_items:
             assert isinstance(item, list) or isinstance(item, tuple)
             assert len(item) == len(columns)
             cur.execute(insert_row_sql, item)
@@ -332,9 +337,9 @@ class TestResultCollector:
         project = TestProjectReader(project_root)
         all_results = []
         for case in project.itercases():
-            case_path = case["case_path"]
+            case_path = case["path"]
             # TODO: support collecting from multiple result file
-            result_fn = os.path.join(case_path, case["run_spec"]["results"][0])
+            result_fn = os.path.join(case_path, case["spec"]["results"][0])
             if not os.path.exists(result_fn):
                 continue
             content = parser.parse(result_fn)
@@ -345,17 +350,18 @@ class TestResultCollector:
                 # Only use the last record, TODO: use all records
                 data = content[-1]
                 for row in data["data"]:
-                    row_list = [row.get(x, None) for x in data["columns"]]
+                    row_list = [row.get(x, None) for x in data["column_names"]]
                     yield test_vector.values() + row_list
 
         ref_vector, ref_content = all_results[0]
-        columns = ref_vector.keys()
+        column_names = ref_vector.keys()
         column_types = {x: type(ref_vector[x]) for x in ref_vector.keys()}
-        for c in ref_content[0]["columns"]:
-            columns.append(c)
+        for c in ref_content[0]["column_names"]:
+            column_names.append(c)
             column_types[c] = ref_content[0]["column_types"].get(c, str)
 
-        self.serializer.serialize(columns, column_types, data_item_generator())
+        self.serializer.serialize(
+            data_item_generator(), column_names, column_types)
 
 
 def make_parser(name, *args, **kwargs):
