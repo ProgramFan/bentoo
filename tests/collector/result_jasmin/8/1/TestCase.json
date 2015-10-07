@@ -1,5 +1,4 @@
 {
-    "test_case": {
         "envs": {
             "OMP_NUM_THREADS": 1, 
             "LS_COLORS": ""
@@ -18,5 +17,4 @@
         "results": [
             "LinAdvSL-linadv_2d.log"
         ]
-    }
 }

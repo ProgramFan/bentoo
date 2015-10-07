@@ -41,8 +41,8 @@ class TestProjectReader:
                 "Unsupported project version '%s': Only 1 " % version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
-        self.data_files = conf["data_files"]
         self.test_cases = conf["test_cases"]
+        self.data_files = conf.get("data_files", [])
 
     def itercases(self):
         for case in self.test_cases:
@@ -110,7 +110,6 @@ def parse_jasminlog(fn):
     logtbl_ptn = re.compile(
         "^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
         "(?P<content>.*?)^\+{80}$", re.M + re.S)
-    result = []
     for match in logtbl_ptn.finditer(content):
         log_table = match.groupdict()
         table_name = tokenlize(log_table["name"])
@@ -144,15 +143,17 @@ def parse_jasminlog(fn):
         for k in table_contents[0].iterkeys():
             if k not in header:
                 header.append(k)
-        # Make final result
-        types = {x: avail_types[x] for x in header}
+        # Make final result:
+        # Ensures `len(header) == len(types)` and `[len(data_item) ==
+        # len(header) for data_item in data]`. So the data is in good shape.
+        types = [avail_types[x] for x in header]
+        data = [[v.get(k, None) for k in header] for v in table_contents]
         table = {
             "column_names": header,
             "column_types": types,
-            "data": table_contents
+            "data": data
         }
-        result.append(table)
-    return result
+        yield table
 
 
 class JasminParser:
@@ -204,7 +205,6 @@ def parse_jasmin4log(fn):
     logtbl_ptn = re.compile(
         r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" + r"^(?P<header>^.*?$)\n-{10,}\n"
         + r"(?P<content>.*?)^-{10,}\n", re.M + re.S)
-    result = []
     for match in logtbl_ptn.finditer(content):
         log_table = match.groupdict()
         table_name = log_table["name"]
@@ -237,19 +237,22 @@ def parse_jasmin4log(fn):
             if k not in header:
                 header.append(k)
         # Make final result
-        types = {x: avail_types[x] for x in header}
+        # Ensures `len(header) == len(types)` and `[len(data_item) ==
+        # len(header) for data_item in data]`. So the data is in good shape.
+        types = [avail_types[x] for x in header]
+        data = [[v.get(k, None) for k in header] for v in table_contents]
         table = {
             "column_names": header,
             "column_types": types,
-            "data": table_contents
+            "data": data
         }
-        result.append(table)
-    return result
+
+        yield table
 
 
 class Jasmin4Parser:
 
-    def parse(self, fn):
+    def itertables(self, fn):
         return parse_jasmin4log(fn)
 
 
@@ -280,7 +283,7 @@ class UnifiedJasminParser:
             "jasmin4": parse_jasmin4log
         }
 
-    def parse(self, fn):
+    def itertables(self, fn):
         return self.parser_funcs[self.filetype_detector(fn)](fn)
 
 
@@ -321,7 +324,7 @@ class SqliteSerializer:
         cur.execute(create_table_sql)
         for item in data_items:
             assert isinstance(item, list) or isinstance(item, tuple)
-            assert len(item) == len(columns)
+            assert len(item) == len(column_names)
             cur.execute(insert_row_sql, item)
         self.conn.commit()
         self.conn.close()
@@ -335,33 +338,52 @@ class TestResultCollector:
 
     def collect(self, project_root, parser):
         project = TestProjectReader(project_root)
-        all_results = []
-        for case in project.itercases():
-            case_path = case["path"]
-            # TODO: support collecting from multiple result file
-            result_fn = os.path.join(case_path, case["spec"]["results"][0])
-            if not os.path.exists(result_fn):
-                continue
-            content = parser.parse(result_fn)
-            all_results.append((case["test_vector"], content))
 
-        def data_item_generator():
-            for test_vector, content in all_results:
-                # Only use the last record, TODO: use all records
-                data = content[-1]
-                for row in data["data"]:
-                    row_list = [row.get(x, None) for x in data["column_names"]]
-                    yield test_vector.values() + row_list
+        def table_generator():
+            for case in project.itercases():
+                case_path = case["path"]
+                # TODO: support collecting from multiple result file
+                result_fn = os.path.join(case_path, case["spec"]["results"][0])
+                if not os.path.exists(result_fn):
+                    continue
+                content = list(parser.itertables(result_fn))
+                # TODO: refactor to support user defined table selection
+                test_vector = OrderedDict(zip(project.test_factors,
+                                              case["test_vector"]))
+                yield {
+                    "test_vector": test_vector,
+                    "data_table": content[-1]
+                }
 
-        ref_vector, ref_content = all_results[0]
-        column_names = ref_vector.keys()
-        column_types = {x: type(ref_vector[x]) for x in ref_vector.keys()}
-        for c in ref_content[0]["column_names"]:
-            column_names.append(c)
-            column_types[c] = ref_content[0]["column_types"].get(c, str)
+        def data_item_generator(table):
+            test_vector_values = table["test_vector"].values()
+            data_table = table["data_table"]
+            for data_row in data_table["data"]:
+                yield test_vector_values + data_row
 
-        self.serializer.serialize(
-            data_item_generator(), column_names, column_types)
+        table_producer = iter(table_generator())
+
+        try:
+            ref_table = next(table_producer)
+        except StopIteration:
+            # nothing to dump, return
+            return
+        # build final table structure from reference data table
+        ref_vector = ref_table["test_vector"]
+        ref_data = ref_table["data_table"]
+        column_names = ref_vector.keys() + ref_data["column_names"]
+        column_types = map(type, ref_vector.values())
+        column_types.extend(ref_data["column_types"])
+
+        def final_generator():
+            for item in data_item_generator(ref_table):
+                yield item
+            for table in table_producer:
+                for item in data_item_generator(table):
+                    yield item
+
+        self.serializer.serialize(final_generator(),
+                                  column_names, column_types)
 
 
 def make_parser(name, *args, **kwargs):
@@ -396,6 +418,8 @@ def main():
                         choices=["jasmin3", "jasmin4", "jasmin"],
                         default="jasmin",
                         help="Parser for raw result files (default: jasmin)")
+    parser.add_argument("--use-table", default="-1",
+                        help="Choose which data table to use")
 
     args = parser.parse_args()
     parser = make_parser(args.parser)

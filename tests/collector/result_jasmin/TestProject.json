@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "name": "TemplateGeneration",
+  "test_factors": ["nnodes", "nthreads"],
+  "test_cases": [
+    { "test_vector": [1, 1], "path": "1/1" },
+    { "test_vector": [1, 6], "path": "1/6" },
+    { "test_vector": [2, 1], "path": "2/1" },
+    { "test_vector": [2, 6], "path": "2/6" },
+    { "test_vector": [4, 1], "path": "4/1" },
+    { "test_vector": [4, 6], "path": "4/6" },
+    { "test_vector": [8, 1], "path": "8/1" },
+    { "test_vector": [8, 6], "path": "8/6" }
+  ]
+}

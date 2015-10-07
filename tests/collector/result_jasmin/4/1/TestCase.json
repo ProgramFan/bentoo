@@ -1,0 +1,20 @@
+{
+  "envs": {
+    "OMP_NUM_THREADS": 1, 
+    "LS_COLORS": ""
+  }, 
+  "cmd": [
+    "ls", 
+    "-l", 
+    "../.."
+  ], 
+  "run": {
+    "nprocs": 48, 
+    "nnodes": 4, 
+    "procs_per_node": 12, 
+    "tasks_per_proc": 1
+  }, 
+  "results": [
+    "LinAdvSL-linadv_2d.log"
+  ]
+}

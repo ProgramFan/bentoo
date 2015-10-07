@@ -1,7 +1,6 @@
 {
-    "test_case": {
         "envs": {
-            "OMP_NUM_THREADS": 1, 
+            "OMP_NUM_THREADS": 6, 
             "LS_COLORS": ""
         }, 
         "cmd": [
@@ -10,13 +9,12 @@
             "../.."
         ], 
         "run": {
-            "procs_per_node": 12, 
+            "procs_per_node": 2, 
             "nnodes": 8, 
-            "nprocs": 96, 
-            "tasks_per_proc": 1
+            "nprocs": 16, 
+            "tasks_per_proc": 6
         }, 
         "results": [
             "LinAdvSL-linadv_2d.log"
         ]
-    }
 }
