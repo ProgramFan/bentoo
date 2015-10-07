@@ -29,9 +29,16 @@ import pandas
 
 
 class SqliteReader:
+
     def read_frame(self, fn):
         conn = sqlite3.connect(fn)
         return pandas.io.sql.read_sql("SELECT * FROM result", conn)
+
+
+class ExcelReader:
+
+    def read_frame(self, fn):
+        return pandas.read_excel(fn, index=False)
 
 
 def make_equal_match_func(value):
@@ -68,6 +75,7 @@ def make_glob_match_func(value):
 
 
 class Matcher:
+
     def __init__(self, spec):
         '''Create pandas DataFrame filter from spec
 
@@ -101,6 +109,15 @@ class Matcher:
         return df
 
 
+def make_reader(reader):
+    if reader == "sqlite":
+        return SqliteReader()
+    elif reader == "excel":
+        return ExcelReader()
+    else:
+        raise RuntimeError("Unknown reader '%s'" % reader)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -121,9 +138,13 @@ def main():
                         "--pivot",
                         help="Pivoting fields, 2 or 3 element list")
     parser.add_argument("-s", "--save", help="Save result to a CSV file")
+    parser.add_argument("--reader", choices=["sqlite", "excel"],
+                        default="sqlite",
+                        help="Choose database reader (default: sqlite)")
 
     args = parser.parse_args()
-    data = SqliteReader().read_frame(args.data_file)
+    reader = make_reader(args.reader)
+    data = reader.read_frame(args.data_file)
     matcher = Matcher(args.match)
     df = matcher.filter(data)
     if args.field:
