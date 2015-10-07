@@ -330,6 +330,28 @@ class SqliteSerializer:
         self.conn.close()
 
 
+class PandasSerializer(object):
+
+    def __init__(self, data_file, file_format=None):
+        self.data_file = data_file
+        self.file_format = file_format if file_format else "xlsx"
+
+    def serialize(self, data_items, column_names, column_types):
+        import numpy
+        import pandas
+        # column_types is not used becuase numpy automatically deduce the best
+        # type for each data item.
+        data = numpy.array(list(data_items))
+        frame = pandas.DataFrame(data, columns=column_names)
+        if self.file_format == "xls" or self.file_format == "xlsx":
+            frame.to_excel(self.data_file, index=False)
+        elif self.file_format == "csv":
+            frame.to_csv(self.data_file, index=False)
+        else:
+            raise RuntimeError(
+                "Unsupported output format '%s'" % self.file_format)
+
+
 class TestResultCollector:
     '''TestResultCollector - Collect test results and save them'''
 
@@ -400,6 +422,8 @@ def make_parser(name, *args, **kwargs):
 def make_serializer(name, *args, **kwargs):
     if name == "sqlite3":
         return SqliteSerializer(*args, **kwargs)
+    elif name == "pandas":
+        return PandasSerializer(*args, **kwargs)
     else:
         raise ValueError("Unsupported serializer: %s" % name)
 
@@ -411,7 +435,7 @@ def main():
     parser.add_argument("project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
     parser.add_argument("--serializer",
-                        choices=["sqlite3"],
+                        choices=["sqlite3", "pandas"],
                         default="sqlite3",
                         help="Serializer to dump results (default: sqlite3)")
     parser.add_argument("--parser",
