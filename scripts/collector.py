@@ -22,6 +22,7 @@ import argparse
 import json
 import sqlite3
 from collections import OrderedDict
+from functools import reduce
 
 
 class TestProjectReader:
@@ -352,77 +353,33 @@ class PandasSerializer(object):
                 "Unsupported output format '%s'" % self.file_format)
 
 
-class TestResultCollector:
-    '''TestResultCollector - Collect test results and save them'''
+class TableColumnFilter(object):
 
-    def __init__(self, serializer):
-        self.serializer = serializer
-
-    def collect(self, project_root, parser, drop_columns=None):
-        project = TestProjectReader(project_root)
-
-        def compute_drop_index(column_names, drop_specs):
-            from fnmatch import fnmatchcase
-            if not drop_specs:
-                return [False for x in column_names]
-            drop_specs = [x.strip() for x in drop_specs.split(",")]
-            drop_or_not = [reduce(lambda x, y: x or y,
-                                  [fnmatchcase(n, x) for x in drop_specs])
-                           for n in column_names]
-            return drop_or_not
-
-        def table_generator():
-            for case in project.itercases():
-                case_path = case["path"]
-                # TODO: support collecting from multiple result file
-                result_fn = os.path.join(case_path, case["spec"]["results"][0])
-                if not os.path.exists(result_fn):
-                    continue
-                content = list(parser.itertables(result_fn))
-                # TODO: refactor to support user defined table selection
-                test_vector = OrderedDict(zip(project.test_factors,
-                                              case["test_vector"]))
-                yield {
-                    "test_vector": test_vector,
-                    "data_table": content[-1]
-                }
-
-        def data_item_generator(table):
-            test_vector_values = table["test_vector"].values()
-            data_table = table["data_table"]
-            for data_row in data_table["data"]:
-                yield test_vector_values + data_row
-
-        table_producer = iter(table_generator())
-
-        try:
-            ref_table = next(table_producer)
-        except StopIteration:
-            # nothing to dump, return
+    def __init__(self, column_names, filter_spec, action="throw"):
+        assert action in ("throw", "keep")
+        self.column_names = column_names
+        self.action = action
+        if not filter_spec:
+            self.filter_mask = None
             return
-        # build final table structure from reference data table
-        ref_vector = ref_table["test_vector"]
-        ref_data = ref_table["data_table"]
-        column_names = ref_vector.keys() + ref_data["column_names"]
-        column_types = map(type, ref_vector.values())
-        column_types.extend(ref_data["column_types"])
+        from fnmatch import fnmatchcase
+        parsed_spec = [x.strip() for x in filter_spec.split(",")]
+        filter_mask = [reduce(lambda x, y: x or y,
+                              [fnmatchcase(n, x) for x in parsed_spec])
+                       for n in self.column_names]
+        self.filter_mask = filter_mask
 
-        def do_drop(drop_mask, data):
-            return [data[i] for i, t in enumerate(drop_mask) if not t]
-
-        drop_mask = compute_drop_index(column_names, drop_columns)
-        column_names = do_drop(drop_mask, column_names)
-        column_types = do_drop(drop_mask, column_types)
-
-        def final_generator():
-            for item in data_item_generator(ref_table):
-                yield do_drop(drop_mask, item)
-            for table in table_producer:
-                for item in data_item_generator(table):
-                    yield do_drop(drop_mask, item)
-
-        self.serializer.serialize(final_generator(),
-                                  column_names, column_types)
+    def filter(self, data_row):
+        # short cut for empty filter
+        if not self.filter_mask:
+            return data_row
+        if self.action == "keep":
+            return [data_row[i] for i, t in enumerate(self.filter_mask) if t]
+        elif self.action == "throw":
+            return [data_row[i] for i, t in enumerate(self.filter_mask)
+                    if not t]
+        else:
+            raise RuntimeError("Bad filter action '%s'" % self.action)
 
 
 def make_parser(name, *args, **kwargs):
@@ -445,11 +402,82 @@ def make_serializer(name, *args, **kwargs):
         raise ValueError("Unsupported serializer: %s" % name)
 
 
+class Collector(object):
+
+    '''TestResultCollector - Collect test results and save them'''
+
+    def __init__(self, project_root, data_file, parser, serializer,
+                 drop_columns=None, use_table=-1):
+        self.project = TestProjectReader(project_root)
+        self.parser = make_parser(parser)
+        self.serializer = make_serializer(serializer, data_file)
+        self.use_table = use_table
+        self.drop_columns = drop_columns
+
+    @staticmethod
+    def _table_generator(project, parser, table_selector):
+        for case in project.itercases():
+            case_path = case["path"]
+            # TODO: support collecting from multiple result file. This
+            # would require another column designating the filename. This
+            # is not often used, so shall be used as an option
+            result_fn = os.path.join(
+                case_path, case["spec"]["results"][0])
+            if not os.path.exists(result_fn):
+                continue
+            content = list(parser.itertables(result_fn))
+            test_vector = OrderedDict(zip(project.test_factors,
+                                          case["test_vector"]))
+            yield {
+                "test_vector": test_vector,
+                "data_table": content[table_selector]
+            }
+
+    @staticmethod
+    def _data_item_generator(table):
+        test_vector_values = table["test_vector"].values()
+        data_table = table["data_table"]
+        for data_row in data_table["data"]:
+            yield test_vector_values + data_row
+
+    def collect(self):
+        table_producer = iter(self._table_generator(self.project, self.parser,
+                                                    self.use_table))
+
+        # Build final data table structure
+        try:
+            ref_table = next(table_producer)
+        except StopIteration:
+            # nothing to collect, return
+            return
+        ref_vector = ref_table["test_vector"]
+        ref_data = ref_table["data_table"]
+        column_names = ref_vector.keys() + ref_data["column_names"]
+        column_types = map(type, ref_vector.values())
+        column_types.extend(ref_data["column_types"])
+
+        column_dropper = TableColumnFilter(column_names, self.drop_columns,
+                                           action="throw")
+        column_names = column_dropper.filter(column_names)
+        column_types = column_dropper.filter(column_types)
+
+        def data_row_producer():
+            for item in self._data_item_generator(ref_table):
+                yield column_dropper.filter(item)
+            for table in table_producer:
+                for item in self._data_item_generator(table):
+                    yield column_dropper.filter(item)
+
+        self.serializer.serialize(data_row_producer(), column_names,
+                                  column_types)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("project_root", help="Test project root directory")
+    parser.add_argument(
+        "project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
     parser.add_argument("-s, --serializer", metavar="SERIALIZER",
                         dest="serializer", choices=["sqlite3", "pandas"],
@@ -459,18 +487,16 @@ def main():
                         choices=["jasmin3", "jasmin4", "jasmin"],
                         default="jasmin",
                         help="Parser for raw result files (default: jasmin)")
-    parser.add_argument("--use-table", default="-1",
+    parser.add_argument("--use-table", type=int, default=-1,
                         help="Choose which data table to use")
     parser.add_argument("-d, --drop-columns", default=None, metavar="SPEC",
                         dest="drop_columns",
                         help="Drop un-wanted table columns")
 
     args = parser.parse_args()
-    parser = make_parser(args.parser)
-    serializer = make_serializer(args.serializer, args.data_file)
-    collector = TestResultCollector(serializer)
-    collector.collect(args.project_root, parser, args.drop_columns)
-
+    collector = Collector(args.project_root, args.data_file, args.parser,
+                          args.serializer, args.drop_columns, args.use_table)
+    collector.collect()
 
 if __name__ == "__main__":
     main()
