@@ -358,8 +358,18 @@ class TestResultCollector:
     def __init__(self, serializer):
         self.serializer = serializer
 
-    def collect(self, project_root, parser):
+    def collect(self, project_root, parser, drop_columns=None):
         project = TestProjectReader(project_root)
+
+        def compute_drop_index(column_names, drop_specs):
+            from fnmatch import fnmatchcase
+            if not drop_specs:
+                return [False for x in column_names]
+            drop_specs = [x.strip() for x in drop_specs.split(",")]
+            drop_or_not = [reduce(lambda x, y: x or y,
+                                  [fnmatchcase(n, x) for x in drop_specs])
+                           for n in column_names]
+            return drop_or_not
 
         def table_generator():
             for case in project.itercases():
@@ -397,12 +407,19 @@ class TestResultCollector:
         column_types = map(type, ref_vector.values())
         column_types.extend(ref_data["column_types"])
 
+        def do_drop(drop_mask, data):
+            return [data[i] for i, t in enumerate(drop_mask) if not t]
+
+        drop_mask = compute_drop_index(column_names, drop_columns)
+        column_names = do_drop(drop_mask, column_names)
+        column_types = do_drop(drop_mask, column_types)
+
         def final_generator():
             for item in data_item_generator(ref_table):
-                yield item
+                yield do_drop(drop_mask, item)
             for table in table_producer:
                 for item in data_item_generator(table):
-                    yield item
+                    yield do_drop(drop_mask, item)
 
         self.serializer.serialize(final_generator(),
                                   column_names, column_types)
@@ -434,22 +451,25 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
-    parser.add_argument("--serializer",
-                        choices=["sqlite3", "pandas"],
+    parser.add_argument("-s, --serializer", metavar="SERIALIZER",
+                        dest="serializer", choices=["sqlite3", "pandas"],
                         default="sqlite3",
                         help="Serializer to dump results (default: sqlite3)")
-    parser.add_argument("--parser",
+    parser.add_argument("-p, --parser", metavar="PARSER", dest="parser",
                         choices=["jasmin3", "jasmin4", "jasmin"],
                         default="jasmin",
                         help="Parser for raw result files (default: jasmin)")
     parser.add_argument("--use-table", default="-1",
                         help="Choose which data table to use")
+    parser.add_argument("-d, --drop-columns", default=None, metavar="SPEC",
+                        dest="drop_columns",
+                        help="Drop un-wanted table columns")
 
     args = parser.parse_args()
     parser = make_parser(args.parser)
     serializer = make_serializer(args.serializer, args.data_file)
     collector = TestResultCollector(serializer)
-    collector.collect(args.project_root, parser)
+    collector.collect(args.project_root, parser, args.drop_columns)
 
 
 if __name__ == "__main__":
