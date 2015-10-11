@@ -19,64 +19,48 @@ cases, namely tasks need to be done quick and often in command line. More
 sphosticated analysis need to be done directly in python using pandas etc.
 '''
 
-import os
-import sys
 import argparse
-import re
 import fnmatch
-import sqlite3
+import os
 import pandas
+import re
+import sys
+import sqlite3
 
 
-class SqliteReader:
-
-    def read_frame(self, fn):
-        conn = sqlite3.connect(fn)
-        return pandas.io.sql.read_sql("SELECT * FROM result", conn)
+def parse_list(repr):
+    return [x.strip() for x in repr.split(",") if x.strip()]
 
 
-class ExcelReader:
+class PandasReader(object):
 
-    def read_frame(self, fn):
-        return pandas.read_excel(fn, index=False)
+    @staticmethod
+    def _make_equal_match_func(value):
+        if isinstance(value, list):
+            def match(x):
+                return str(x) in value
+            return match
+        else:
+            def match(x):
+                return x == type(x)(value)
+            return match
 
+    @staticmethod
+    def _make_glob_match_func(value):
+        if isinstance(value, list):
+            def match(x):
+                for v in value:
+                    if fnmatch.fnmatch(str(x), v):
+                        return True
+                return False
+            return match
+        else:
+            def match(x):
+                return fnmatch.fnmatch(str(x), value)
+            return match
 
-def make_equal_match_func(value):
-    if isinstance(value, list):
-
-        def match(x):
-            return str(x) in value
-
-        return match
-    else:
-
-        def match(x):
-            return x == type(x)(value)
-
-        return match
-
-
-def make_glob_match_func(value):
-    if isinstance(value, list):
-
-        def match(x):
-            for v in value:
-                if fnmatch.fnmatch(str(x), v):
-                    return True
-            return False
-
-        return match
-    else:
-
-        def match(x):
-            return fnmatch.fnmatch(str(x), value)
-
-        return match
-
-
-class Matcher:
-
-    def __init__(self, spec):
+    @classmethod
+    def _build_pandas_matchers(cls, matches):
         '''Create pandas DataFrame filter from spec
 
         'spec' is a list of matchers, each matcher defines a rule for a single
@@ -87,7 +71,7 @@ class Matcher:
         4. name~value,value,...: fnmatch any value
         '''
         compiled_matcher = []
-        for item in spec:
+        for item in matches:
             m = re.match(r'^(\w+)\s*([=~])\s*(.*)$', item)
             assert m is not None
             name, op, value = m.groups()
@@ -96,71 +80,200 @@ class Matcher:
             else:
                 value = value.strip()
             if op == "~":
-                matcher = make_glob_match_func(value)
+                matcher = cls._make_glob_match_func(value)
             else:
-                matcher = make_equal_match_func(value)
+                matcher = cls._make_equal_match_func(value)
             compiled_matcher.append((name, matcher))
-        self.compiled_matcher = compiled_matcher
+        return compiled_matcher
 
-    def filter(self, frame):
-        df = frame
-        for name, matcher in self.compiled_matcher:
-            df = df[df[name].map(matcher)]
-        return df
+    def __init__(self, backend="sqlite"):
+        self.backend = backend
+
+    def read_frame(self, data_file, matches, columns, pivot):
+        reader = self.backend
+        if reader == "excel":
+            data = pandas.read_excel(data_file, index=False)
+        elif reader == "sqlite":
+            conn = sqlite3.connect(data_file)
+            data = pandas.read_sql("SELECT * FROM result", conn)
+        else:
+            raise RuntimeError("Unknown backend '%s'" % reader)
+
+        pandas_matchers = self._build_pandas_matchers(matches)
+        for name, matcher in pandas_matchers:
+            data = data[data[name].map(matcher)]
+
+        if columns:
+            real_columns = []
+            for c in columns:
+                real_columns.extend(parse_list(c))
+            data = data[real_columns]
+
+        if pivot:
+            pivot_fields = parse_list(pivot)
+            assert len(pivot_fields) in (2, 3)
+            data = data.pivot(*pivot_fields)
+
+        return data
 
 
-def make_reader(reader):
+class SqliteReader(object):
+
+    types = {
+        None: "NULL",
+        int: "INTEGER",
+        long: "INTEGER",
+        float: "REAL",
+        str: "TEXT",
+        unicode: "TEXT",
+        buffer: "BLOB"
+    }
+
+    globops = {
+        "fnmatchcase": "GLOB",
+        "fnmatch": "GLOB",
+        "regex": "REGEXP"
+    }
+
+    @classmethod
+    def _build_where_clause(cls, column_types, matches, glob_syntax):
+        if not matches:
+            return ""
+
+        assert glob_syntax in cls.globops
+
+        def quote(name, value):
+            assert name in column_types
+            sqlite_type = cls.types[column_types[name]]
+            if sqlite_type == "TEXT":
+                return "'{0}'".format(value)
+            elif sqlite_type == "BLOB":
+                return "x'{0}'".format(value)
+            elif sqlite_type == "NULL":
+                return ""
+            else:
+                return value
+
+        sql_segs = []
+        for item in matches:
+            m = re.match(r'^(\w+)\s*([=~])\s*(.*)$', item)
+            assert m is not None
+            name, op, value = m.groups()
+            if name not in column_types:
+                continue
+            if "," in value:
+                value = parse_list(value)
+            else:
+                value = value.strip()
+            if op == "=":
+                if isinstance(value, list):
+                    value = map(lambda x: quote(name, x), value)
+                    sql_seg = "{0} IN ({1})".format(name, ", ".join(value))
+                else:
+                    value = quote(name, value)
+                    sql_seg = "{0} == {1}".format(name, value)
+            else:
+                assert cls.types[column_types[name]] == "TEXT"
+                glob_op = cls.globops[glob_syntax]
+                if isinstance(value, list):
+                    quoted = ["{0} {1} '{2}'".format(name, glob_op, x)
+                              for x in value]
+                    sql_seg = "(" + " OR ".join(quoted) + ")"
+                else:
+                    sql_seg = "{0} {1} '{2}'".format(name, glob_op, value)
+            sql_segs.append(sql_seg)
+        return "WHERE %s" % " AND ".join(sql_segs)
+
+    @classmethod
+    def _build_select_clause(cls, column_types, columns):
+        if not columns:
+            return "*"
+        real_columns = []
+        for f in columns:
+            real_columns.extend(parse_list(f))
+        for f in real_columns:
+            assert f in column_types
+        return ", ".join(real_columns)
+
+    def __init__(self, glob_syntax="fnmatch"):
+        self.glob_syntax = glob_syntax
+
+    def read_frame(self, data_file, matches, columns, pivot):
+        conn = sqlite3.connect(data_file)
+        if self.glob_syntax == "regex":
+            conn.create_function("regexp", 2,
+                                 lambda x, y: 1 if re.match(x, y) else 0)
+
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM result ORDER BY ROWID ASC LIMIT 1")
+        row = cur.fetchone()
+        data_columns = [x[0] for x in cur.description]
+        data_types = dict(zip(data_columns, [type(x) for x in row]))
+
+        selects = self._build_select_clause(data_types, columns)
+        filters = self._build_where_clause(data_types, matches,
+                                           self.glob_syntax)
+        sql = "SELECT {0} FROM result {1}".format(selects, filters)
+        data = pandas.io.sql.read_sql(sql, conn)
+
+        if pivot:
+            pivot_fields = parse_list(pivot)
+            assert len(pivot_fields) in (2, 3)
+            data = data.pivot(*pivot_fields)
+
+        return data
+
+
+def make_reader(reader, *args, **kwargs):
     if reader == "sqlite":
-        return SqliteReader()
-    elif reader == "excel":
-        return ExcelReader()
+        return SqliteReader(glob_syntax=kwargs.get("sqlite_glob_syntax"))
+    elif reader == "pandas":
+        return PandasReader(backend=kwargs.get("pandas_backend"))
     else:
         raise RuntimeError("Unknown reader '%s'" % reader)
+
+
+def analyse_data(data_file, reader, matches, columns,
+                 pivot=None, save=None, **kwargs):
+    reader = make_reader(reader, **kwargs)
+    data = reader.read_frame(data_file, matches, columns, pivot)
+    print(data.to_string())
+    if save:
+        data.to_csv(save, index=True)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("data_file", help="Data file generated by Collector")
-    parser.add_argument("-f",
-                        "--field",
-                        action='append',
-                        default=[],
-                        help="Field to display, value or list of values")
-    parser.add_argument("-m",
-                        "--match",
-                        "--filter",
-                        action='append',
-                        default=[],
-                        help="Data record matcher, name[~=]value")
-    parser.add_argument("-p",
-                        "--pivot",
+    parser.add_argument("data_file", help="Database file")
+    parser.add_argument("-r", "--reader",
+                        choices=["sqlite", "pandas"], default="sqlite",
+                        help="Database reader (default: sqlite)")
+    parser.add_argument("-m", "--matches", "--filter",
+                        action='append', default=[],
+                        help="Value filter, name[~=]value")
+    parser.add_argument("-c", "--columns",
+                        action='append', default=[],
+                        help="Columns to display, value or list of values")
+    parser.add_argument("-p", "--pivot", default=None,
                         help="Pivoting fields, 2 or 3 element list")
-    parser.add_argument("-s", "--save", help="Save result to a CSV file")
-    parser.add_argument("--reader", choices=["sqlite", "excel"],
-                        default="sqlite",
-                        help="Choose database reader (default: sqlite)")
+    parser.add_argument("-s", "--save",
+                        help="Save result to a CSV file")
+
+    ag = parser.add_argument_group("Sqlite Reader Options")
+    ag.add_argument("--sqlite-glob-syntax", choices=["fnmatch", "regex"],
+                    default="fnmatch", help="Globbing operator syntax")
+
+    ag = parser.add_argument_group("Pandas Reader Options")
+    ag.add_argument("--pandas-backend", choices=["excel", "sqlite"],
+                    default="sqlite", help="Pandas IO backend")
 
     args = parser.parse_args()
-    reader = make_reader(args.reader)
-    data = reader.read_frame(args.data_file)
-    matcher = Matcher(args.match)
-    df = matcher.filter(data)
-    if args.field:
-        fields = []
-        for f in args.field:
-            fields.extend(x.strip() for x in f.split(","))
-        v = df[fields]
-    else:
-        v = df
-    if args.pivot:
-        fields = [x.strip() for x in args.pivot.split(",")]
-        v = v.pivot(*fields)
-    print v.to_string()
-    if args.save:
-        v.to_csv(args.save, index=False)
-
+    analyse_data(args.data_file, args.reader,
+                 args.matches, args.columns, args.pivot, args.save,
+                 sqlite_glob_syntax=args.sqlite_glob_syntax,
+                 pandas_backend=args.pandas_backend)
 
 if __name__ == "__main__":
     main()
