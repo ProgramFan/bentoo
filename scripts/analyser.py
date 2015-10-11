@@ -91,6 +91,15 @@ class PandasReader(object):
 
     def read_frame(self, data_file, matches, columns, pivot):
         reader = self.backend
+        if self.backend == "auto":
+            ext = os.path.splitext(data_file)[1]
+            if ext in (".xls", ".xlsx"):
+                reader = "excel"
+            elif ext in (".sqlite", ".sqlite3"):
+                reader = "sqlite"
+            else:
+                raise RuntimeError("Can not guess type of '%s'" % data_file)
+
         if reader == "excel":
             data = pandas.read_excel(data_file, index=False)
         elif reader == "sqlite":
@@ -248,8 +257,8 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("data_file", help="Database file")
     parser.add_argument("-r", "--reader",
-                        choices=["sqlite", "pandas"], default="sqlite",
-                        help="Database reader (default: sqlite)")
+                        choices=["sqlite", "pandas"], default="pandas",
+                        help="Database reader (default: pandas)")
     parser.add_argument("-m", "--matches", "--filter",
                         action='append', default=[],
                         help="Value filter, name[~=]value")
@@ -262,12 +271,14 @@ def main():
                         help="Save result to a CSV file")
 
     ag = parser.add_argument_group("Sqlite Reader Options")
-    ag.add_argument("--sqlite-glob-syntax", choices=["fnmatch", "regex"],
-                    default="fnmatch", help="Globbing operator syntax")
+    ag.add_argument("--sqlite-glob-syntax",
+                    choices=["fnmatch", "regex"], default="fnmatch",
+                    help="Globbing operator syntax (default: fnmatch)")
 
     ag = parser.add_argument_group("Pandas Reader Options")
-    ag.add_argument("--pandas-backend", choices=["excel", "sqlite"],
-                    default="sqlite", help="Pandas IO backend")
+    ag.add_argument("--pandas-backend",
+                    choices=["excel", "sqlite3", "auto"], default="auto",
+                    help="Pandas IO backend (default: auto)")
 
     args = parser.parse_args()
     analyse_data(args.data_file, args.reader,
