@@ -2,11 +2,13 @@
 # coding: utf-8
 
 import argparse
+import importlib
 import itertools
 import json
 import os
 import re
 import shutil
+import sys
 
 from collections import OrderedDict
 
@@ -128,12 +130,15 @@ class CustomCaseGenerator:
     def __init__(self, module, func, args):
         if not os.path.exists(module):
             raise RuntimeError("Module '%s' does not exists" % module)
-        import_result = {}
-        execfile(module, import_result)
-        if func not in import_result:
+
+        sys.path.insert(0, os.path.dirname(module))
+        module_name = os.path.splitext(os.path.basename(module))[0]
+        mod = importlib.import_module(module_name)
+        fun = getattr(mod, func)
+        if not hasattr(mod, func):
             raise RuntimeError("Can not find function '%s' in '%s'"
                                % (func, module))
-        self.func = import_result[func]
+        self.func = fun
         self.args = args
 
     def make_case(self, conf_root, output_root, case_path, test_vector):
@@ -240,7 +245,7 @@ class TestProjectBuilder:
             if not os.path.isabs(module):
                 module = os.path.normpath(os.path.join(self.conf_root, module))
             func = info["func"]
-            args = info["args"]
+            args = info.get("args", {})
             self.test_case_generator = CustomCaseGenerator(module, func, args)
         else:
             raise RuntimeError(
