@@ -200,8 +200,13 @@ def parse_jasmin4log(fn):
         "AvgTime_percent": float,
         "LoadBalance": float,
         "Accesses": int,
-        "Overhead": float
+        "Overhead": float,
+        "LocalMaxTime": float,
+        "LocalAvgTime": float,
+        "MaxLoc": int,
+        "LocalMaxLoc": int,
     }
+
     content = file(fn, "r").read()
     logtbl_ptn = re.compile(
         r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" + r"^(?P<header>^.*?$)\n-{10,}\n"
@@ -240,7 +245,7 @@ def parse_jasmin4log(fn):
         # Make final result
         # Ensures `len(header) == len(types)` and `[len(data_item) ==
         # len(header) for data_item in data]`. So the data is in good shape.
-        types = [avail_types[x] for x in header]
+        types = [avail_types.get(x, str) for x in header]
         data = [[v.get(k, None) for k in header] for v in table_contents]
         table = {
             "column_names": header,
