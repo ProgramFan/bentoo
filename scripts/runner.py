@@ -145,14 +145,14 @@ class YhrunRunner:
 
     def run(self, case, timeout=None):
         test_vector = case["test_vector"]
-        path = case["case_path"]
-        spec = case["run_spec"]
+        path = case["path"]
+        spec = case["spec"]
         assert os.path.isabs(path)
 
         run = spec["run"]
         nprocs = str(run["nprocs"])
-        nnodes = run.value("nnodes", None)
-        tasks_per_proc = run.value("tasks_per_proc", None)
+        nnodes = run.get("nnodes", None)
+        tasks_per_proc = run.get("tasks_per_proc", None)
         yhrun_cmd = ["yhrun"]
         if nnodes:
             yhrun_cmd.extend(["-N", nnodes])
@@ -163,7 +163,9 @@ class YhrunRunner:
             yhrun_cmd.extend(["-t", str(timeout)])
         if self.args["partition"]:
             yhrun_cmd.extend(["-p", self.args["partition"]])
+        exec_cmd = map(str, spec["cmd"])
         cmd = yhrun_cmd + exec_cmd
+        cmd = map(str, cmd)
 
         env = dict(os.environ)
         for k, v in spec["envs"].iteritems():
@@ -179,7 +181,8 @@ class YhrunRunner:
 
         if ret == 0:
             return "success"
-        elif ret_code == 124:
+        # FIXME: find the correct return code for timeout
+        elif ret == 124:
             return "timeout"
         else:
             return "failed"
