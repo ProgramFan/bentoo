@@ -95,7 +95,7 @@ class MpirunRunner:
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None, **kwargs):
+    def run(self, case, timeout=None, verbose=False, **kwargs):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -114,15 +114,21 @@ class MpirunRunner:
         out_fn = os.path.join(path, "STDOUT")
         err_fn = os.path.join(path, "STDERR")
 
-        ret = subprocess.call(cmd,
-                              env=env,
-                              cwd=path,
-                              stdout=file(out_fn, "w"),
-                              stderr=file(err_fn, "w"))
+        if verbose:
+            proc1 = subprocess.Popen(cmd, env=env, cwd=path,
+                                     stdout=subprocess.PIPE,
+                                     stderr=file(err_fn, "w"))
+            proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
+                                     stdin=proc1.stdout)
+            ret = proc2.wait()
+        else:
+            ret = subprocess.call(cmd, env=env, cwd=path,
+                                  stdout=file(out_fn, "w"),
+                                  stderr=file(err_fn, "w"))
 
         if ret == 0:
             return "success"
-        elif ret_code == 124:
+        elif ret == 124:
             return "timeout"
         else:
             return "failed"
@@ -143,7 +149,7 @@ class YhrunRunner:
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None):
+    def run(self, case, timeout=None, verbose=False):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -173,11 +179,17 @@ class YhrunRunner:
         out_fn = os.path.join(path, "STDOUT")
         err_fn = os.path.join(path, "STDERR")
 
-        ret = subprocess.call(cmd,
-                              env=env,
-                              cwd=path,
-                              stdout=file(out_fn, "w"),
-                              stderr=file(err_fn, "w"))
+        if verbose:
+            proc1 = subprocess.Popen(cmd, env=env, cwd=path,
+                                     stdout=subprocess.PIPE,
+                                     stderr=file(err_fn, "w"))
+            proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
+                                     stdin=proc1.stdout)
+            ret = proc2.wait()
+        else:
+            ret = subprocess.call(cmd, env=env, cwd=path,
+                                  stdout=file(out_fn, "w"),
+                                  stderr=file(err_fn, "w"))
 
         if ret == 0:
             return "success"
@@ -192,6 +204,7 @@ class SimpleProgressReporter:
 
     def project_begin(self, project):
         sys.stdout.write("Start project %s:\n" % project.name)
+        sys.stdout.flush()
         self.total_cases = project.count_cases()
         self.finished_cases = 0
 
@@ -200,25 +213,27 @@ class SimpleProgressReporter:
         sys.stdout.write("%d success, %d failed, %d timeout.\n" % (
             len(stats["success"]), len(stats["failed"]),
             len(stats["timeout"])))
+        sys.stdout.flush()
 
     def case_begin(self, project, case):
         self.finished_cases += 1
         completed = float(self.finished_cases) / float(self.total_cases) * 100
         pretty_case = os.path.relpath(case["path"], project.project_root)
         sys.stdout.write("   [%3.0f%%] Run %s ... " % (completed, pretty_case))
+        sys.stdout.flush()
 
     def case_end(self, project, case, result):
         sys.stdout.write("%s\n" % result)
         sys.stdout.flush()
 
 
-def run_project(project, runner, reporter):
+def run_project(project, runner, reporter, verbose=False):
     stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
 
     reporter.project_begin(project)
     for case in project.itercases():
         reporter.case_begin(project, case)
-        result = runner.run(case)
+        result = runner.run(case, verbose=verbose)
         reporter.case_end(project, case, result)
         stats[result].append(case)
     reporter.project_end(project, stats)
@@ -248,6 +263,8 @@ def main():
     ag.add_argument("--timeout",
                     default=5,
                     help="Timeout for each case, in minites")
+    ag.add_argument("--verbose", action="store_true", default=False,
+                    help="Be verbose (print jobs output currently)")
 
     ag = parser.add_argument_group("yhrun options")
     YhrunRunner.register_cmdline_args(ag)
@@ -265,7 +282,8 @@ def main():
     else:
         raise NotImplementedError("This is not possible")
 
-    run_project(proj, runner, SimpleProgressReporter())
+    run_project(proj, runner, SimpleProgressReporter(),
+                verbose=config.verbose)
 
 
 if __name__ == "__main__":
