@@ -210,9 +210,9 @@ class SimpleProgressReporter:
 
     def project_end(self, project, stats):
         sys.stdout.write("Done.\n")
-        sys.stdout.write("%d success, %d failed, %d timeout.\n" % (
+        sys.stdout.write("%d success, %d failed, %d timeout, %d skipped.\n" % (
             len(stats["success"]), len(stats["failed"]),
-            len(stats["timeout"])))
+            len(stats["timeout"]), len(stats["skipped"])))
         sys.stdout.flush()
 
     def case_begin(self, project, case):
@@ -227,11 +227,20 @@ class SimpleProgressReporter:
         sys.stdout.flush()
 
 
-def run_project(project, runner, reporter, verbose=False):
+def run_project(project, runner, reporter, verbose=False,
+                exclude=None, include=None):
     stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
+    stats["skipped"] = []
 
     reporter.project_begin(project)
     for case in project.itercases():
+        case_path = os.path.relpath(case["path"], project.project_root)
+        if exclude and fnmatch.fnmatch(case_path, exclude):
+            stats["skipped"].append(case)
+            continue
+        if include and not fnmatch.fnmatch(case_path, include):
+            stats["skipped"].append(case)
+            continue
         reporter.case_begin(project, case)
         result = runner.run(case, verbose=verbose)
         reporter.case_end(project, case, result)
@@ -283,7 +292,8 @@ def main():
         raise NotImplementedError("This is not possible")
 
     run_project(proj, runner, SimpleProgressReporter(),
-                verbose=config.verbose)
+                verbose=config.verbose, exclude=config.exclude,
+                include=config.include)
 
 
 if __name__ == "__main__":
