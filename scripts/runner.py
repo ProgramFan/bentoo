@@ -86,9 +86,6 @@ class TestProjectReader:
     def count_cases(self):
         return len(self.test_cases)
 
-    def last_stats(self):
-        return self.last_stats
-
 
 class MpirunRunner:
 
@@ -246,9 +243,8 @@ def run_project(project, runner, reporter, verbose=False,
                 exclude=None, include=None, skip_finished=False):
     stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
     stats["skipped"] = []
-    if skip_finished and project.last_stats():
-        last_stats = project.last_stats()
-        stats["success"] = last_stats["success"]
+    if skip_finished and project.last_stats:
+        stats["success"] = project.last_stats["success"]
 
     reporter.project_begin(project)
     for case in project.itercases():
