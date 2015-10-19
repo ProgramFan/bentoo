@@ -39,6 +39,11 @@ class TestProjectReader:
         self.data_files = conf["data_files"]
         self.test_cases = conf["test_cases"]
 
+        self.last_stats = None
+        stats_fn = os.path.join(self.project_root, "run_stats.json")
+        if os.path.exists(stats_fn):
+            self.last_stats = json.load(file(stats_fn))
+
     def check(self):
         '''Check project's validity
 
@@ -80,6 +85,9 @@ class TestProjectReader:
 
     def count_cases(self):
         return len(self.test_cases)
+
+    def last_stats(self):
+        return self.last_stats
 
 
 class MpirunRunner:
@@ -235,12 +243,17 @@ class SimpleProgressReporter:
 
 
 def run_project(project, runner, reporter, verbose=False,
-                exclude=None, include=None):
+                exclude=None, include=None, skip_finished=False):
     stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
     stats["skipped"] = []
+    if skip_finished and project.last_stats():
+        last_stats = project.last_stats()
+        stats["success"] = last_stats["success"]
 
     reporter.project_begin(project)
     for case in project.itercases():
+        if skip_finished and case in stats["success"]:
+            continue
         case_path = os.path.relpath(case["path"], project.project_root)
         if exclude and fnmatch.fnmatch(case_path, exclude):
             stats["skipped"].append(case)
@@ -264,6 +277,8 @@ def main():
     ag = parser.add_argument_group("Global options")
     ag.add_argument("project_root",
                     help="Root directory of the test project")
+    ag.add_argument("--skip-finished", action="store_true",
+                    help="Skip already finished cases")
 
     ag = parser.add_argument_group("Filter options")
     ag.add_argument("--exclude",
@@ -300,7 +315,7 @@ def main():
 
     run_project(proj, runner, SimpleProgressReporter(),
                 verbose=config.verbose, exclude=config.exclude,
-                include=config.include)
+                include=config.include, skip_finished=config.skip_finished)
 
 
 if __name__ == "__main__":
