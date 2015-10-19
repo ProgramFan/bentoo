@@ -122,7 +122,7 @@ class MpirunRunner:
         if verbose:
             proc1 = subprocess.Popen(cmd, env=env, cwd=path,
                                      stdout=subprocess.PIPE,
-                                     stderr=file(err_fn, "w"))
+                                     stderr=subprocess.STDOUT)
             proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
                                      stdin=proc1.stdout)
             proc1.stdout.close()
@@ -193,7 +193,7 @@ class YhrunRunner:
         if verbose:
             proc1 = subprocess.Popen(cmd, env=env, cwd=path,
                                      stdout=subprocess.PIPE,
-                                     stderr=file(err_fn, "w"))
+                                     stderr=subprocess.STDOUT)
             proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
                                      stdin=proc1.stdout)
             proc1.stdout.close()
