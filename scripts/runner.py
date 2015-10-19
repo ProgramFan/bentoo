@@ -120,6 +120,7 @@ class MpirunRunner:
                                      stderr=file(err_fn, "w"))
             proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
                                      stdin=proc1.stdout)
+            proc1.stdout.close()
             ret = proc2.wait()
         else:
             ret = subprocess.call(cmd, env=env, cwd=path,
@@ -190,6 +191,7 @@ class YhrunRunner:
                                      stderr=file(err_fn, "w"))
             proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
                                      stdin=proc1.stdout)
+            proc1.stdout.close()
             ret = proc2.wait()
         else:
             ret = subprocess.call(cmd, env=env, cwd=path,
@@ -215,9 +217,9 @@ class SimpleProgressReporter:
 
     def project_end(self, project, stats):
         sys.stdout.write("Done.\n")
-        sys.stdout.write("%d success, %d failed, %d timeout, %d skipped.\n" % (
-            len(stats["success"]), len(stats["failed"]),
-            len(stats["timeout"]), len(stats["skipped"])))
+        stats_str = ", ".join("%d %s" % (len(v), k)
+                              for k, v in stats.iteritems()) + "\n"
+        sys.stdout.write(stats_str)
         sys.stdout.flush()
 
     def case_begin(self, project, case):
@@ -243,7 +245,7 @@ def run_project(project, runner, reporter, verbose=False,
         if exclude and fnmatch.fnmatch(case_path, exclude):
             stats["skipped"].append(case)
             continue
-        if include and not fnmatch.fnmatch(case_path, include):
+        elif include and not fnmatch.fnmatch(case_path, include):
             stats["skipped"].append(case)
             continue
         reporter.case_begin(project, case)
