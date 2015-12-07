@@ -149,11 +149,14 @@ class YhrunRunner:
                                help="Select job partition to use")
         argparser.add_argument("-x", metavar="NODELIST", dest="excluded_nodes",
                                help="Exclude nodes from job allocation")
+        argparser.add_argument("-w", metavar="NODELIST", dest="only_nodes",
+                               help="Use only selected nodes")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {"partition": namespace.partition,
-                "excluded_nodes": namespace.excluded_nodes}
+                "excluded_nodes": namespace.excluded_nodes,
+                "only_nodes": namespace.only_nodes}
 
     def __init__(self, args):
         self.args = args
@@ -180,6 +183,8 @@ class YhrunRunner:
             yhrun_cmd.extend(["-p", self.args["partition"]])
         if self.args["excluded_nodes"]:
             yhrun_cmd.extend(["-x", self.args["excluded_nodes"]])
+        if self.args["only_nodes"]:
+            yhrun_cmd.extend(["-w", self.args["excluded_nodes"]])
         exec_cmd = map(str, spec["cmd"])
         cmd = yhrun_cmd + exec_cmd
         cmd = map(str, cmd)
