@@ -151,12 +151,15 @@ class YhrunRunner:
                                help="Exclude nodes from job allocation")
         argparser.add_argument("-w", metavar="NODELIST", dest="only_nodes",
                                help="Use only selected nodes")
+        argparser.add_argument("--batch", action="store_true",
+                               help="Use yhbatch instead of yhrun")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {"partition": namespace.partition,
                 "excluded_nodes": namespace.excluded_nodes,
-                "only_nodes": namespace.only_nodes}
+                "only_nodes": namespace.only_nodes,
+                "use_batch": namespace.batch}
 
     def __init__(self, args):
         self.args = args
@@ -184,7 +187,7 @@ class YhrunRunner:
         if self.args["excluded_nodes"]:
             yhrun_cmd.extend(["-x", self.args["excluded_nodes"]])
         if self.args["only_nodes"]:
-            yhrun_cmd.extend(["-w", self.args["excluded_nodes"]])
+            yhrun_cmd.extend(["-w", self.args["only_nodes"]])
         exec_cmd = map(str, spec["cmd"])
         cmd = yhrun_cmd + exec_cmd
         cmd = map(str, cmd)
@@ -192,6 +195,43 @@ class YhrunRunner:
         env = dict(os.environ)
         for k, v in spec["envs"].iteritems():
             env[k] = str(v)
+
+        if self.args["use_batch"]:
+            # Pretty quote: Quote string only if it contains reserved chars for
+            # bash shell.
+            def shell_quote(x):
+                x = str(x)
+                if any(i in set("${}(); >&")):
+                    return "\"%s\"" % x
+                else:
+                    return x
+
+            # Generate batch job script
+            batch_script = []
+            batch_script.append("#!/bin/bash")
+            batch_script.append("#")
+            batch_script.append("")
+            for k, v in spec["envs"].iteritems():
+                batch_script.append("export {0}={1}".format(k, shell_quote(v)))
+            batch_script.append("")
+            batch_script.append(" ".join(map(shell_quote, cmd)))
+            script_fn = os.path.join(path, "run_job.sh")
+            file(script_fn, "w").write("\n".join(batch_script))
+            os.chmod(script_fn, 0755)
+            # Run yhbatch
+            yhbatch_cmd = ["yhbatch", "-N", nnodes]
+            if self.args["partition"]:
+                yhbatch_cmd.extend(["-p", self.args["partition"]])
+            # if self.args["excluded_nodes"]:
+            #     yhbatch_cmd.extend(["-x", self.args["excluded_nodes"]])
+            yhbatch_cmd.append("./run_job.sh")
+            yhbatch_cmd = map(str, yhbatch_cmd)
+            subprocess.call(yhbatch_cmd, cwd=path)
+            # Always return success since batch job's return code is
+            # meaningless. One need to manually determine if a job is success
+            # or not.
+            return "success"
+
         out_fn = os.path.join(path, "STDOUT")
         err_fn = os.path.join(path, "STDERR")
 
