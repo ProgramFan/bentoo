@@ -305,7 +305,8 @@ def run_project(project, runner, reporter, verbose=False, timeout=None,
         reporter.case_begin(project, case)
         result = runner.run(case, verbose=verbose, timeout=timeout)
         reporter.case_end(project, case, result)
-        stats[result].append(case)
+        case_id = {"test_vector": case["test_vector"], "path": case_path}
+        stats[result].append(case_id)
     reporter.project_end(project, stats)
 
     runlog_path = os.path.join(project.project_root, "run_stats.json")
@@ -355,7 +356,7 @@ def main():
         raise NotImplementedError("This is not possible")
 
     run_project(proj, runner, SimpleProgressReporter(), verbose=config.verbose,
-                timeout=config.timeout, exclude=config.exclude, 
+                timeout=config.timeout, exclude=config.exclude,
                 include=config.include, skip_finished=config.skip_finished)
 
 
