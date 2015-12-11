@@ -159,7 +159,7 @@ def parse_jasminlog(fn):
 
 class JasminParser:
 
-    def parse(self, fn):
+    def itertables(self, fn):
         return parse_jasminlog(fn)
 
 
