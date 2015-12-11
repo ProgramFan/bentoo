@@ -201,7 +201,7 @@ class YhrunRunner:
             # bash shell.
             def shell_quote(x):
                 x = str(x)
-                if any(i in set("${}(); >&")):
+                if any(i in x for i in set("${}(); >&")):
                     return "\"%s\"" % x
                 else:
                     return x
@@ -284,7 +284,7 @@ class SimpleProgressReporter:
         sys.stdout.flush()
 
 
-def run_project(project, runner, reporter, verbose=False,
+def run_project(project, runner, reporter, verbose=False, timeout=None,
                 exclude=None, include=None, skip_finished=False):
     stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
     stats["skipped"] = []
@@ -303,7 +303,7 @@ def run_project(project, runner, reporter, verbose=False,
             stats["skipped"].append(case)
             continue
         reporter.case_begin(project, case)
-        result = runner.run(case, verbose=verbose)
+        result = runner.run(case, verbose=verbose, timeout=timeout)
         reporter.case_end(project, case, result)
         stats[result].append(case)
     reporter.project_end(project, stats)
@@ -333,7 +333,7 @@ def main():
                     default="mpirun",
                     help="Runner to choose, default to mpirun")
     ag.add_argument("--timeout",
-                    default=5,
+                    default=None,
                     help="Timeout for each case, in minites")
     ag.add_argument("--verbose", action="store_true", default=False,
                     help="Be verbose (print jobs output currently)")
@@ -354,8 +354,8 @@ def main():
     else:
         raise NotImplementedError("This is not possible")
 
-    run_project(proj, runner, SimpleProgressReporter(),
-                verbose=config.verbose, exclude=config.exclude,
+    run_project(proj, runner, SimpleProgressReporter(), verbose=config.verbose,
+                timeout=config.timeout, exclude=config.exclude, 
                 include=config.include, skip_finished=config.skip_finished)
 
 
