@@ -280,13 +280,18 @@ class UnifiedJasminParser:
             elif jasmin4_ptn.search(content):
                 return "jasmin4"
             else:
-                msg = "File %s is neither jasmin 3 nor jasmin 4 log" % fn
-                raise RuntimeError(msg)
+                return "null"
+
+        def null_parse(fn):
+            # return + yield makes a perfect empty generator function
+            return
+            yield
 
         self.filetype_detector = detector
         self.parser_funcs = {
             "jasmin3": parse_jasminlog,
-            "jasmin4": parse_jasmin4log
+            "jasmin4": parse_jasmin4log,
+            "null": null_parse
         }
 
     def itertables(self, fn):
@@ -412,7 +417,7 @@ class Collector(object):
     '''TestResultCollector - Collect test results and save them'''
 
     def __init__(self, project_root, data_file, parser, serializer,
-                 drop_columns=None, use_table=-1):
+                 drop_columns=None, use_table=None):
         self.project = TestProjectReader(project_root)
         self.parser = make_parser(parser)
         self.serializer = make_serializer(serializer, data_file)
@@ -420,30 +425,50 @@ class Collector(object):
         self.drop_columns = drop_columns
 
     @staticmethod
-    def _table_generator(project, parser, table_selector):
+    def _table_generator(project, parser, table_selector=None):
         for case in project.itercases():
             case_path = case["path"]
             # TODO: support collecting from multiple result file. This
             # would require another column designating the filename. This
             # is not often used, so shall be used as an option
-            result_fn = os.path.join(
-                case_path, case["spec"]["results"][0])
+            result_fn = os.path.join(case_path, case["spec"]["results"][0])
+            short_fn = os.path.relpath(result_fn, project.project_root)
             if not os.path.exists(result_fn):
+                print "WARNING: Result file '%s' not found" % short_fn
                 continue
             content = list(parser.itertables(result_fn))
+            if not content:
+                print "WARNING: No timer table found in '%s'" % short_fn
+                continue
             test_vector = OrderedDict(zip(project.test_factors,
                                           case["test_vector"]))
-            yield {
-                "test_vector": test_vector,
-                "data_table": content[table_selector]
-            }
+
+            if not table_selector or not isinstance(table_selector, int):
+                for table_id, data_table in enumerate(content):
+                    yield {
+                        "test_vector": test_vector,
+                        "data_table": data_table,
+                        "table_id": table_id
+                    }
+            else:
+                try:
+                    data_table = content[table_selector]
+                except IndexError:
+                    print "WARNING: Table %s not found in '%s'" % (
+                        table_selector, short_fn)
+                    yield {
+                        "test_vector": test_vector,
+                        "data_table": data_table,
+                        "table_id": table_selector
+                    }
 
     @staticmethod
     def _data_item_generator(table):
         test_vector_values = table["test_vector"].values()
+        table_id = table["table_id"]
         data_table = table["data_table"]
         for data_row in data_table["data"]:
-            yield test_vector_values + data_row
+            yield test_vector_values + [table_id] + data_row
 
     def collect(self):
         table_producer = iter(self._table_generator(self.project, self.parser,
@@ -457,9 +482,11 @@ class Collector(object):
             return
         ref_vector = ref_table["test_vector"]
         ref_data = ref_table["data_table"]
-        column_names = ref_vector.keys() + ref_data["column_names"]
-        column_types = map(type, ref_vector.values())
-        column_types.extend(ref_data["column_types"])
+        column_names = ref_vector.keys() + \
+            ["table_id"] + ref_data["column_names"]
+        column_types = map(type, ref_vector.values())  # types of test factors
+        column_types.append(int)  # type of table id
+        column_types.extend(ref_data["column_types"])  # types of table columns
 
         column_dropper = TableColumnFilter(column_names, self.drop_columns,
                                            action="throw")
@@ -492,7 +519,7 @@ def main():
                         choices=["jasmin3", "jasmin4", "jasmin"],
                         default="jasmin",
                         help="Parser for raw result files (default: jasmin)")
-    parser.add_argument("--use-table", type=int, default=-1,
+    parser.add_argument("--use-table", type=int, default=None,
                         help="Choose which data table to use")
     parser.add_argument("-d, --drop-columns", default=None, metavar="SPEC",
                         dest="drop_columns",
