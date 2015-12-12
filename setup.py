@@ -3,9 +3,9 @@
 
 from setuptools import setup, find_packages
 setup(
-    name="bento",
+    name="bentoo",
     description="Benchmarking tools",
-    version="0.7",
+    version="0.8",
     packages=find_packages(),
     scripts=["scripts/generator.py", "scripts/runner.py",
              "scripts/collector.py", "scripts/analyser.py"],
@@ -16,5 +16,5 @@ setup(
     author_email="zyangmath@gmail.com",
     license="PSF",
     keywords="Benchmark;Performance Analysis",
-    url="http://github.com/ProgramFan/bento"
+    url="http://github.com/ProgramFan/bentoo"
 )
