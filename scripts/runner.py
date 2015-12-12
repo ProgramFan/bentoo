@@ -153,13 +153,16 @@ class YhrunRunner:
                                help="Use only selected nodes")
         argparser.add_argument("--batch", action="store_true",
                                help="Use yhbatch instead of yhrun")
+        argparser.add_argument("--dry-run", action="store_true",
+                               help="Only generate job script (dry run)")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {"partition": namespace.partition,
                 "excluded_nodes": namespace.excluded_nodes,
                 "only_nodes": namespace.only_nodes,
-                "use_batch": namespace.batch}
+                "use_batch": namespace.batch,
+                "dry_run": namespace.dry_run}
 
     def __init__(self, args):
         self.args = args
@@ -196,7 +199,7 @@ class YhrunRunner:
         for k, v in spec["envs"].iteritems():
             env[k] = str(v)
 
-        if self.args["use_batch"]:
+        if self.args["use_batch"] or self.args["dry_run"]:
             # Pretty quote: Quote string only if it contains reserved chars for
             # bash shell.
             def shell_quote(x):
@@ -218,6 +221,10 @@ class YhrunRunner:
             script_fn = os.path.join(path, "run_job.sh")
             file(script_fn, "w").write("\n".join(batch_script))
             os.chmod(script_fn, 0755)
+
+            if self.args["dry_run"]:
+                return "success"
+
             # Run yhbatch
             yhbatch_cmd = ["yhbatch", "-N", nnodes]
             if self.args["partition"]:
