@@ -292,21 +292,27 @@ class SimpleProgressReporter:
 
 
 def run_project(project, runner, reporter, verbose=False, timeout=None,
-                exclude=None, include=None, skip_finished=False):
+                exclude=[], include=[], skip_finished=False):
     stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
     stats["skipped"] = []
     if skip_finished and project.last_stats:
         stats["success"] = project.last_stats["success"]
+
+    def has_match(path, matchers):
+        for m in matchers:
+            if fnmatch.fnmatch(path, m):
+                return True
+        return False
 
     reporter.project_begin(project)
     for case in project.itercases():
         if skip_finished and case in stats["success"]:
             continue
         case_path = os.path.relpath(case["path"], project.project_root)
-        if exclude and fnmatch.fnmatch(case_path, exclude):
+        if exclude and has_match(case_path, exclude):
             stats["skipped"].append(case)
             continue
-        elif include and not fnmatch.fnmatch(case_path, include):
+        elif include and not has_match(case_path, include):
             stats["skipped"].append(case)
             continue
         reporter.case_begin(project, case)
@@ -330,18 +336,17 @@ def main():
                     help="Skip already finished cases")
 
     ag = parser.add_argument_group("Filter options")
-    ag.add_argument("--exclude",
-                    help="Test cases to exclude, support wildcards")
-    ag.add_argument("--include",
-                    help="Test cases to include, support wildcards")
+    ag.add_argument("-e", "--exclude", action="append", default=[],
+                    help="Excluded case paths, support shell wildcards")
+    ag.add_argument("-i", "--include", action="append", default=[],
+                    help="Included case paths, support shell wildcards")
 
     ag = parser.add_argument_group("Runner options")
     ag.add_argument("--case-runner",
                     choices=["mpirun", "yhrun"],
                     default="mpirun",
                     help="Runner to choose, default to mpirun")
-    ag.add_argument("--timeout",
-                    default=None,
+    ag.add_argument("-t", "--timeout", default=None,
                     help="Timeout for each case, in minites")
     ag.add_argument("--verbose", action="store_true", default=False,
                     help="Be verbose (print jobs output currently)")
