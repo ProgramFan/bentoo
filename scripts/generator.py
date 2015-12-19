@@ -255,7 +255,7 @@ class TestProjectBuilder:
         # Build output organizer
         self.output_organizer = OutputOrganizer(version=1)
 
-    def write(self, output_root):
+    def write(self, output_root, link_files=False):
         # Prepare directories
         if not os.path.isabs(output_root):
             output_root = os.path.abspath(output_root)
@@ -293,14 +293,36 @@ class TestProjectBuilder:
                 raise RuntimeError(
                     "Data file specified but not found: '%s'" % path)
             if os.path.isdir(srcpath):
+                dstdir = os.path.dirname(dstpath)
+                if not os.path.exists(dstdir):
+                    os.makedirs(dstdir)
                 if os.path.exists(dstpath):
-                    shutil.rmtree(dstpath)
-                shutil.copytree(srcpath, dstpath)
+                    if os.path.islink(dstpath):
+                        os.remove(dstpath)
+                    elif os.path.isdir(dstpath):
+                        shutil.rmtree(dstpath)
+                    else:
+                        os.remove(dstpath)
+                if link_files:
+                    os.symlink(srcpath, dstpath)
+                else:
+                    shutil.copytree(srcpath, dstpath)
             elif os.path.isfile(srcpath):
                 dstdir = os.path.dirname(dstpath)
                 if not os.path.exists(dstdir):
                     os.makedirs(dstdir)
-                shutil.copyfile(srcpath, dstpath)
+                if os.path.exists(dstpath):
+                    if os.path.islink(dstpath):
+                        os.remove(dstpath)
+                    elif os.path.isdir(dstpath):
+                        shutil.rmtree(dstpath)
+                    else:
+                        os.remove(dstpath)
+                if link_files:
+                    os.symlink(srcpath, dstpath)
+                else:
+                    shutil.copyfile(srcpath, dstpath)
+                    shutil.copystat(srcpath, dstpath)
             else:
                 raise RuntimeError("File type not supported: '%s'" % path)
 
@@ -325,10 +347,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("conf_root", help="Project configuration directory")
     parser.add_argument("output_root", help="Output directory")
+    parser.add_argument("--link-files", action="store_true",
+                        help="Sympolic link data files instead of copy")
 
     config = parser.parse_args()
     project = TestProjectBuilder(config.conf_root)
-    project.write(config.output_root)
+    project.write(config.output_root, config.link_files)
 
 
 if __name__ == "__main__":
