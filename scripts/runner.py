@@ -153,7 +153,7 @@ class YhrunRunner:
                                help="Use only selected nodes")
         argparser.add_argument("--batch", action="store_true",
                                help="Use yhbatch instead of yhrun")
-        argparser.add_argument("--dry-run", action="store_true",
+        argparser.add_argument("--dryrun", action="store_true",
                                help="Only generate job script (dry run)")
 
     @classmethod
@@ -162,7 +162,7 @@ class YhrunRunner:
                 "excluded_nodes": namespace.excluded_nodes,
                 "only_nodes": namespace.only_nodes,
                 "use_batch": namespace.batch,
-                "dry_run": namespace.dry_run}
+                "dry_run": namespace.dryrun}
 
     def __init__(self, args):
         self.args = args
