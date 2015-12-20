@@ -105,7 +105,7 @@ def shell_quote(x):
         return x
 
 
-def make_job_script(cmd, envs, outfile):
+def make_bash_script(cmd, envs, outfile):
     content = []
     content.append("#!/bin/bash")
     content.append("#")
@@ -160,7 +160,7 @@ class MpirunRunner:
             env[k] = str(v)
 
         if make_script:
-            make_job_script(cmd, env, os.path.join(path, "run.sh"))
+            make_bash_script(cmd, spec["envs"], os.path.join(path, "run.sh"))
         if dryrun:
             return "skipped"
 
@@ -265,7 +265,8 @@ class YhrunRunner:
             if "-p" in real_cmd:
                 idx = real_cmd.index("-p")
                 real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
-            make_job_script(env, real_cmd, os.path.join(path, "batch_spec.sh"))
+            make_bash_script(real_cmd, spec["envs"],
+                             os.path.join(path, "batch_spec.sh"))
             # build yhbatch command line
             yhbatch_cmd = ["yhbatch", "-N", str(nnodes)]
             if self.args["partition"]:
@@ -277,8 +278,8 @@ class YhrunRunner:
             yhbatch_cmd.append("./batch_spec.sh")
 
             if make_script:
-                make_job_script(None, yhbatch_cmd,
-                                os.path.join(path, "run.sh"))
+                make_bash_script(yhbatch_cmd, None,
+                                 os.path.join(path, "run.sh"))
             if dryrun:
                 return "skipped"
 
@@ -288,7 +289,8 @@ class YhrunRunner:
 
         else:
             if make_script:
-                make_job_script(cmd, env, os.path.join(path, "run.sh"))
+                make_bash_script(
+                    cmd, spec["envs"], os.path.join(path, "run.sh"))
             if dryrun:
                 return "skipped"
 
