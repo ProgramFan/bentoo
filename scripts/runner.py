@@ -87,7 +87,48 @@ class TestProjectReader:
         return len(self.test_cases)
 
 
+def has_program(cmd):
+    try:
+        subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+        return True
+    except OSError:
+        return False
+    except subprocess.CalledProcessError:
+        return True
+
+
+def shell_quote(x):
+    x = str(x)
+    if any(i in x for i in set("*?[]${}(); >&")):
+        return "\"%s\"" % x
+    else:
+        return x
+
+
+def make_job_script(cmd, envs, outfile):
+    content = []
+    content.append("#!/bin/bash")
+    content.append("#")
+    content.append("")
+    if envs:
+        for k, v in envs.iteritems():
+            content.append("export {0}={1}".format(k, shell_quote(v)))
+        content.append("")
+    content.append(" ".join(map(shell_quote, cmd)))
+    file(outfile, "w").write("\n".join(content))
+    os.chmod(outfile, 0755)
+
+
 class MpirunRunner:
+
+    @classmethod
+    def is_available(cls):
+        if has_program(["mpirun", "-h"]):
+            return True
+        elif has_program(["mpiexec", "-h"]):
+            return True
+        else:
+            return False
 
     @classmethod
     def register_cmdline_args(cls, argparser):
@@ -100,7 +141,8 @@ class MpirunRunner:
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None, verbose=False, **kwargs):
+    def run(self, case, timeout=None, make_script=False, dryrun=False,
+            verbose=False, **kwargs):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -116,6 +158,12 @@ class MpirunRunner:
         env = dict(os.environ)
         for k, v in spec["envs"].iteritems():
             env[k] = str(v)
+
+        if make_script:
+            make_job_script(cmd, env, os.path.join(path, "run.sh"))
+        if dryrun:
+            return "skipped"
+
         out_fn = os.path.join(path, "STDOUT")
         err_fn = os.path.join(path, "STDERR")
 
@@ -143,6 +191,13 @@ class MpirunRunner:
 class YhrunRunner:
 
     @classmethod
+    def is_available(cls):
+        if has_program(["yhrun", "-h"]):
+            return True
+        else:
+            return False
+
+    @classmethod
     def register_cmdline_args(cls, argparser):
         argparser.add_argument("-p", "--partition",
                                metavar="PARTITION", dest="partition",
@@ -153,21 +208,19 @@ class YhrunRunner:
                                help="Use only selected nodes")
         argparser.add_argument("--batch", action="store_true",
                                help="Use yhbatch instead of yhrun")
-        argparser.add_argument("--dryrun", action="store_true",
-                               help="Only generate job script (dry run)")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {"partition": namespace.partition,
                 "excluded_nodes": namespace.excluded_nodes,
                 "only_nodes": namespace.only_nodes,
-                "use_batch": namespace.batch,
-                "dry_run": namespace.dryrun}
+                "use_batch": namespace.batch}
 
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None, verbose=False):
+    def run(self, case, timeout=None, make_script=False, dryrun=False,
+            verbose=False, **kwargs):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -199,69 +252,69 @@ class YhrunRunner:
         for k, v in spec["envs"].iteritems():
             env[k] = str(v)
 
-        if self.args["use_batch"] or self.args["dry_run"]:
-            # Pretty quote: Quote string only if it contains reserved chars for
-            # bash shell.
-            def shell_quote(x):
-                x = str(x)
-                if any(i in x for i in set("${}(); >&")):
-                    return "\"%s\"" % x
-                else:
-                    return x
-
-            # Generate batch job script
-            batch_script = []
-            batch_script.append("#!/bin/bash")
-            batch_script.append("#")
-            batch_script.append("")
-            for k, v in spec["envs"].iteritems():
-                batch_script.append("export {0}={1}".format(k, shell_quote(v)))
-            batch_script.append("")
-            batch_script.append(" ".join(map(shell_quote, cmd)))
-            script_fn = os.path.join(path, "run_job.sh")
-            file(script_fn, "w").write("\n".join(batch_script))
-            os.chmod(script_fn, 0755)
-
-            if self.args["dry_run"]:
-                return "success"
-
-            # Run yhbatch
-            yhbatch_cmd = ["yhbatch", "-N", nnodes]
+        if self.args["use_batch"]:
+            # build batch job script: we need to remove job control parameters
+            # from job command, since they colide with yhbatch parameters.
+            real_cmd = list(cmd)
+            if "-x" in real_cmd:
+                idx = real_cmd.index("-x")
+                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
+            if "-w" in real_cmd:
+                idx = real_cmd.index("-w")
+                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
+            if "-p" in real_cmd:
+                idx = real_cmd.index("-p")
+                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
+            make_job_script(env, real_cmd, os.path.join(path, "batch_spec.sh"))
+            # build yhbatch command line
+            yhbatch_cmd = ["yhbatch", "-N", str(nnodes)]
             if self.args["partition"]:
                 yhbatch_cmd.extend(["-p", self.args["partition"]])
-            # if self.args["excluded_nodes"]:
-            #     yhbatch_cmd.extend(["-x", self.args["excluded_nodes"]])
-            yhbatch_cmd.append("./run_job.sh")
-            yhbatch_cmd = map(str, yhbatch_cmd)
+            if self.args["excluded_nodes"]:
+                yhbatch_cmd.extend(["-x", self.args["excluded_nodes"]])
+            if self.args["only_nodes"]:
+                yhbatch_cmd.extend(["-w", self.args["only_nodes"]])
+            yhbatch_cmd.append("./batch_spec.sh")
+
+            if make_script:
+                make_job_script(None, yhbatch_cmd,
+                                os.path.join(path, "run.sh"))
+            if dryrun:
+                return "skipped"
+
             subprocess.call(yhbatch_cmd, cwd=path)
-            # Always return success since batch job's return code is
-            # meaningless. One need to manually determine if a job is success
-            # or not.
+            # yhbatch always success
             return "success"
 
-        out_fn = os.path.join(path, "STDOUT")
-        err_fn = os.path.join(path, "STDERR")
-
-        if verbose:
-            proc1 = subprocess.Popen(cmd, env=env, cwd=path,
-                                     stdout=subprocess.PIPE,
-                                     stderr=subprocess.STDOUT)
-            proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
-                                     stdin=proc1.stdout)
-            proc1.stdout.close()
-            ret = proc2.wait()
         else:
-            ret = subprocess.call(cmd, env=env, cwd=path,
-                                  stdout=file(out_fn, "w"),
-                                  stderr=file(err_fn, "w"))
+            if make_script:
+                make_job_script(cmd, env, os.path.join(path, "run.sh"))
+            if dryrun:
+                return "skipped"
 
-        if ret == 0:
-            return "success"
-        # FIXME: find the correct return code for timeout
-        elif ret == 124:
-            return "timeout"
-        else:
-            return "failed"
+            out_fn = os.path.join(path, "STDOUT")
+            err_fn = os.path.join(path, "STDERR")
+
+            if verbose:
+                proc1 = subprocess.Popen(cmd, env=env, cwd=path,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT)
+                proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
+                                         stdin=proc1.stdout)
+                proc1.stdout.close()
+                ret = proc2.wait()
+            else:
+                ret = subprocess.call(cmd, env=env, cwd=path,
+                                      stdout=file(out_fn, "w"),
+                                      stderr=file(err_fn, "w"))
+
+            if ret == 0:
+                return "success"
+            # FIXME: find the correct return code for timeout
+            elif ret == 124:
+                return "timeout"
+            else:
+                return "failed"
 
 
 class SimpleProgressReporter:
@@ -291,10 +344,11 @@ class SimpleProgressReporter:
         sys.stdout.flush()
 
 
-def run_project(project, runner, reporter, verbose=False, timeout=None,
-                exclude=[], include=[], skip_finished=False):
-    stats = OrderedDict(zip(["success", "timeout", "failed"], [[], [], []]))
-    stats["skipped"] = []
+def run_project(project, runner, reporter, timeout=None, make_script=True,
+                dryrun=False, verbose=False, exclude=[], include=[],
+                skip_finished=False):
+    stats = OrderedDict(zip(["success", "timeout", "failed", "skipped"],
+                            [[], [], [], []]))
     if skip_finished and project.last_stats:
         stats["success"] = project.last_stats["success"]
 
@@ -316,7 +370,8 @@ def run_project(project, runner, reporter, verbose=False, timeout=None,
             stats["skipped"].append(case)
             continue
         reporter.case_begin(project, case)
-        result = runner.run(case, verbose=verbose, timeout=timeout)
+        result = runner.run(case, verbose=verbose, timeout=timeout,
+                            make_script=make_script, dryrun=dryrun)
         reporter.case_end(project, case, result)
         case_id = {"test_vector": case["test_vector"], "path": case_path}
         stats[result].append(case_id)
@@ -343,11 +398,14 @@ def main():
 
     ag = parser.add_argument_group("Runner options")
     ag.add_argument("--case-runner",
-                    choices=["mpirun", "yhrun"],
-                    default="mpirun",
-                    help="Runner to choose, default to mpirun")
+                    choices=["mpirun", "yhrun", "auto"], default="auto",
+                    help="Runner to choose (default: auto)")
     ag.add_argument("-t", "--timeout", default=None,
                     help="Timeout for each case, in minites")
+    ag.add_argument("--make-script", action="store_true",
+                    help="Generate job script for each case")
+    ag.add_argument("--dryrun", action="store_true",
+                    help="Don't actually run cases")
     ag.add_argument("--verbose", action="store_true", default=False,
                     help="Be verbose (print jobs output currently)")
 
@@ -365,10 +423,19 @@ def main():
     elif config.case_runner == "yhrun":
         runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
     else:
-        raise NotImplementedError("This is not possible")
+        # automatically determine which is the best
+        if YhrunRunner.is_available():
+            runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
+        elif MpirunRunner.is_available():
+            runner = MpirunRunner(MpirunRunner.parse_cmdline_args(config))
+        else:
+            raise RuntimeError(
+                "Failed to automatically determine runner, please specify "
+                "one via --case-runner")
 
-    run_project(proj, runner, SimpleProgressReporter(), verbose=config.verbose,
-                timeout=config.timeout, exclude=config.exclude,
+    run_project(proj, runner, SimpleProgressReporter(), timeout=config.timeout,
+                make_script=config.make_script, dryrun=config.dryrun,
+                verbose=config.verbose, exclude=config.exclude,
                 include=config.include, skip_finished=config.skip_finished)
 
 
