@@ -212,17 +212,30 @@ def parse_jasmin4log(fn):
         r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" + r"^(?P<header>^.*?$)\n-{10,}\n"
         + r"(?P<content>.*?)^-{10,}\n", re.M + re.S)
     for match in logtbl_ptn.finditer(content):
+        # TODO: use column width to better split columns. the columns names and
+        # width can be determined from the header, everything is right aligned.
         log_table = match.groupdict()
         table_name = log_table["name"]
         # Extract table header
         header = log_table["header"].split()
+        assert(header[0] == "Name")
+        timer_name_pos = log_table["header"].index("Name")
+        timer_value_pos = timer_name_pos + len("Name")
         # Parse table rows
         table_contents = []
-        for ln in log_table["content"].strip().split("\n"):
+        for ln in log_table["content"].split("\n"):
+            # skip empty lines
+            if not ln.strip():
+                continue
             timer_rec = {}
-            seg_ptn = re.compile(r"(TOTAL RUN TIME|\S+)")
-            for i, seg in enumerate(seg_ptn.finditer(ln)):
-                cn = header[i]
+            # split out the timer name column first, it may contain strange
+            # charactors such as spaces.
+            timer_name = ln[:timer_value_pos]
+            timer_rec["Name"] = timer_name.strip()
+            timer_values = ln[timer_value_pos:]
+            seg_ptn = re.compile(r"(\S+)")
+            for i, seg in enumerate(seg_ptn.finditer(timer_values)):
+                cn = header[i + 1]
                 val = seg.group(1)
                 flt_ptn = r"[-+]?(?:\d+(?:\.\d*)?)(?:[Ee][-+]?\d+)?|[+-]?nan"
                 m = re.match(r"({0})\(({0})%\)".format(flt_ptn), val)
