@@ -379,8 +379,9 @@ def run_project(project, runner, reporter, timeout=None, make_script=True,
         stats[result].append(case_id)
     reporter.project_end(project, stats)
 
-    runlog_path = os.path.join(project.project_root, "run_stats.json")
-    json.dump(stats, file(runlog_path, "w"), indent=2)
+    if not dryrun:
+        runlog_path = os.path.join(project.project_root, "run_stats.json")
+        json.dump(stats, file(runlog_path, "w"), indent=2)
 
 
 def main():
