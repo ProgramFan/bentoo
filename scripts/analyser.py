@@ -249,26 +249,35 @@ class SqliteReader(object):
         return data
 
 
-def make_reader(reader, *args, **kwargs):
-    if reader == "sqlite":
-        return SqliteReader(glob_syntax=kwargs.get("sqlite_glob_syntax"))
-    elif reader == "pandas":
-        return PandasReader(backend=kwargs.get("pandas_backend"))
-    else:
-        raise RuntimeError("Unknown reader '%s'" % reader)
-
-
 def guess_file_type(name):
     known_types = {
         ".csv": "csv",
         ".xls": "excel",
-        ".xlsx": "excel"
+        ".xlsx": "excel",
+        ".sqlite": "sqlite",
+        ".sqlite3": "sqlite",
     }
-    ext = os.path.splitext()[1]
+    ext = os.path.splitext(name)[1]
     if ext in known_types:
         return known_types[ext]
     else:
         return "csv"
+
+
+def make_reader(data_file, reader, *args, **kwargs):
+    known_reader = {
+        "sqlite": lambda: SqliteReader(kwargs.get("sqlite_glob_syntax")),
+        "pandas": lambda: PandasReader(kwargs.get("pandas_backend"))
+    }
+    if reader == "auto":
+        file_type = guess_file_type(data_file)
+        if file_type in known_reader:
+            return known_reader[file_type]()
+        else:
+            raise RuntimeError("Failed to guess reader for '%s', please "
+                               "specify a reader." % data_file)
+    else:
+        return known_reader[reader]()
 
 
 def save_data(data_frame, output_file):
@@ -282,7 +291,7 @@ def save_data(data_frame, output_file):
 
 def analyse_data(data_file, reader, matches, columns, groupby,
                  pivot=None, save=None, **kwargs):
-    reader = make_reader(reader, **kwargs)
+    reader = make_reader(data_file, reader, **kwargs)
     data = reader.read_frame(data_file, matches, columns, groupby, pivot)
     print(data.to_string())
     if save:
@@ -295,7 +304,7 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("data_file", help="Database file")
     parser.add_argument("-r", "--reader",
-                        choices=["sqlite", "pandas"], default="pandas",
+                        choices=["sqlite", "pandas", "auto"], default="auto",
                         help="Database reader (default: pandas)")
 
     parser.add_argument("-m", "--matches", "--filter",
