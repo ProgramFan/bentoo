@@ -8,4 +8,3 @@
 - [x] Add an option to runner to generate running scripts instead of real run
 - [ ] Add terminate-current-job function to runner
 - [ ] Add safe Ctrl-C support to runner
-- [ ] Make SqliteReader work without pandas
