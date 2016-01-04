@@ -7,4 +7,4 @@
 - [x] Make possible to run a subpart of a test
 - [ ] Add terminate-current-job function to runner
 - [ ] Add safe Ctrl-C support to runner
-- [ ] Add an option to runner to generate running scripts instead of real run
+- [x] Add an option to runner to generate running scripts instead of real run
