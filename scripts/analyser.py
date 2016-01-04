@@ -258,13 +258,35 @@ def make_reader(reader, *args, **kwargs):
         raise RuntimeError("Unknown reader '%s'" % reader)
 
 
+def guess_file_type(name):
+    known_types = {
+        ".csv": "csv",
+        ".xls": "excel",
+        ".xlsx": "excel"
+    }
+    ext = os.path.splitext()[1]
+    if ext in known_types:
+        return known_types[ext]
+    else:
+        return "csv"
+
+
+def save_data(data_frame, output_file):
+    known_saver = {
+        "csv": lambda x, y: x.to_csv(y, index=True),
+        "excel": lambda x, y: x.to_excel(y, index=True)
+    }
+    file_type = guess_file_type(output_file)
+    known_saver[file_type](data_frame, output_file)
+
+
 def analyse_data(data_file, reader, matches, columns, groupby,
                  pivot=None, save=None, **kwargs):
     reader = make_reader(reader, **kwargs)
     data = reader.read_frame(data_file, matches, columns, groupby, pivot)
     print(data.to_string())
     if save:
-        data.to_csv(save, index=True)
+        save_data(data, save)
 
 
 def main():
@@ -288,7 +310,7 @@ def main():
     parser.add_argument("-p", "--pivot", default=None,
                         help="Pivoting fields, 2 or 3 element list")
     parser.add_argument("-s", "--save",
-                        help="Save result to a CSV file")
+                        help="Save result to a csv/Excel file")
 
     ag = parser.add_argument_group("Sqlite Reader Options")
     ag.add_argument("--sqlite-glob-syntax",
