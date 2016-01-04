@@ -89,7 +89,7 @@ class PandasReader(object):
     def __init__(self, backend="sqlite"):
         self.backend = backend
 
-    def read_frame(self, data_file, matches, columns, pivot):
+    def read_frame(self, data_file, matches, columns, groupby, pivot):
         reader = self.backend
         if self.backend == "auto":
             ext = os.path.splitext(data_file)[1]
@@ -201,13 +201,28 @@ class SqliteReader(object):
         for f in columns:
             real_columns.extend(parse_list(f))
         for f in real_columns:
-            assert f in column_types
+            m = re.match(r"\w+\((\w+)\)", f)
+            if m:
+                assert m.group(1) in column_types
+            else:
+                assert f in column_types
         return ", ".join(real_columns)
+
+    @classmethod
+    def _build_groupby_clause(cls, column_types, groupby):
+        if not groupby:
+            return ""
+        real_groups = []
+        for g in groupby:
+            real_groups.extend(parse_list(g))
+        for g in real_groups:
+            assert g in column_types
+        return "GROUP BY " + ", ".join(real_groups)
 
     def __init__(self, glob_syntax="fnmatch"):
         self.glob_syntax = glob_syntax
 
-    def read_frame(self, data_file, matches, columns, pivot):
+    def read_frame(self, data_file, matches, columns, groupby, pivot):
         conn = sqlite3.connect(data_file)
         if self.glob_syntax == "regex":
             conn.create_function("regexp", 2,
@@ -222,7 +237,8 @@ class SqliteReader(object):
         selects = self._build_select_clause(data_types, columns)
         filters = self._build_where_clause(data_types, matches,
                                            self.glob_syntax)
-        sql = "SELECT {0} FROM result {1}".format(selects, filters)
+        groups = self._build_groupby_clause(data_types, groupby)
+        sql = "SELECT {0} FROM result {1} {2}".format(selects, filters, groups)
         data = pandas.io.sql.read_sql(sql, conn)
 
         if pivot:
@@ -242,10 +258,10 @@ def make_reader(reader, *args, **kwargs):
         raise RuntimeError("Unknown reader '%s'" % reader)
 
 
-def analyse_data(data_file, reader, matches, columns,
+def analyse_data(data_file, reader, matches, columns, groupby,
                  pivot=None, save=None, **kwargs):
     reader = make_reader(reader, **kwargs)
-    data = reader.read_frame(data_file, matches, columns, pivot)
+    data = reader.read_frame(data_file, matches, columns, groupby, pivot)
     print(data.to_string())
     if save:
         data.to_csv(save, index=True)
@@ -259,12 +275,16 @@ def main():
     parser.add_argument("-r", "--reader",
                         choices=["sqlite", "pandas"], default="pandas",
                         help="Database reader (default: pandas)")
+
     parser.add_argument("-m", "--matches", "--filter",
                         action='append', default=[],
                         help="Value filter, name[~=]value")
     parser.add_argument("-c", "--columns",
                         action='append', default=[],
                         help="Columns to display, value or list of values")
+    parser.add_argument("-g", "--groupby", action='append', default=[],
+                        help="Group-by specification")
+
     parser.add_argument("-p", "--pivot", default=None,
                         help="Pivoting fields, 2 or 3 element list")
     parser.add_argument("-s", "--save",
@@ -281,8 +301,8 @@ def main():
                     help="Pandas IO backend (default: auto)")
 
     args = parser.parse_args()
-    analyse_data(args.data_file, args.reader,
-                 args.matches, args.columns, args.pivot, args.save,
+    analyse_data(args.data_file, args.reader, args.matches, args.columns,
+                 args.groupby, args.pivot, args.save,
                  sqlite_glob_syntax=args.sqlite_glob_syntax,
                  pandas_backend=args.pandas_backend)
 
