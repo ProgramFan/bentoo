@@ -337,8 +337,8 @@ class BsubRunner:
                                help="Use large segment support")
         argparser.add_argument("--cgsp",
                                help="Number of slave cores per core group")
-        argparser.add_argument("--shared_size",
-                               help="Shared region size")
+        argparser.add_argument("--share_size",
+                               help="Share region size")
         argparser.add_argument("--host_stack",
                                help="Host stack size")
 
@@ -347,7 +347,7 @@ class BsubRunner:
         return {"queue": namespace.queue,
                 "cgsp": namespace.cgsp,
                 "large_seg": namespace.large_seg,
-                "shared_size": namespace.shared_size,
+                "share_size": namespace.share_size,
                 "host_stack": namespace.host_stack}
 
     def __init__(self, args):
@@ -362,11 +362,11 @@ class BsubRunner:
 
         run = spec["run"]
         nprocs = str(run["nprocs"])
-        nnodes = run.get("nnodes", None)
+        procs_per_node = run.get("procs_per_node", None)
         bsub_cmd = ["bsub", "-I"]
         bsub_cmd.extend(["-n", nprocs])
-        if nnodes:
-            bsub_cmd.extend(["-np", nnodes])
+        if procs_per_node:
+            bsub_cmd.extend(["-np", procs_per_node])
         if self.args["large_seg"]:
             bsub_cmd.append("-b")
         # TODO: add timeout support
@@ -376,8 +376,8 @@ class BsubRunner:
             bsub_cmd.extend(["-q", self.args["queue"]])
         if self.args["cgsp"]:
             bsub_cmd.extend(["-cgsp", self.args["cgsp"]])
-        if self.args["shared_size"]:
-            bsub_cmd.extend(["-shared_size", self.args["shared_size"]])
+        if self.args["share_size"]:
+            bsub_cmd.extend(["-share_size", self.args["share_size"]])
         if self.args["host_stack"]:
             bsub_cmd.extend(["-host_stack", self.args["host_stack"]])
         exec_cmd = map(str, spec["cmd"])
@@ -465,17 +465,17 @@ def run_project(project, runner, reporter, timeout=None, make_script=True,
         if skip_finished and case in stats["success"]:
             continue
         case_path = os.path.relpath(case["path"], project.project_root)
+        case_id = {"test_vector": case["test_vector"], "path": case_path}
         if exclude and has_match(case_path, exclude):
-            stats["skipped"].append(case)
+            stats["skipped"].append(case_id)
             continue
         elif include and not has_match(case_path, include):
-            stats["skipped"].append(case)
+            stats["skipped"].append(case_id)
             continue
         reporter.case_begin(project, case)
         result = runner.run(case, verbose=verbose, timeout=timeout,
                             make_script=make_script, dryrun=dryrun)
         reporter.case_end(project, case, result)
-        case_id = {"test_vector": case["test_vector"], "path": case_path}
         stats[result].append(case_id)
     reporter.project_end(project, stats)
 
