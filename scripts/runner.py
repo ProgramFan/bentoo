@@ -319,6 +319,106 @@ class YhrunRunner:
                 return "failed"
 
 
+class BsubRunner:
+
+    @classmethod
+    def is_available(cls):
+        if has_program(["bsub", "-h"]):
+            return True
+        else:
+            return False
+
+    @classmethod
+    def register_cmdline_args(cls, argparser):
+        argparser.add_argument("-q", "--queue",
+                               metavar="QUEUE", dest="queue",
+                               help="Select job queue to use")
+        argparser.add_argument("-b", action="store_true", dest="large_seg",
+                               help="Use large segment support")
+        argparser.add_argument("--cgsp",
+                               help="Number of slave cores per core group")
+        argparser.add_argument("--shared_size",
+                               help="Shared region size")
+        argparser.add_argument("--host_stack",
+                               help="Host stack size")
+
+    @classmethod
+    def parse_cmdline_args(cls, namespace):
+        return {"queue": namespace.queue,
+                "cgsp": namespace.cgsp,
+                "large_seg": namespace.large_seg,
+                "shared_size": namespace.shared_size,
+                "host_stack": namespace.host_stack}
+
+    def __init__(self, args):
+        self.args = args
+
+    def run(self, case, timeout=None, make_script=False, dryrun=False,
+            verbose=False, **kwargs):
+        test_vector = case["test_vector"]
+        path = case["path"]
+        spec = case["spec"]
+        assert os.path.isabs(path)
+
+        run = spec["run"]
+        nprocs = str(run["nprocs"])
+        nnodes = run.get("nnodes", None)
+        bsub_cmd = ["bsub", "-I"]
+        bsub_cmd.extend(["-n", nprocs])
+        if nnodes:
+            bsub_cmd.extend(["-np", nnodes])
+        if self.args["large_seg"]:
+            bsub_cmd.append("-b")
+        # TODO: add timeout support
+        # if timeout:
+        #     bsub_cmd.extend(["-t", str(timeout)])
+        if self.args["queue"]:
+            bsub_cmd.extend(["-q", self.args["queue"]])
+        if self.args["cgsp"]:
+            bsub_cmd.extend(["-cgsp", self.args["cgsp"]])
+        if self.args["shared_size"]:
+            bsub_cmd.extend(["-shared_size", self.args["shared_size"]])
+        if self.args["host_stack"]:
+            bsub_cmd.extend(["-host_stack", self.args["host_stack"]])
+        exec_cmd = map(str, spec["cmd"])
+        cmd = bsub_cmd + exec_cmd
+        cmd = map(str, cmd)
+
+        env = dict(os.environ)
+        for k, v in spec["envs"].iteritems():
+            env[k] = str(v)
+
+        if make_script:
+            make_bash_script(
+                cmd, spec["envs"], os.path.join(path, "run.sh"))
+        if dryrun:
+            return "skipped"
+
+        out_fn = os.path.join(path, "STDOUT")
+        err_fn = os.path.join(path, "STDERR")
+
+        if verbose:
+            proc1 = subprocess.Popen(cmd, env=env, cwd=path,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT)
+            proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
+                                     stdin=proc1.stdout)
+            proc1.stdout.close()
+            ret = proc2.wait()
+        else:
+            ret = subprocess.call(cmd, env=env, cwd=path,
+                                  stdout=file(out_fn, "w"),
+                                  stderr=file(err_fn, "w"))
+
+        if ret == 0:
+            return "success"
+        # FIXME: find the correct return code for timeout
+        elif ret == 124:
+            return "timeout"
+        else:
+            return "failed"
+
+
 class SimpleProgressReporter:
 
     def project_begin(self, project):
@@ -401,8 +501,8 @@ def main():
 
     ag = parser.add_argument_group("Runner options")
     ag.add_argument("--case-runner",
-                    choices=["mpirun", "yhrun", "auto"], default="auto",
-                    help="Runner to choose (default: auto)")
+                    choices=["yhrun", "bsub", "mpirun", "auto"],
+                    default="auto", help="Runner to choose (default: auto)")
     ag.add_argument("-t", "--timeout", default=None,
                     help="Timeout for each case, in minites")
     ag.add_argument("--make-script", action="store_true",
@@ -418,6 +518,9 @@ def main():
     ag = parser.add_argument_group("mpirun options")
     MpirunRunner.register_cmdline_args(ag)
 
+    ag = parser.add_argument_group("bsub options")
+    BsubRunner.register_cmdline_args(ag)
+
     config = parser.parse_args()
 
     proj = TestProjectReader(config.project_root)
@@ -425,10 +528,14 @@ def main():
         runner = MpirunRunner(MpirunRunner.parse_cmdline_args(config))
     elif config.case_runner == "yhrun":
         runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
+    elif config.case_runner == "bsub":
+        runner = BsubRunner(BsubRunner.parse_cmdline_args(config))
     else:
         # automatically determine which is the best
         if YhrunRunner.is_available():
             runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
+        elif BsubRunner.is_available():
+            runner = BsubRunner(BsubRunner.parse_cmdline_args(config))
         elif MpirunRunner.is_available():
             runner = MpirunRunner(MpirunRunner.parse_cmdline_args(config))
         else:
