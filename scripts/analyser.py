@@ -19,13 +19,40 @@ cases, namely tasks need to be done quick and often in command line. More
 sphosticated analysis need to be done directly in python using pandas etc.
 '''
 
+# TODO: Implement new design
+# # New design
+#
+# ## Interface
+#
+#  -m, --match
+#  -c, --columns
+#  -g, --groupby
+#  -s, --sortby
+#  -n, --limit
+#  --raw-sql
+#  -p, --pivot # Only with pandas
+#  -d, --dump  # Only with pandas
+#
+#  ## Design
+#
+#  Frontend: sqlite3 sql query, support all SQL properties.
+#  Backend: sqlite3 for sqlite files; other files readin by pandas and convert
+#  to an sqlite database on the fly.
+#  Show: simple without pandas, nice results as pandas dataframe.
+
+
 import argparse
 import fnmatch
 import os
-import pandas
 import re
 import sys
 import sqlite3
+
+try:
+    import pandas
+    pandas = True
+except ImportError:
+    HAVE_PANDAS = False
 
 
 def parse_list(repr):
@@ -316,20 +343,22 @@ def main():
     parser.add_argument("-g", "--groupby", action='append', default=[],
                         help="Group-by specification")
 
-    parser.add_argument("-p", "--pivot", default=None,
-                        help="Pivoting fields, 2 or 3 element list")
-    parser.add_argument("-s", "--save",
-                        help="Save result to a csv/Excel file")
+    if HAVE_PANDAS:
+        parser.add_argument("-p", "--pivot", default=None,
+                            help="Pivoting fields, 2 or 3 element list")
+        parser.add_argument("-s", "--save",
+                            help="Save result to a csv/Excel file")
 
     ag = parser.add_argument_group("Sqlite Reader Options")
     ag.add_argument("--sqlite-glob-syntax",
                     choices=["fnmatch", "regex"], default="fnmatch",
                     help="Globbing operator syntax (default: fnmatch)")
 
-    ag = parser.add_argument_group("Pandas Reader Options")
-    ag.add_argument("--pandas-backend",
-                    choices=["excel", "sqlite3", "auto"], default="auto",
-                    help="Pandas IO backend (default: auto)")
+    if HAVE_PANDAS:
+        ag = parser.add_argument_group("Pandas Reader Options")
+        ag.add_argument("--pandas-backend",
+                        choices=["excel", "sqlite3", "auto"], default="auto",
+                        help="Pandas IO backend (default: auto)")
 
     args = parser.parse_args()
     analyse_data(args.data_file, args.reader, args.matches, args.columns,
