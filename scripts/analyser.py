@@ -50,7 +50,7 @@ import sqlite3
 
 try:
     import pandas
-    pandas = True
+    HAVE_PANDAS = True
 except ImportError:
     HAVE_PANDAS = False
 
@@ -276,53 +276,20 @@ class SqliteReader(object):
         return data
 
 
-def guess_file_type(name):
-    known_types = {
-        ".csv": "csv",
-        ".xls": "excel",
-        ".xlsx": "excel",
-        ".sqlite": "sqlite",
-        ".sqlite3": "sqlite",
-    }
-    ext = os.path.splitext(name)[1]
-    if ext in known_types:
-        return known_types[ext]
+def analyse_data(data_file, matchs, columns, groupby, sortby, limit,
+                 glob_syntax="fnmatch", pivot=None, dump=None,
+                 *args, **kwargs):
+    sql = build_sql(matches, columns, groupby, sortby, limit, glob_syntax)
+    data = show_sql(data_file, sql)
+    if HAVE_PANDAS:
+        data = pandas.DataFrame(data)
+        if pivot:
+            data = data.pivot(pivot)
+        print data.to_string()
+        if dump:
+            data.to_csv(dump, index=False)
     else:
-        return "csv"
-
-
-def make_reader(data_file, reader, *args, **kwargs):
-    known_reader = {
-        "sqlite": lambda: SqliteReader(kwargs.get("sqlite_glob_syntax")),
-        "pandas": lambda: PandasReader(kwargs.get("pandas_backend"))
-    }
-    if reader == "auto":
-        file_type = guess_file_type(data_file)
-        if file_type in known_reader:
-            return known_reader[file_type]()
-        else:
-            raise RuntimeError("Failed to guess reader for '%s', please "
-                               "specify a reader." % data_file)
-    else:
-        return known_reader[reader]()
-
-
-def save_data(data_frame, output_file):
-    known_saver = {
-        "csv": lambda x, y: x.to_csv(y, index=True),
-        "excel": lambda x, y: x.to_excel(y, index=True)
-    }
-    file_type = guess_file_type(output_file)
-    known_saver[file_type](data_frame, output_file)
-
-
-def analyse_data(data_file, reader, matches, columns, groupby,
-                 pivot=None, save=None, **kwargs):
-    reader = make_reader(data_file, reader, **kwargs)
-    data = reader.read_frame(data_file, matches, columns, groupby, pivot)
-    print(data.to_string())
-    if save:
-        save_data(data, save)
+        print_raw_data(data)
 
 
 def main():
@@ -330,41 +297,35 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("data_file", help="Database file")
-    parser.add_argument("-r", "--reader",
-                        choices=["sqlite", "pandas", "auto"], default="auto",
-                        help="Database reader (default: pandas)")
 
-    parser.add_argument("-m", "--matches", "--filter",
-                        action='append', default=[],
-                        help="Value filter, name[~=]value")
-    parser.add_argument("-c", "--columns",
-                        action='append', default=[],
-                        help="Columns to display, value or list of values")
+    parser.add_argument("-m", "--match", action='append', default=[],
+                        help="Record filter criteria")
+    parser.add_argument("-c", "--columns", default="*",
+                        help="Columns to extract")
     parser.add_argument("-g", "--groupby", action='append', default=[],
-                        help="Group-by specification")
+                        help="Group by specificed columns")
+    parser.add_argument("-s", "--sortby", "--orderby", default=None,
+                        help="Sort by specified columns")
+    parser.add_argument("-n", "--limit", default=0,
+                        help="Max number of records")
+    parser.add_argument("--raw-sql", default="",
+                        help="Use raw SQL query, suppress other arguments")
+
+    ag.add_argument("--glob-syntax",
+                    choices=["fnmatch", "regex"], default="fnmatch",
+                    help="Globbing syntax (default: fnmatch)")
 
     if HAVE_PANDAS:
         parser.add_argument("-p", "--pivot", default=None,
                             help="Pivoting fields, 2 or 3 element list")
-        parser.add_argument("-s", "--save",
+        parser.add_argument("-d", "--dump", default=None,
                             help="Save result to a csv/Excel file")
 
-    ag = parser.add_argument_group("Sqlite Reader Options")
-    ag.add_argument("--sqlite-glob-syntax",
-                    choices=["fnmatch", "regex"], default="fnmatch",
-                    help="Globbing operator syntax (default: fnmatch)")
-
-    if HAVE_PANDAS:
-        ag = parser.add_argument_group("Pandas Reader Options")
-        ag.add_argument("--pandas-backend",
-                        choices=["excel", "sqlite3", "auto"], default="auto",
-                        help="Pandas IO backend (default: auto)")
-
     args = parser.parse_args()
-    analyse_data(args.data_file, args.reader, args.matches, args.columns,
-                 args.groupby, args.pivot, args.save,
-                 sqlite_glob_syntax=args.sqlite_glob_syntax,
-                 pandas_backend=args.pandas_backend)
+    analyse_data(args.data_file, args.match, args.columns,
+                 args.groupby, args.sortby, args.limit, args.glob_syntax,
+                 args.pivot if HAVE_PANDAS else None,
+                 args.dump if HAVE_PANDAS else None)
 
 if __name__ == "__main__":
     main()
