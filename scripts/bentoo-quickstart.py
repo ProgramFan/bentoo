@@ -4,6 +4,7 @@
 
 from __future__ import print_function
 
+import argparse
 import os
 import re
 import string
@@ -186,6 +187,9 @@ def make_custom_script(project_dir, binary_name, test_factors):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.parse_args()
+
     show_message("Welcome to the bentoo world. This quickstart will guide "
                  "you through the creation of a bentoo project, by asking "
                  "you simple questions")
