@@ -183,7 +183,7 @@ def make_custom_script(project_dir, binary_name, test_factors):
                               test_factors_repr=test_factors_repr)
     outfn = os.path.join(project_dir, "make-case.py")
     file(outfn, "w").write(out)
-    os.chmod(outfn, 755)
+    os.chmod(outfn, 0755)
 
 
 def main():
