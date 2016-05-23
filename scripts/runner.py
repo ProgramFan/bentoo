@@ -132,11 +132,14 @@ class MpirunRunner:
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        pass
+        argparser.add_argument("--hosts", default=None,
+                               help="Comma seperated host list")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {}
+        return {
+            "hosts": namespace.hosts
+        }
 
     def __init__(self, args):
         self.args = args
@@ -150,6 +153,8 @@ class MpirunRunner:
 
         nprocs = str(spec["run"]["nprocs"])
         mpirun_cmd = ["mpirun", "-np", nprocs]
+        if self.args["hosts"]:
+            mpirun_cmd.extend(["-hosts", self.args["hosts"]])
         exec_cmd = map(str, spec["cmd"])
         cmd = mpirun_cmd + exec_cmd
         if timeout:
