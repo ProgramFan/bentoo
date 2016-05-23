@@ -8,7 +8,8 @@ setup(
     version="0.10-dev",
     packages=find_packages(),
     scripts=["scripts/generator.py", "scripts/runner.py",
-             "scripts/collector.py", "scripts/analyser.py"],
+             "scripts/collector.py", "scripts/analyser.py",
+             "scripts/bentoo-quickstart.py"],
     package_data={
         '': ['*.adoc', '*.rst', '*.md']
     },
