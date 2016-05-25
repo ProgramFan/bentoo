@@ -143,7 +143,7 @@ from collections import OrderedDict
 
 def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
     # Expand test vector
-    ${test_factors_repr} = test_vector
+    ${test_factors_repr} = test_vector.values()
 
     # Do input preparation and other heavy stuff
     DO_HEAVY_STUFF()
