@@ -44,7 +44,7 @@ def parse_json(fn):
             result = obj
         return result
     content = file(fn).read()
-    content = re.sub(r"\s*//.*$", "", content)
+    content = re.sub(r"//.*", "", content)
     return ununicodify(json.loads(content, object_pairs_hook=OrderedDict))
 
 
