@@ -721,17 +721,17 @@ def main():
     parser.add_argument(
         "project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
-    parser.add_argument("-s, --serializer", metavar="SERIALIZER",
+    parser.add_argument("-s", "--serializer", metavar="SERIALIZER",
                         dest="serializer", choices=["sqlite3", "pandas"],
                         default="sqlite3",
                         help="Serializer to dump results (default: sqlite3)")
-    parser.add_argument("-p, --parser", metavar="PARSER", dest="parser",
+    parser.add_argument("-p", "--parser", metavar="PARSER", dest="parser",
                         choices=["jasmin3", "jasmin4", "jasmin", "likwid"],
                         default="jasmin",
                         help="Parser for raw result files (default: jasmin)")
     parser.add_argument("--use-table", type=int, default=None,
                         help="Choose which data table to use")
-    parser.add_argument("-d, --drop-columns", default=None, metavar="SPEC",
+    parser.add_argument("-d", "--drop-columns", default=None, metavar="SPEC",
                         dest="drop_columns",
                         help="Drop un-wanted table columns")
 
