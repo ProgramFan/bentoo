@@ -433,13 +433,24 @@ class LikwidMetrics(object):
         return eval(formula)
 
 
+def guess_likwid_home():
+    possible_places = os.environ["PATH"].split(":")
+    possible_places.append("/usr/local/bin")
+    possible_places.append("/usr/local/likwid/bin")
+    possible_places.append("/home/lib/jasmin/thirdparty/likwid/bin")
+    for p in possible_places:
+        if os.path.exists(os.path.join(p, "bin", "likwid-perfctr")):
+            return os.path.dirname(p)
+    raise RuntimeError("Can not find likwid.")
+
+
 class LikwidOutputParser(object):
 
     def __init__(self, group):
         self.likwid = None
         self.group = group
-        self.collum_names = []
-        self.collum_types = []
+        self.column_names = []
+        self.column_types = []
         self.data = []
 
     def process(self, iterable):
@@ -449,14 +460,14 @@ class LikwidOutputParser(object):
         cpu_cycles = line2.split(":")[-1].strip()
         if not self.likwid:
             # OPTIMIZATION: init likwid metrics only once
-            likwid = LikwidMetrics("/usr/local", cpu_model, self.group)
+            likwid = LikwidMetrics(guess_likwid_home(), cpu_model, self.group)
             # OPTIMIZATION: calculate table structure only once
-            self.collum_names.extend(["TimerName", "ThreadId", "RDTSC",
+            self.column_names.extend(["TimerName", "ThreadId", "RDTSC",
                                       "CallCount"])
-            self.collum_types.extend([str, int, float, int])
+            self.column_types.extend([str, int, float, int])
             for i in xrange(likwid.metric_count()):
                 name = likwid.metric_name(i).replace(" ", "_")
-                self.collum_names.append(name)
+                self.column_names.append(name)
                 self.column_types.append(float)
             self.likwid = likwid
         self.data = []
@@ -468,8 +479,8 @@ class LikwidOutputParser(object):
             tmp["inverseClock"] = 1.0 / float(cpu_cycles)
             result = [tmp["RegionTag"], tmp["ThreadId"], tmp["RDTSC"],
                       tmp["CallCount"]]
-            for i in xrange(likwid.metric_count()):
-                value = likwid.calc_metric(i, tmp)
+            for i in xrange(self.likwid.metric_count()):
+                value = self.likwid.calc_metric(i, tmp)
                 result.append(value)
             self.data.append(result)
 
@@ -497,8 +508,8 @@ class LikwidParser(object):
             likwid_block.process(f, parser)
             for d in parser.data:
                 data.append([d[0], proc_id] + d[1:])
-        cnames = [parser.collum_names[0], "ProcId"] + parser.collum_names[1:]
-        ctypes = [parser.collum_types[0], int] + parser.collum_types[1:]
+        cnames = [parser.column_names[0], "ProcId"] + parser.column_names[1:]
+        ctypes = [parser.column_types[0], int] + parser.column_types[1:]
         yield {
             "column_names": cnames,
             "column_types": ctypes,
@@ -532,7 +543,7 @@ class SqliteSerializer:
             t = column_types[i]
             assert t in SqliteSerializer.typemap
             tn = SqliteSerializer.typemap[t]
-            column_segs.append("{0} {1}".format(column_name, tn))
+            column_segs.append("\"{0}\" {1}".format(column_name, tn))
         create_columns_sql = ", ".join(column_segs)
         create_table_sql = "CREATE TABLE result ({0})".format(
             create_columns_sql)
