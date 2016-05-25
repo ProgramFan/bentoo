@@ -439,7 +439,7 @@ def guess_likwid_home():
     possible_places.append("/usr/local/likwid/bin")
     possible_places.append("/home/lib/jasmin/thirdparty/likwid/bin")
     for p in possible_places:
-        if os.path.exists(os.path.join(p, "bin", "likwid-perfctr")):
+        if os.path.exists(os.path.join(p, "likwid-perfctr")):
             return os.path.dirname(p)
     raise RuntimeError("Can not find likwid.")
 
