@@ -21,6 +21,9 @@ import string
 import argparse
 import json
 import sqlite3
+import glob
+import csv
+import cStringIO
 from collections import OrderedDict
 from functools import reduce
 
@@ -311,6 +314,198 @@ class UnifiedJasminParser:
         return self.parser_funcs[self.filetype_detector(fn)](fn)
 
 
+#
+# Likwid Parser
+#
+
+class BlockReader(object):
+
+    def __init__(self, start, end, use_regex=False):
+        if use_regex:
+            self.start_ = re.compile(start)
+
+            def match_start(x):
+                return self.start_.match(x)
+            self.match_start = match_start
+
+            self.end = re.compile(end)
+
+            def match_end(x):
+                return self.end_.match(x)
+            self.match_end = match_end
+        else:
+            def match_start(x):
+                return x == self.start_
+
+            def match_end(x):
+                return x == self.end_
+
+            self.start_ = start
+            self.end_ = end
+            self.match_start = match_start
+            self.match_end = match_end
+
+    def process(self, iterable, consumer):
+        def content(iterable):
+            while not self.match_start(iterable.next()):
+                continue
+            line = iterable.next()
+            while not self.match_end(line):
+                yield line
+                line = iterable.next()
+        consumer.process(content(iterable))
+
+
+class EventsetParser(object):
+
+    def __init__(self):
+        self.events = {}
+        self.counters = {}
+
+    def process(self, iterable):
+        for line in iterable:
+            counter, event = line.split()
+            combined = "%s:%s" % (event, counter)
+            self.events[combined] = event
+            self.counters[combined] = counter
+
+
+class MetricsParser(object):
+
+    def __init__(self):
+        self.metrics = []
+
+    def process(self, iterable):
+        for line in iterable:
+            if re.findall(r"\[.*\]", line):
+                name, unit, formula = map(lambda x: x.strip(),
+                                          re.match(r"^(.*?)\[(.*?)\](.*)$",
+                                                   line).groups())
+                self.metrics.append((name, unit, formula))
+            else:
+                name, formula = map(lambda x: x.strip(),
+                                    re.match(r"^(.*?)(\S+)$", line).groups())
+                self.metrics.append((name, "1", formula))
+
+
+class LikwidMetrics(object):
+
+    @classmethod
+    def locate_group(cls, likwid_home, arch, group):
+        path = os.path.join(likwid_home, "share", "likwid", "perfgroups", arch,
+                            "%s.txt" % group)
+        return path if os.path.exists(path) else None
+
+    def __init__(self, likwid_home, arch, group):
+        groupdef = self.locate_group(likwid_home, arch, group)
+        if not groupdef:
+            raise RuntimeError("Can not find group '%s' for '%s' in '%s'"
+                               % (group, arch, likwid_home))
+        with open(groupdef) as groupfile:
+            eventset_reader = BlockReader("EVENTSET\n", "\n")
+            metrics_reader = BlockReader("METRICS\n", "\n")
+            ep = EventsetParser()
+            mp = MetricsParser()
+            eventset_reader.process(groupfile, ep)
+            metrics_reader.process(groupfile, mp)
+            self.eventset = {"events": ep.events, "counters": ep.counters}
+            self.metrics = mp.metrics
+
+    def counter_name(self, fullname):
+        return self.eventset["counters"][fullname]
+
+    def event_name(self, fullname):
+        return self.eventset["events"][fullname]
+
+    def metric_count(self):
+        return len(self.metrics)
+
+    def metric_name(self, metric_id):
+        return self.metrics[metric_id][0]
+
+    def metric_unit(self, metric_id):
+        return self.metrics[metric_id][1]
+
+    def calc_metric(self, metric_id, eventvals):
+        formula = str(self.metrics[metric_id][2])
+        for k, v in eventvals.iteritems():
+            formula = formula.replace(k, str(v))
+        return eval(formula)
+
+
+class LikwidOutputParser(object):
+
+    def __init__(self, group):
+        self.likwid = None
+        self.group = group
+        self.collum_names = []
+        self.collum_types = []
+        self.data = []
+
+    def process(self, iterable):
+        line1 = iterable.next()
+        line2 = iterable.next()
+        cpu_model = line1.split(":")[-1].strip()
+        cpu_cycles = line2.split(":")[-1].strip()
+        if not self.likwid:
+            # OPTIMIZATION: init likwid metrics only once
+            likwid = LikwidMetrics("/usr/local", cpu_model, self.group)
+            # OPTIMIZATION: calculate table structure only once
+            self.collum_names.extend(["TimerName", "ThreadId", "RDTSC",
+                                      "CallCount"])
+            self.collum_types.extend([str, int, float, int])
+            for i in xrange(likwid.metric_count()):
+                name = likwid.metric_name(i).replace(" ", "_")
+                self.collum_names.append(name)
+                self.column_types.append(float)
+            self.likwid = likwid
+        self.data = []
+        other = [x for x in iterable]
+        other = cStringIO.StringIO("".join(other[1:-1]))
+        for record in csv.DictReader(other):
+            tmp = {k.split(":")[-1]: v for k, v in record.iteritems()}
+            tmp["time"] = tmp["RDTSC"]
+            tmp["inverseClock"] = 1.0 / float(cpu_cycles)
+            result = [tmp["RegionTag"], tmp["ThreadId"], tmp["RDTSC"],
+                      tmp["CallCount"]]
+            for i in xrange(likwid.metric_count()):
+                value = likwid.calc_metric(i, tmp)
+                result.append(value)
+            self.data.append(result)
+
+
+class LikwidParser(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def itertables(self, fn):
+        # Likwid output one file for each process, so we construct the list of
+        # all files to workaround the result specificaiton limit.
+        result_dir = os.path.dirname(fn)
+        likwid_data = glob.glob(os.path.join(result_dir,
+                                             "likwid_counters.*.dat"))
+        likwid_group = os.path.basename(fn).split("LIKWID_")[1]
+        assert(likwid_data)
+        files = [file(path) for path in likwid_data]
+
+        parser = LikwidOutputParser(likwid_group)
+        likwid_block = BlockReader("@start_likwid\n", "@end_likwid\n")
+        # we only support the first table currently
+        data = []
+        for i, f in enumerate(files):
+            proc_id = int(os.path.basename(likwid_data[i]).split(".")[1])
+            likwid_block.process(f, parser)
+            for d in parser.data:
+                data.append([d[0], proc_id] + d[1:])
+        cnames = [parser.collum_names[0], "ProcId"] + parser.collum_names[1:]
+        ctypes = [parser.collum_types[0], int] + parser.collum_types[1:]
+        yield {
+            "column_names": cnames,
+            "column_types": ctypes,
+            "data": data
+        }
+
+
 class SqliteSerializer:
     typemap = {
         None: "NULL",
@@ -412,6 +607,8 @@ def make_parser(name, *args, **kwargs):
         return Jasmin4Parser(*args, **kwargs)
     elif name == "jasmin":
         return UnifiedJasminParser(*args, **kwargs)
+    elif name == "likwid":
+        return LikwidParser(*args, **kwargs)
     else:
         raise ValueError("Unsupported parser: %s" % name)
 
@@ -529,7 +726,7 @@ def main():
                         default="sqlite3",
                         help="Serializer to dump results (default: sqlite3)")
     parser.add_argument("-p, --parser", metavar="PARSER", dest="parser",
-                        choices=["jasmin3", "jasmin4", "jasmin"],
+                        choices=["jasmin3", "jasmin4", "jasmin", "likwid"],
                         default="jasmin",
                         help="Parser for raw result files (default: jasmin)")
     parser.add_argument("--use-table", type=int, default=None,
