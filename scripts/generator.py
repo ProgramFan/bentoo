@@ -171,6 +171,12 @@ class CustomCaseGenerator:
         args["test_vector"] = test_vector
         case_spec = self.func(**args)
 
+        # create empty output file, so when output file is used for special
+        # signal, it's ready and will not be ignored.
+        for f in case_spec["results"]:
+            filepath = os.path.join(case_path, f)
+            file(filepath, "w").write("")
+
         return case_spec
 
 
