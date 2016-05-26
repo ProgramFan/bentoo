@@ -44,7 +44,7 @@ def parse_json(fn):
             result = obj
         return result
     content = file(fn).read()
-    content = re.sub(r"\s*//.*$", "", content)
+    content = re.sub(r"//.*", "", content)
     return ununicodify(json.loads(content, object_pairs_hook=OrderedDict))
 
 
@@ -170,6 +170,12 @@ class CustomCaseGenerator:
         args["case_path"] = case_path
         args["test_vector"] = test_vector
         case_spec = self.func(**args)
+
+        # create empty output file, so when output file is used for special
+        # signal, it's ready and will not be ignored.
+        for f in case_spec["results"]:
+            filepath = os.path.join(case_path, f)
+            file(filepath, "w").write("")
 
         return case_spec
 

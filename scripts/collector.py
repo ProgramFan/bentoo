@@ -21,11 +21,35 @@ import string
 import argparse
 import json
 import sqlite3
+import glob
+import csv
+import cStringIO
 from collections import OrderedDict
 from functools import reduce
 
 
-class TestProjectReader:
+#
+# Design Of Collector
+#
+# Collector consists of ResultScanner, DataParser, DataAggregator and
+# StorageBackend.  ResultScanner searches the test project for resultant data
+# files, and generates a list of file paths (absolute path). DataParser parses
+# each data file to generate a list of data tables. Each file shall contain the
+# same number of data tables, and all data tables shall have the same shape.
+# DataAggregator merge all or selected data tables into a large data table,
+# dropping table columns if required. The StorageBackend is then responsible
+# for storing the resultant data table.
+#
+# The ResultScanner, DataParser and StorageBackend is implemented using
+# duck-typing to support multiple types of parsers and backends.
+#
+
+
+#
+# ResultScanner
+#
+
+class TestProjectReader(object):
 
     '''Scan a test project for test cases'''
 
@@ -53,13 +77,87 @@ class TestProjectReader:
                 "TestCase.json")
             case_spec = json.load(file(case_spec_fullpath))
             yield {
+                "id": case["path"],
                 "test_vector": case["test_vector"],
-                "path": os.path.join(self.project_root, case["path"]),
+                "fullpath": os.path.join(self.project_root, case["path"]),
                 "spec": case_spec
             }
 
     def count_cases(self):
         return len(self.test_cases)
+
+
+class TestCaseFilter(object):
+    def __init__(self, patterns, mode="include"):
+        assert(mode in ("include", "exclude"))
+        self.patterns = patterns
+
+        def match_any(path, patterns):
+            for m in patterns:
+                if fnmatch.fnmatch(path, m):
+                    return True
+            return False
+
+        def null_check(path):
+            return True
+
+        def include_check(path):
+            return True if match_any(path, self.patterns) else False
+
+        def exclude_check(path):
+            return False if match_any(path, self.patterns) else True
+
+        if not patterns:
+            self.checker = null_check
+        elif mode == "include":
+            self.checker = include_check
+        else:
+            self.checker = exclude_check
+
+    def valid(self, case):
+        return self.checker(case["id"])
+
+
+class ResultScanner(object):
+    def __init__(self, project_root, case_filter=None, filter_mode="include",
+                 result_selector=None):
+        '''
+        Parameters
+        ----------
+
+        project_root: string, root dir of the test project
+        case_filter: list of strings, wildcard strings to match cases
+        filter_mode: "include" or "exclude", how the filter is handled
+        result_selector: list of integers, index of selected results
+        '''
+        self.project = TestProjectReader(project_root)
+        self.case_filter = TestCaseFilter(case_filter, filter_mode)
+        self.result_selector = result_selector
+
+    def iterfiles(self):
+        for case in self.project.itercases():
+            if not self.case_filter.valid(case):
+                continue
+            fullpath = case["fullpath"]
+            result_files = case["spec"]["results"]
+            result_selector = self.result_selector
+            if not result_selector:
+                result_selector = xrange(len(result_files))
+            for result_id in result_selector:
+                fn = os.path.join(fullpath, result_files[result_id])
+                short_fn = os.path.relpath(fn, self.project.project_root)
+                if not os.path.exists(fn):
+                    print("WARNING: Result file '%s' not found" % short_fn)
+                    continue
+                spec = zip(self.project.test_factors + ["result_id"],
+                           case["test_vector"] + [result_id])
+                spec = OrderedDict(spec)
+                yield {"spec": spec, "fullpath": fn}
+
+
+#
+# DataParser
+#
 
 
 def parse_jasminlog(fn):
@@ -107,6 +205,8 @@ def parse_jasminlog(fn):
         "max_percent": float,
         "proc": int
     }
+
+    table_id = 0
     content = file(fn, "r").read()
     logtbl_ptn = re.compile(
         "^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
@@ -150,14 +250,26 @@ def parse_jasminlog(fn):
         types = [avail_types[x] for x in header]
         data = [[v.get(k, None) for k in header] for v in table_contents]
         table = {
+            "table_id": table_id,
             "column_names": header,
             "column_types": types,
             "data": data
         }
         yield table
+        table_id += 1
 
 
-class JasminParser:
+class JasminParser(object):
+    @staticmethod
+    def register_cmd_args(argparser):
+        pass
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {}
+
+    def __init__(self, args):
+        pass
 
     def itertables(self, fn):
         return parse_jasminlog(fn)
@@ -207,6 +319,7 @@ def parse_jasmin4log(fn):
         "LocalMaxLoc": int,
     }
 
+    table_id = 0
     content = file(fn, "r").read()
     logtbl_ptn = re.compile(
         r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" + r"^(?P<header>^.*?$)\n-{10,}\n"
@@ -261,21 +374,43 @@ def parse_jasmin4log(fn):
         types = [avail_types.get(x, str) for x in header]
         data = [[v.get(k, None) for k in header] for v in table_contents]
         table = {
+            "table_id": table_id,
             "column_names": header,
             "column_types": types,
             "data": data
         }
 
         yield table
+        table_id += 1
 
 
-class Jasmin4Parser:
+class Jasmin4Parser(object):
+    @staticmethod
+    def register_cmd_args(argparser):
+        pass
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {}
+
+    def __init__(self, args):
+        pass
 
     def itertables(self, fn):
         return parse_jasmin4log(fn)
 
 
-class UnifiedJasminParser:
+class UnifiedJasminParser(object):
+    @staticmethod
+    def register_cmd_args(argparser):
+        pass
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {}
+
+    def __init__(self, args):
+        pass
 
     def __init__(self):
         jasmin4_ptn = re.compile(
@@ -311,7 +446,253 @@ class UnifiedJasminParser:
         return self.parser_funcs[self.filetype_detector(fn)](fn)
 
 
-class SqliteSerializer:
+#
+# Likwid Parser
+#
+
+class BlockReader(object):
+
+    def __init__(self, start, end, use_regex=False):
+        if use_regex:
+            self.start_ = re.compile(start)
+
+            def match_start(x):
+                return self.start_.match(x)
+            self.match_start = match_start
+
+            self.end = re.compile(end)
+
+            def match_end(x):
+                return self.end_.match(x)
+            self.match_end = match_end
+        else:
+            def match_start(x):
+                return x == self.start_
+
+            def match_end(x):
+                return x == self.end_
+
+            self.start_ = start
+            self.end_ = end
+            self.match_start = match_start
+            self.match_end = match_end
+
+    def process(self, iterable, consumer):
+        def content(iterable):
+            while not self.match_start(iterable.next()):
+                continue
+            line = iterable.next()
+            while not self.match_end(line):
+                yield line
+                line = iterable.next()
+        consumer.process(content(iterable))
+
+
+class EventsetParser(object):
+
+    def __init__(self):
+        self.events = {}
+        self.counters = {}
+
+    def process(self, iterable):
+        for line in iterable:
+            counter, event = line.split()
+            combined = "%s:%s" % (event, counter)
+            self.events[combined] = event
+            self.counters[combined] = counter
+
+
+class MetricsParser(object):
+
+    def __init__(self):
+        self.metrics = []
+
+    def process(self, iterable):
+        for line in iterable:
+            if re.findall(r"\[.*\]", line):
+                name, unit, formula = map(lambda x: x.strip(),
+                                          re.match(r"^(.*?)\[(.*?)\](.*)$",
+                                                   line).groups())
+                self.metrics.append((name, unit, formula))
+            else:
+                name, formula = map(lambda x: x.strip(),
+                                    re.match(r"^(.*?)(\S+)$", line).groups())
+                self.metrics.append((name, "1", formula))
+
+
+class LikwidMetrics(object):
+    def __init__(self, group_file):
+        with open(groupdef) as groupfile:
+            eventset_reader = BlockReader("EVENTSET\n", "\n")
+            metrics_reader = BlockReader("METRICS\n", "\n")
+            ep = EventsetParser()
+            mp = MetricsParser()
+            eventset_reader.process(groupfile, ep)
+            metrics_reader.process(groupfile, mp)
+            self.eventset = {"events": ep.events, "counters": ep.counters}
+            self.metrics = mp.metrics
+
+    def counter_name(self, fullname):
+        return self.eventset["counters"][fullname]
+
+    def event_name(self, fullname):
+        return self.eventset["events"][fullname]
+
+    def metric_count(self):
+        return len(self.metrics)
+
+    def metric_name(self, metric_id):
+        return self.metrics[metric_id][0]
+
+    def metric_unit(self, metric_id):
+        return self.metrics[metric_id][1]
+
+    def calc_metric(self, metric_id, eventvals):
+        formula = str(self.metrics[metric_id][2])
+        for k, v in eventvals.iteritems():
+            formula = formula.replace(k, str(v))
+        return eval(formula)
+
+
+def guess_likwid_home():
+    possible_places = os.environ["PATH"].split(":")
+    possible_places.append("/usr/local/bin")
+    possible_places.append("/usr/local/likwid/bin")
+    possible_places.append("/home/lib/jasmin/thirdparty/likwid/bin")
+    for p in possible_places:
+        if os.path.exists(os.path.join(p, "likwid-perfctr")):
+            return os.path.dirname(p)
+    raise RuntimeError("Can not find likwid.")
+
+
+def likwid_group_path(likwid_home, arch, group):
+    return os.path.join(likwid_home, "share", "likwid", "perfgroups",
+                        arch, group + ".txt")
+
+
+class LikwidOutputParser(object):
+
+    def __init__(self, group, group_file):
+        self.likwid = None
+        self.group = group
+        self.column_names = []
+        self.column_types = []
+        self.data = []
+        self.group_file = group_file
+
+    def process(self, iterable):
+        line1 = iterable.next()
+        line2 = iterable.next()
+        cpu_model = line1.split(":")[-1].strip()
+        cpu_cycles = line2.split(":")[-1].strip()
+        if not self.likwid:
+            # OPTIMIZATION: init likwid metrics only once
+            group_file_path = self.group_file
+            if group_file_path == "auto" or not os.path.exists(group_file):
+                likwid_home = guess_likwid_home()
+                group_file_path = likwid_group_path(likwid_home, cpu_model,
+                                                    self.group)
+            likwid = LikwidMetrics(group_file_path)
+            # OPTIMIZATION: calculate table structure only once
+            self.column_names.extend(["TimerName", "ThreadId", "RDTSC",
+                                      "CallCount"])
+            self.column_types.extend([str, int, float, int])
+            for i in xrange(likwid.metric_count()):
+                name = likwid.metric_name(i).replace(" ", "_")
+                self.column_names.append(name)
+                self.column_types.append(float)
+            self.likwid = likwid
+        self.data = []
+        other = [x for x in iterable]
+        other = cStringIO.StringIO("".join(other[1:-1]))
+        for record in csv.DictReader(other):
+            tmp = {k.split(":")[-1]: v for k, v in record.iteritems()}
+            tmp["time"] = tmp["RDTSC"]
+            tmp["inverseClock"] = 1.0 / float(cpu_cycles)
+            result = [tmp["RegionTag"], tmp["ThreadId"], tmp["RDTSC"],
+                      tmp["CallCount"]]
+            for i in xrange(self.likwid.metric_count()):
+                value = self.likwid.calc_metric(i, tmp)
+                result.append(value)
+            self.data.append(result)
+
+
+class LikwidParser(object):
+    @staticmethod
+    def register_cmd_args(argparser):
+        argparser.add_argument("--group-file", default="auto",
+                               help="Performance group file (default: auto)")
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {
+            "group_file": namespace.group_file
+        }
+
+    def __init__(self, args):
+        self.args = args
+
+    def itertables(self, fn):
+        # Likwid output one file for each process, so we construct the list of
+        # all files to workaround the result specificaiton limit.
+        result_dir = os.path.dirname(fn)
+        likwid_data = glob.glob(os.path.join(result_dir,
+                                             "likwid_counters.*.dat"))
+        likwid_group = os.path.basename(fn).split("LIKWID_")[1]
+        assert(likwid_data)
+        files = [file(path) for path in likwid_data]
+
+        parser = LikwidOutputParser(likwid_group, self.group_file)
+        likwid_block = BlockReader("@start_likwid\n", "@end_likwid\n")
+        # we only support the first table currently
+        data = []
+        for i, f in enumerate(files):
+            proc_id = int(os.path.basename(likwid_data[i]).split(".")[1])
+            likwid_block.process(f, parser)
+            for d in parser.data:
+                data.append([d[0], proc_id] + d[1:])
+        cnames = [parser.column_names[0], "ProcId"] + parser.column_names[1:]
+        ctypes = [parser.column_types[0], int] + parser.column_types[1:]
+        yield {
+            "table_id": 0,
+            "column_names": cnames,
+            "column_types": ctypes,
+            "data": data
+        }
+
+
+class ParserFactory(object):
+    @staticmethod
+    def create(name, namespace):
+        if name == "jasmin3":
+            return JasminParser(JasminParser.retrive_cmd_args(namespace))
+        elif name == "jasmin4":
+            return Jasmin4Parser(Jasmin4Parser.retrive_cmd_args(namespace))
+        elif name == "jasmin":
+            return UnifiedJasminParser(
+                UnifiedJasminParser.retrive_cmd_args(namespace))
+        elif name == "likwid":
+            return LikwidParser(LikwidParser.retrive_cmd_args(namespace))
+        else:
+            raise ValueError("Unsupported parser: %s" % name)
+
+    @staticmethod
+    def register_cmd_args(argparser):
+        group = argparser.add_argument_group("Jasmin Parser Arguments")
+        JasminParser.register_cmd_args(group)
+        group = argparser.add_argument_group("Jasmin4 Parser Arguments")
+        Jasmin4Parser.register_cmd_args(group)
+        group = argparser.add_argument_group("Unified Jasmin Parser Arguments")
+        UnifiedJasminParser.register_cmd_args(group)
+        group = argparser.add_argument_group("Likwid Parser Arguments")
+        LikwidParser.register_cmd_args(group)
+
+#
+# StorageBackend
+#
+
+
+class SqliteSerializer(object):
     typemap = {
         None: "NULL",
         int: "INTEGER",
@@ -337,7 +718,7 @@ class SqliteSerializer:
             t = column_types[i]
             assert t in SqliteSerializer.typemap
             tn = SqliteSerializer.typemap[t]
-            column_segs.append("{0} {1}".format(column_name, tn))
+            column_segs.append("\"{0}\" {1}".format(column_name, tn))
         create_columns_sql = ", ".join(column_segs)
         create_table_sql = "CREATE TABLE result ({0})".format(
             create_columns_sql)
@@ -376,6 +757,17 @@ class PandasSerializer(object):
                 "Unsupported output format '%s'" % self.file_format)
 
 
+class SerializerFactory(object):
+    @staticmethod
+    def create(name, *args, **kwargs):
+        if name == "sqlite3":
+            return SqliteSerializer(*args, **kwargs)
+        elif name == "pandas":
+            return PandasSerializer(*args, **kwargs)
+        else:
+            raise ValueError("Unsupported serializer: %s" % name)
+
+
 class TableColumnFilter(object):
 
     def __init__(self, column_names, filter_spec, action="throw"):
@@ -405,42 +797,32 @@ class TableColumnFilter(object):
             raise RuntimeError("Bad filter action '%s'" % self.action)
 
 
-def make_parser(name, *args, **kwargs):
-    if name == "jasmin3":
-        return JasminParser(*args, **kwargs)
-    elif name == "jasmin4":
-        return Jasmin4Parser(*args, **kwargs)
-    elif name == "jasmin":
-        return UnifiedJasminParser(*args, **kwargs)
-    else:
-        raise ValueError("Unsupported parser: %s" % name)
-
-
-def make_serializer(name, *args, **kwargs):
-    if name == "sqlite3":
-        return SqliteSerializer(*args, **kwargs)
-    elif name == "pandas":
-        return PandasSerializer(*args, **kwargs)
-    else:
-        raise ValueError("Unsupported serializer: %s" % name)
-
-
 class Collector(object):
 
     '''TestResultCollector - Collect test results and save them'''
 
     def __init__(self, project_root, data_file, parser, serializer,
-                 drop_columns=None, use_table=None):
+                 drop_columns=None, use_table=None, include=None,
+                 exclude=None):
         self.project = TestProjectReader(project_root)
         self.parser = make_parser(parser)
         self.serializer = make_serializer(serializer, data_file)
         self.use_table = use_table
         self.drop_columns = drop_columns
+        if include:
+            self.case_filter = TestCaseFilter(include, "include")
+        elif exclude:
+            self.case_filter = TestCaseFilter(exclude, "exclude")
+        else:
+            self.case_filter = TestCaseFilter(None)
 
     @staticmethod
-    def _table_generator(project, parser, table_selector=None):
+    def _table_generator(project, parser, table_selector=None,
+                         case_filter=None):
         for case in project.itercases():
-            case_path = case["path"]
+            if not case_filter.valid(case):
+                continue
+            case_path = case["fullpath"]
             # TODO: support collecting from multiple result file. This
             # would require another column designating the filename. This
             # is not often used, so shall be used as an option
@@ -485,7 +867,8 @@ class Collector(object):
 
     def collect(self):
         table_producer = iter(self._table_generator(self.project, self.parser,
-                                                    self.use_table))
+                                                    self.use_table,
+                                                    self.case_filter))
 
         # Build final data table structure
         try:
@@ -524,23 +907,32 @@ def main():
     parser.add_argument(
         "project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
-    parser.add_argument("-s, --serializer", metavar="SERIALIZER",
+    parser.add_argument("-s", "--serializer", metavar="SERIALIZER",
                         dest="serializer", choices=["sqlite3", "pandas"],
                         default="sqlite3",
                         help="Serializer to dump results (default: sqlite3)")
-    parser.add_argument("-p, --parser", metavar="PARSER", dest="parser",
-                        choices=["jasmin3", "jasmin4", "jasmin"],
+    parser.add_argument("-p", "--parser", metavar="PARSER", dest="parser",
+                        choices=["jasmin3", "jasmin4", "jasmin", "likwid"],
                         default="jasmin",
                         help="Parser for raw result files (default: jasmin)")
     parser.add_argument("--use-table", type=int, default=None,
                         help="Choose which data table to use")
-    parser.add_argument("-d, --drop-columns", default=None, metavar="SPEC",
+    parser.add_argument("-d", "--drop-columns", default=None, metavar="SPEC",
                         dest="drop_columns",
                         help="Drop un-wanted table columns")
+    parser.add_argument("-i", "--include", action="append", default=[],
+                        help="Include only matched cases (shell wildcards)")
+    parser.add_argument("-e", "--exclude", action="append", default=[],
+                        help="Excluded matched cases (shell wildcards)")
+
+    ParserFactory.register_cmd_args(parser)
 
     args = parser.parse_args()
+
+    parser = ParserFactory.create(args.parser, args)
     collector = Collector(args.project_root, args.data_file, args.parser,
-                          args.serializer, args.drop_columns, args.use_table)
+                          args.serializer, args.drop_columns, args.use_table,
+                          args.include, args.exclude)
     collector.collect()
 
 if __name__ == "__main__":

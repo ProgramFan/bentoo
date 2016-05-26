@@ -1,4 +1,4 @@
-# bentoo: BENchmarking TOOls
+# Bentoo: A Performance Experiment Tool for Reproducible Performance Optimization Research
 
 **bentoo** is a set of tools to make reproducible performance optimization research easy.
 
@@ -6,14 +6,16 @@ Performance optimization research involves a variety of activities. One need to 
 
 bentoo tries to ease this burden by providing a set of interfaces, reusable components, and helpful tools, for defining and running performance experiments, as well as data extraction and analysis. With bentoo, one only needs to focus on experiments design and hypothesis validation. Painful scripts design and debugging becomes the past.
 
-## Bentoo's performance experiment methodology
+bentoo tries to ease this burden by providing a set of interfaces, reusable components, and helpful tools, for defining and running performance experiments, as well as data extraction and analysis. With bentoo, one only needs to focus on experiments design and hypothesis validation. Painful scripts design and debugging becomes the past.
+
+## Bentoo's Performance Experiments Strategy
 
 Bentoo abstracts performance experiments as the following five-stage pipeline:
 
 ```
 Design --> Prepare --> Run --> Collect --> Analysis
-   ^                                         |
-   |-----------------------------------------|
+  ^                                         |
+  |-----------------------------------------|
 ```
 
 **Design**: Design the experiment. Determine the test factors, test vectors and test cases, as well as how the data would possibly support or dispute a hypothesis.
@@ -28,14 +30,14 @@ Design --> Prepare --> Run --> Collect --> Analysis
 
 One need to go back and forth between `prepare`, `run`, `collect` and `analysis`, until the data is reproducible and outliers are eliminated.
 
-## Bentoo's components
+## Bentoo's Component-based Design
 
 Bentoo consists of the following components, each is an standalone tool:
 
 - **Generator**: Transform experiment description to ready-to-run experiment organization.
 - **Runner**: Read experiment organization, run each cases and preserve the results.
 - **Collector**: Read finished experiments, extract performance data and save them into user specified formats.
-- **Analyzer**: Extract a data subset from saved data, show them in a meaningful manner, to help analysis.
+- **Analyser**: Extract a data subset from saved data, show them in a meaningful manner, to help analysis.
 
 ## Using bentoo
 
