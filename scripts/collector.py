@@ -56,8 +56,9 @@ class TestProjectReader:
                 "TestCase.json")
             case_spec = json.load(file(case_spec_fullpath))
             yield {
+                "id": case["path"],
                 "test_vector": case["test_vector"],
-                "path": os.path.join(self.project_root, case["path"]),
+                "fullpath": os.path.join(self.project_root, case["path"]),
                 "spec": case_spec
             }
 
@@ -638,17 +639,27 @@ class Collector(object):
     '''TestResultCollector - Collect test results and save them'''
 
     def __init__(self, project_root, data_file, parser, serializer,
-                 drop_columns=None, use_table=None):
+                 drop_columns=None, use_table=None, include=None,
+                 exclude=None):
         self.project = TestProjectReader(project_root)
         self.parser = make_parser(parser)
         self.serializer = make_serializer(serializer, data_file)
         self.use_table = use_table
         self.drop_columns = drop_columns
+        if include:
+            self.case_filter = TestCaseFilter(include, "include")
+        elif exclude:
+            self.case_filter = TestCaseFilter(exclude, "exclude")
+        else:
+            self.case_filter = TestCaseFilter(None)
 
     @staticmethod
-    def _table_generator(project, parser, table_selector=None):
+    def _table_generator(project, parser, table_selector=None,
+                         case_filter=None):
         for case in project.itercases():
-            case_path = case["path"]
+            if not case_filter.valid(case):
+                continue
+            case_path = case["fullpath"]
             # TODO: support collecting from multiple result file. This
             # would require another column designating the filename. This
             # is not often used, so shall be used as an option
@@ -693,7 +704,8 @@ class Collector(object):
 
     def collect(self):
         table_producer = iter(self._table_generator(self.project, self.parser,
-                                                    self.use_table))
+                                                    self.use_table,
+                                                    self.case_filter))
 
         # Build final data table structure
         try:
@@ -725,6 +737,37 @@ class Collector(object):
                                   column_types)
 
 
+class TestCaseFilter(object):
+    def __init__(self, patterns, mode="include"):
+        assert(mode in ("include", "exclude"))
+        self.patterns = patterns
+
+        def match_any(path, patterns):
+            for m in patterns:
+                if fnmatch.fnmatch(path, m):
+                    return True
+            return False
+
+        def null_check(path):
+            return True
+
+        def include_check(path):
+            return True if match_any(path, self.patterns) else False
+
+        def exclude_check(path):
+            return False if match_any(path, self.patterns) else True
+
+        if not patterns:
+            self.checker = null_check
+        elif mode == "include":
+            self.checker = include_check
+        else:
+            self.checker = exclude_check
+
+    def valid(self, case):
+        return self.checker(case["id"])
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -745,10 +788,15 @@ def main():
     parser.add_argument("-d", "--drop-columns", default=None, metavar="SPEC",
                         dest="drop_columns",
                         help="Drop un-wanted table columns")
+    parser.add_argument("-i", "--include", action="append", default=[],
+                        help="Include only matched cases (shell wildcards)")
+    parser.add_argument("-e", "--exclude", action="append", default=[],
+                        help="Excluded matched cases (shell wildcards)")
 
     args = parser.parse_args()
     collector = Collector(args.project_root, args.data_file, args.parser,
-                          args.serializer, args.drop_columns, args.use_table)
+                          args.serializer, args.drop_columns, args.use_table,
+                          args.include, args.exclude)
     collector.collect()
 
 if __name__ == "__main__":
