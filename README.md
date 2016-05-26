@@ -1,10 +1,12 @@
-# Bentoo: An Experiment Organizing Tool for Reproducible Performance Optimization Research
+# Bentoo: A Performance Experiment Tool for Reproducible Performance Optimization Research
 
-## Why Bentoo
+## Why bentoo
 
-**Bentoo** is a set of tools to make reproducible performance optimization research easy.
+**bentoo** is a set of tools to make reproducible performance optimization research easy.
 
 Performance optimization research involves a variety of activities. One need to design algorithms, define confirming experiments, run these experiments, collect performance results and do solid (possibly statistical) analysis. These activities are usually done iteratively and one often goes back and forth among these steps. This involves a lot of efforts in designing and debugging automating scripts. These scripts are often bind to a specific experiments and not easily reusable, causing a lot of headache for everyday research.
+
+bentoo tries to ease this burden by providing a set of interfaces, reusable components, and helpful tools, for defining and running performance experiments, as well as data extraction and analysis. With bentoo, one only needs to focus on experiments design and hypothesis validation. Painful scripts design and debugging becomes the past.
 
 bentoo tries to ease this burden by providing a set of interfaces, reusable components, and helpful tools, for defining and running performance experiments, as well as data extraction and analysis. With bentoo, one only needs to focus on experiments design and hypothesis validation. Painful scripts design and debugging becomes the past.
 
@@ -14,8 +16,8 @@ Bentoo abstracts performance experiments as the following five-stage pipeline:
 
 ```
 Design --> Prepare --> Run --> Collect --> Analysis
-   ^                                         |
-   |-----------------------------------------|
+  ^                                         |
+  |-----------------------------------------|
 ```
 
 **Design**: Design the experiment. Determine the test factors, test vectors and test cases, as well as how the data would possibly support or dispute a hypothesis.
@@ -39,10 +41,6 @@ Bentoo consists of the following components, each is an standalone tool:
 - **Collector**: Read finished experiments, extract performance data and save them into user specified formats.
 - **Analyser**: Extract a data subset from saved data, show them in a meaningful manner, to help analysis.
 
-## Usage \& Example
+## Using bentoo
 
 Just following the help messages of individual tools.
-
-## Contribution
-
-Clone [Bentoo](https://github.com/ProgramFan/bentoo) repository, make your changes and issue a pull request.
