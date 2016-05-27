@@ -415,9 +415,6 @@ class UnifiedJasminParser(object):
         return {}
 
     def __init__(self, args):
-        pass
-
-    def __init__(self):
         jasmin4_ptn = re.compile(
             r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" +
             r"^(?P<header>^.*?$)\n-{10,}\n" + r"(?P<content>.*?)^-{10,}\n",
@@ -818,10 +815,10 @@ class SerializerFactory(object):
     def create(name, namespace):
         if name == "sqlite3":
             args = SqliteSerializer.retrive_cmd_args(namespace)
-            return SqliteSerializer(args)
+            return SqliteSerializer(namespace.data_file, args)
         elif name == "pandas":
             args = PandasSerializer.retrive_cmd_args(namespace)
-            return PandasSerializer(args)
+            return PandasSerializer(namespace.data_file, args)
         else:
             raise ValueError("Unsupported serializer: %s" % name)
 
@@ -869,7 +866,8 @@ class DataAggregator(object):
         column_types = [all_types[i] for i in ds]
 
         def data_generator():
-            for item in first_table["data"]:
+            table_id = first_table["id"]
+            for item in first_table["content"]["data"]:
                 all_values = table_id.values() + item
                 yield [all_values[i] for i in ds]
             for table in tables:
@@ -887,6 +885,9 @@ class DataAggregator(object):
 
 class Collector(object):
 
+    def __init__(self):
+        pass
+
     def collect(self, scanner, parser, aggregator, serializer):
         def table_geneartor():
             for data_file in scanner.iterfiles():
@@ -898,7 +899,7 @@ class Collector(object):
         final_table = aggregator.aggregate(table_geneartor())
         serializer.serialize(final_table["data"],
                              final_table["column_names"],
-                             aggregator["column_types"])
+                             final_table["column_types"])
 
 
 def main():
@@ -908,41 +909,71 @@ def main():
     parser.add_argument(
         "project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
-    group = parser.add_argument_group("Serializer Arguments")
-    group.add_argument("-s", "--serializer", metavar="SERIALIZER",
-                       dest="serializer", choices=["sqlite3", "pandas"],
-                       default="sqlite3",
-                       help="Serializer to dump results (default: sqlite3)")
-    SerializerFactory.register_cmd_args(parser)
+
+    group = parser.add_argument_group("Scanner Arguments")
+    grp = group.add_mutually_exclusive_group()
+    grp.add_argument("-i", "--include", action="append", default=[],
+                     help="Include only matched cases (shell wildcards)")
+    grp.add_argument("-e", "--exclude", action="append", default=[],
+                     help="Excluded matched cases (shell wildcards)")
+
     group = parser.add_argument_group("Parser Arguments")
-    group.add_argument("-p", "--parser", metavar="PARSER", dest="parser",
+    group.add_argument("-p", "--parser",
                        choices=["jasmin3", "jasmin4", "jasmin", "likwid"],
                        default="jasmin",
                        help="Parser for raw result files (default: jasmin)")
     group.add_argument("--use-table", type=int, default=None,
                        help="Choose which data table to use")
     ParserFactory.register_cmd_args(parser)
+
     group = parser.add_argument_group("Aggregator Arguments")
-    group.add_argument("-d", "--drop-columns", default=None, metavar="SPEC",
-                       dest="drop_columns",
-                       help="Drop un-wanted table columns")
-    group.add_argument("-k", "--keep-columns", default=None, metavar="SPEC",
-                       dest="keep_columns",
-                       help="Keep only speciied table columns")
-    group = parser.add_argument_group("Scanner Arguments")
-    group.add_argument("-i", "--include", action="append", default=[],
-                       help="Include only matched cases (shell wildcards)")
-    group.add_argument("-e", "--exclude", action="append", default=[],
-                       help="Excluded matched cases (shell wildcards)")
+    grp = group.add_mutually_exclusive_group()
+    grp.add_argument("-d", "--drop-columns", default=None, nargs="+",
+                     action="append",
+                     help="Drop un-wanted table columns")
+    grp.add_argument("-k", "--keep-columns", default=None, nargs="+",
+                     action="append",
+                     help="Keep only speciied table columns")
+
+    group = parser.add_argument_group("Serializer Arguments")
+    group.add_argument("-s", "--serializer",
+                       choices=["sqlite3", "pandas"], default="sqlite3",
+                       help="Serializer to dump results (default: sqlite3)")
+    SerializerFactory.register_cmd_args(parser)
 
     args = parser.parse_args()
 
-    scanner = ResultScanner(args.project_root, args.include)
+    # make scanner
+    if args.include:
+        case_filter = args.include
+        filter_mode = "include"
+    elif args.exclude:
+        case_filter = args.include
+        filter_mode = "exclude"
+    else:
+        case_filter = None
+        filter_mode = "exclude"
+    scanner = ResultScanner(args.project_root, case_filter, filter_mode)
+    # make parser
     parser = ParserFactory.create(args.parser, args)
+    # make aggregator
+    if args.keep_columns:
+        column_filter = args.keep_columns
+        filter_mode = "include"
+        print column_filter
+    if args.drop_columns:
+        column_filter = args.drop_columns
+        filter_mode = "exclude"
+        print column_filter
+    else:
+        column_filter = None
+        filter_mode = "exclude"
+    aggregator = DataAggregator(column_filter, filter_mode)
+    # make serializer
     serializer = SerializerFactory.create(args.serializer, args)
-    aggregate = DataAggregator(args.drop_columns)
-    collector = Collector(scanner, parser, aggregator, serializer)
-    collector.collect()
+    # assemble collector and do acutal collecting
+    collector = Collector()
+    collector.collect(scanner, parser, aggregator, serializer)
 
 if __name__ == "__main__":
     main()
