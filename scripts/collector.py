@@ -636,13 +636,13 @@ class LikwidParser(object):
 
     @staticmethod
     def register_cmd_args(argparser):
-        argparser.add_argument("--group-file", default="auto",
+        argparser.add_argument("--likwid-group-file", default="auto",
                                help="Performance group file (default: auto)")
 
     @staticmethod
     def retrive_cmd_args(namespace):
         return {
-            "group_file": namespace.group_file
+            "group_file": namespace.likwid_group_file
         }
 
     def __init__(self, args):
@@ -781,13 +781,13 @@ class PandasSerializer(object):
 
     @staticmethod
     def register_cmd_args(argparser):
-        argparser.add_argument("--format", default="xlsx",
+        argparser.add_argument("--pandas-format", default="xlsx",
                                choices=("xls", "xlsx", "csv"),
                                help="Output file format")
 
     @staticmethod
     def retrive_cmd_args(namespace):
-        return {"format": namespace.format}
+        return {"format": namespace.pandas_format}
 
     def __init__(self, data_file, args):
         self.data_file = data_file
@@ -906,33 +906,37 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(
-        "project_root", help="Test project root directory")
+    parser.add_argument("project_root", help="Test project root directory")
     parser.add_argument("data_file", help="Data file to save results")
 
     group = parser.add_argument_group("Scanner Arguments")
     grp = group.add_mutually_exclusive_group()
-    grp.add_argument("-i", "--include", action="append", default=[],
+    grp.add_argument("-i", "--include", default=None, nargs="+",
+                     metavar="CASE_PATH",
                      help="Include only matched cases (shell wildcards)")
-    grp.add_argument("-e", "--exclude", action="append", default=[],
+    grp.add_argument("-e", "--exclude", default=None, nargs="+",
+                     metavar="CASE_PATH",
                      help="Excluded matched cases (shell wildcards)")
+    group.add_argument("--use-result", default=[0], nargs="+",
+                       metavar="RESULT_ID",
+                       help="Choose result files to use (as index)")
 
     group = parser.add_argument_group("Parser Arguments")
-    group.add_argument("-p", "--parser",
+    group.add_argument("-p", "--parser", default="jasmin",
                        choices=["jasmin3", "jasmin4", "jasmin", "likwid"],
-                       default="jasmin",
                        help="Parser for raw result files (default: jasmin)")
-    group.add_argument("--use-table", type=int, default=None,
-                       help="Choose which data table to use")
+    group.add_argument("--use-table", default=None, nargs="+",
+                       metavar="TABLE_ID",
+                       help="Choose which data table to use (as index)")
     ParserFactory.register_cmd_args(parser)
 
     group = parser.add_argument_group("Aggregator Arguments")
     grp = group.add_mutually_exclusive_group()
     grp.add_argument("-d", "--drop-columns", default=None, nargs="+",
-                     action="append",
+                     metavar="COLUMN_NAME",
                      help="Drop un-wanted table columns")
     grp.add_argument("-k", "--keep-columns", default=None, nargs="+",
-                     action="append",
+                     metavar="COLUMN_NAME",
                      help="Keep only speciied table columns")
 
     group = parser.add_argument_group("Serializer Arguments")
@@ -953,18 +957,18 @@ def main():
     else:
         case_filter = None
         filter_mode = "exclude"
-    scanner = ResultScanner(args.project_root, case_filter, filter_mode)
+    use_result = map(int, args.use_result)
+    scanner = ResultScanner(args.project_root, case_filter, filter_mode,
+                            use_result)
     # make parser
     parser = ParserFactory.create(args.parser, args)
     # make aggregator
     if args.keep_columns:
         column_filter = args.keep_columns
         filter_mode = "include"
-        print column_filter
-    if args.drop_columns:
+    elif args.drop_columns:
         column_filter = args.drop_columns
         filter_mode = "exclude"
-        print column_filter
     else:
         column_filter = None
         filter_mode = "exclude"
