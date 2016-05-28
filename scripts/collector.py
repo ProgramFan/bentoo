@@ -516,15 +516,14 @@ class BlockReader(object):
 class EventsetParser(object):
 
     def __init__(self):
-        self.events = {}
-        self.counters = {}
+        self.events = []
+        self.counters = []
 
     def process(self, iterable):
         for line in iterable:
             counter, event = line.split()
-            combined = "%s:%s" % (event, counter)
-            self.events[combined] = event
-            self.counters[combined] = counter
+            self.events.append(event)
+            self.counters.append(counter)
 
 
 class MetricsParser(object):
@@ -555,14 +554,22 @@ class LikwidMetrics(object):
             mp = MetricsParser()
             ep.process(eventset_reader.findblock(groupfile))
             mp.process(metrics_reader.findblock(groupfile))
-            self.eventset = {"events": ep.events, "counters": ep.counters}
+            self.eventset = {"events": ep.events, "counters": ep.counters,
+                             "pair": ["%s:%s" % x for x in zip(ep.events,
+                                                               ep.counters)]}
             self.metrics = mp.metrics
 
-    def counter_name(self, fullname):
-        return self.eventset["counters"][fullname]
+    def event_count(self):
+        return len(self.eventset["events"])
 
-    def event_name(self, fullname):
-        return self.eventset["events"][fullname]
+    def event_name(self, event_id):
+        return self.eventset["events"][event_id]
+
+    def counter_name(self, event_id):
+        return self.eventset["counters"][event_id]
+
+    def event_counter_pair(self, event_id):
+        return self.eventset["pair"][event_id]
 
     def metric_count(self):
         return len(self.metrics)
@@ -596,13 +603,14 @@ def locate_likwid_group_file(arch, group):
 
 class LikwidOutputParser(object):
 
-    def __init__(self, group, group_file):
+    def __init__(self, group, group_file, raw_result=False):
         self.likwid = None
         self.group = group
         self.column_names = []
         self.column_types = []
         self.data = []
         self.group_file = group_file
+        self.raw_result = raw_result
 
     def process(self, iterable):
         line1 = iterable.next()
@@ -620,10 +628,15 @@ class LikwidOutputParser(object):
             self.column_names.extend(["TimerName", "ThreadId", "RDTSC",
                                       "CallCount"])
             self.column_types.extend([str, int, float, int])
-            for i in xrange(likwid.metric_count()):
-                name = likwid.metric_name(i).replace(" ", "_")
-                self.column_names.append(name)
-                self.column_types.append(float)
+            if self.raw_result:
+                for i in xrange(likwid.event_count()):
+                    self.column_names.append(likwid.event_counter_pair(i))
+                    self.column_types.append(float)
+            else:
+                for i in xrange(likwid.metric_count()):
+                    name = likwid.metric_name(i).replace(" ", "_")
+                    self.column_names.append(name)
+                    self.column_types.append(float)
             self.likwid = likwid
         self.data = []
         other = [x for x in iterable]
@@ -634,9 +647,13 @@ class LikwidOutputParser(object):
             tmp["inverseClock"] = 1.0 / float(cpu_cycles)
             result = [tmp["RegionTag"], tmp["ThreadId"], tmp["RDTSC"],
                       tmp["CallCount"]]
-            for i in xrange(self.likwid.metric_count()):
-                value = self.likwid.calc_metric(i, tmp)
-                result.append(value)
+            if self.raw_result:
+                for i in xrange(self.likwid.event_count()):
+                    result.append(record[self.likwid.event_counter_pair(i)])
+            else:
+                for i in xrange(self.likwid.metric_count()):
+                    value = self.likwid.calc_metric(i, tmp)
+                    result.append(value)
             self.data.append(result)
 
 
@@ -646,11 +663,14 @@ class LikwidParser(object):
     def register_cmd_args(argparser):
         argparser.add_argument("--likwid-group-file", default="auto",
                                help="Performance group file (default: auto)")
+        argparser.add_argument("--likwid-raw-result", action="store_true",
+                               help="Save raw event counts (default: false)")
 
     @staticmethod
     def retrive_cmd_args(namespace):
         return {
-            "group_file": namespace.likwid_group_file
+            "group_file": namespace.likwid_group_file,
+            "raw_result": namespace.likwid_raw_result
         }
 
     def __init__(self, use_table, args):
@@ -675,7 +695,8 @@ class LikwidParser(object):
 
         files = [file(path) for path in likwid_data]
 
-        parser = LikwidOutputParser(likwid_group, self.args["group_file"])
+        parser = LikwidOutputParser(likwid_group, self.args["group_file"],
+                                    self.args["raw_result"])
         likwid_block = BlockReader("@start_likwid\n", "@end_likwid\n")
         # Count blocks to ease table_id generating
         nblocks = len(list(likwid_block.iterblocks(files[0])))
