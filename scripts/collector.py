@@ -24,6 +24,7 @@ import sqlite3
 import glob
 import csv
 import cStringIO
+import fnmatch
 from collections import OrderedDict
 from functools import reduce
 
@@ -162,7 +163,7 @@ class ResultScanner(object):
 #
 
 
-def parse_jasminlog(fn):
+def parse_jasminlog(fn, use_table=None):
     '''parse_jasminlog - jasmin time manager log parser
 
     This function parses jasmin timer manager performance reports. It
@@ -219,6 +220,9 @@ def parse_jasminlog(fn):
         # We only handle table "TOTAL WALLCLOCK TIME"
         if table_name != "total_wallclock_time":
             continue
+        # skipping tables not wanted, but null use_table means use all tables
+        if use_table and table_id not in use_table:
+            continue
         # Extract table header
         header_ptn = re.compile(r"(Timer Name|Proc: \d+|Summed|Proc|Max)")
         header = map(tokenlize, header_ptn.findall(log_table["header"]))
@@ -271,14 +275,14 @@ class JasminParser(object):
     def retrive_cmd_args(namespace):
         return {}
 
-    def __init__(self, args):
-        pass
+    def __init__(self, use_table, args):
+        self.use_table = use_table
 
     def itertables(self, fn):
-        return parse_jasminlog(fn)
+        return parse_jasminlog(fn, self.use_table)
 
 
-def parse_jasmin4log(fn):
+def parse_jasmin4log(fn, use_table=None):
     '''parse_jasmin4log - jasmin 4.0 time manager log parser
 
     This function parses jasmin 4.0 timer manager performance reports. It
@@ -328,6 +332,9 @@ def parse_jasmin4log(fn):
         r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" + r"^(?P<header>^.*?$)\n-{10,}\n"
         + r"(?P<content>.*?)^-{10,}\n", re.M + re.S)
     for match in logtbl_ptn.finditer(content):
+        # skipping tables not wanted, but null use_table means use all tables
+        if use_table and table_id not in use_table:
+            continue
         # TODO: use column width to better split columns. the columns names and
         # width can be determined from the header, everything is right aligned.
         log_table = match.groupdict()
@@ -397,11 +404,11 @@ class Jasmin4Parser(object):
     def retrive_cmd_args(namespace):
         return {}
 
-    def __init__(self, args):
-        pass
+    def __init__(self, use_table, args):
+        self.use_table = use_table
 
     def itertables(self, fn):
-        return parse_jasmin4log(fn)
+        return parse_jasmin4log(fn, self.use_table)
 
 
 class UnifiedJasminParser(object):
@@ -414,7 +421,8 @@ class UnifiedJasminParser(object):
     def retrive_cmd_args(namespace):
         return {}
 
-    def __init__(self, args):
+    def __init__(self, use_table, args):
+        self.use_table = use_table
         jasmin4_ptn = re.compile(
             r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" +
             r"^(?P<header>^.*?$)\n-{10,}\n" + r"(?P<content>.*?)^-{10,}\n",
@@ -432,7 +440,7 @@ class UnifiedJasminParser(object):
             else:
                 return "null"
 
-        def null_parse(fn):
+        def null_parse(fn, use_table):
             # return + yield makes a perfect empty generator function
             return
             yield
@@ -445,7 +453,8 @@ class UnifiedJasminParser(object):
         }
 
     def itertables(self, fn):
-        return self.parser_funcs[self.filetype_detector(fn)](fn)
+        filetype = self.filetype_detector(fn)
+        return self.parser_funcs[filetype](fn, self.use_table)
 
 
 #
@@ -539,7 +548,7 @@ class MetricsParser(object):
 class LikwidMetrics(object):
 
     def __init__(self, group_file):
-        with open(groupdef) as groupfile:
+        with open(group_file) as groupfile:
             eventset_reader = BlockReader("EVENTSET\n", "\n")
             metrics_reader = BlockReader("METRICS\n", "\n")
             ep = EventsetParser()
@@ -573,17 +582,16 @@ class LikwidMetrics(object):
 
 def locate_likwid_group_file(arch, group):
     possible_places = os.environ["PATH"].split(":")
-    possible_places.append("/usr/local/bin")
-    possible_places.append("/usr/local/likwid/bin")
-    possible_places.append("/home/lib/jasmin/thirdparty/likwid/bin")
     for p in possible_places:
         if os.path.exists(os.path.join(p, "likwid-perfctr")):
-            likwid_home = os.path.basename(p)
-            break
+            likwid_home = os.path.dirname(p)
+            path = os.path.join(likwid_home, "share", "likwid", "perfgroups",
+                                arch, group + ".txt")
+            if not os.path.exists(path):
+                raise RuntimeError("Bad likwid installation: can not find "
+                                   "'%s' for '%s'" % (group, arch))
+            return path
     raise RuntimeError("Can not find likwid.")
-
-    return os.path.join(likwid_home, "share", "likwid", "perfgroups",
-                        arch, group + ".txt")
 
 
 class LikwidOutputParser(object):
@@ -645,8 +653,9 @@ class LikwidParser(object):
             "group_file": namespace.likwid_group_file
         }
 
-    def __init__(self, args):
+    def __init__(self, use_table, args):
         self.args = args
+        self.use_table = use_table
 
     def itertables(self, fn):
         # We only accept fake file "LIKWID_${GROUP}", so check it.
@@ -661,26 +670,31 @@ class LikwidParser(object):
         likwid_data = glob.glob(os.path.join(result_dir,
                                              "likwid_counters.*.dat"))
         if not likwid_data:
+            print("WARNING: No likwid data file found in '%s'" % fn)
             return
 
         files = [file(path) for path in likwid_data]
 
-        parser = LikwidOutputParser(likwid_group, self.group_file)
+        parser = LikwidOutputParser(likwid_group, self.args["group_file"])
         likwid_block = BlockReader("@start_likwid\n", "@end_likwid\n")
         # Count blocks to ease table_id generating
-        nblocks = len(likwid_block.iterblocks(files[0]))
+        nblocks = len(list(likwid_block.iterblocks(files[0])))
         if nblocks == 0:
+            print("WARNING: No likwid data table found in '%s'" % fn)
             return
         # Reset files[0] as iterblocks have already arrive eof.
         files[0] = file(likwid_data[0])
 
         for table_id in xrange(nblocks):
+            # skip unwanted table
+            if self.use_table and table_id not in self.use_table:
+                continue
             data = []
             for i, f in enumerate(files):
                 proc_id = int(os.path.basename(likwid_data[i]).split(".")[1])
                 block = likwid_block.findblock(f)
                 assert(block)
-                parser.process(likwid_block.findblock(f))
+                parser.process(iter(block))
                 for d in parser.data:
                     data.append([d[0], proc_id] + d[1:])
             cn = [parser.column_names[0], "ProcId"] + parser.column_names[1:]
@@ -697,15 +711,19 @@ class ParserFactory(object):
 
     @staticmethod
     def create(name, namespace):
+        use_table = map(int, namespace.use_table)
         if name == "jasmin3":
-            return JasminParser(JasminParser.retrive_cmd_args(namespace))
+            args = JasminParser.retrive_cmd_args(namespace)
+            return JasminParser(use_table, args)
         elif name == "jasmin4":
-            return Jasmin4Parser(Jasmin4Parser.retrive_cmd_args(namespace))
+            args = Jasmin4Parser.retrive_cmd_args(namespace)
+            return Jasmin4Parser(use_table, args)
         elif name == "jasmin":
-            return UnifiedJasminParser(
-                UnifiedJasminParser.retrive_cmd_args(namespace))
+            args = UnifiedJasminParser.retrive_cmd_args(namespace)
+            return UnifiedJasminParser(use_table, args)
         elif name == "likwid":
-            return LikwidParser(LikwidParser.retrive_cmd_args(namespace))
+            args = LikwidParser.retrive_cmd_args(namespace)
+            return LikwidParser(use_table, args)
         else:
             raise ValueError("Unsupported parser: %s" % name)
 
@@ -746,14 +764,15 @@ class SqliteSerializer(object):
         return {}
 
     def __init__(self, dbfile, args):
-        conn = sqlite3.connect(dbfile)
-        obj = conn.execute("DROP TABLE IF EXISTS result")
-        conn.commit()
-        self.conn = conn
+        self.dbfile = dbfile
 
     def serialize(self, data_items, column_names, column_types):
         '''Dump content to database
         '''
+        conn = sqlite3.connect(self.dbfile)
+        obj = conn.execute("DROP TABLE IF EXISTS result")
+        conn.commit()
+        self.conn = conn
         # Build table creation and insertion SQL statements
         column_segs = []
         for i, column_name in enumerate(column_names):
@@ -853,6 +872,7 @@ class DataAggregator(object):
         try:
             first_table = next(tables)
         except StopIteration:
+            print("WARNING: No data tables found")
             return None
 
         table_id = first_table["id"]
@@ -897,6 +917,8 @@ class Collector(object):
                     spec["table_id"] = tbl["table_id"]
                     yield {"id": spec, "content": tbl}
         final_table = aggregator.aggregate(table_geneartor())
+        if not final_table:
+            return
         serializer.serialize(final_table["data"],
                              final_table["column_names"],
                              final_table["column_types"])
@@ -925,7 +947,7 @@ def main():
     group.add_argument("-p", "--parser", default="jasmin",
                        choices=["jasmin3", "jasmin4", "jasmin", "likwid"],
                        help="Parser for raw result files (default: jasmin)")
-    group.add_argument("--use-table", default=None, nargs="+",
+    group.add_argument("--use-table", default=[], nargs="+",
                        metavar="TABLE_ID",
                        help="Choose which data table to use (as index)")
     ParserFactory.register_cmd_args(parser)
