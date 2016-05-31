@@ -9,7 +9,7 @@ setup(
     packages=find_packages(),
     scripts=["scripts/bentoo-generator.py", "scripts/bentoo-runner.py",
              "scripts/bentoo-collector.py", "scripts/bentoo-analyser.py",
-             "scripts/bentoo-quickstart.py"],
+             "scripts/bentoo-metric.py", "scripts/bentoo-quickstart.py"],
     package_data={
         '': ['*.adoc', '*.rst', '*.md']
     },
