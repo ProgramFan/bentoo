@@ -12,17 +12,14 @@ Note that only raw performance counters shall be stored in the database.
 '''
 
 import os
-import sys
 import re
 import argparse
 import sqlite3
-from collections import OrderedDict
 
 
 #
-# Likwid Parser
+# Likwid Helpers
 #
-
 
 class BlockReader(object):
 
@@ -150,19 +147,9 @@ class LikwidMetrics(object):
         return eval(formula)
 
 
-def locate_likwid_group_file(arch, group):
-    possible_places = os.environ["PATH"].split(":")
-    for p in possible_places:
-        if os.path.exists(os.path.join(p, "likwid-perfctr")):
-            likwid_home = os.path.dirname(p)
-            path = os.path.join(likwid_home, "share", "likwid", "perfgroups",
-                                arch, group + ".txt")
-            if not os.path.exists(path):
-                raise RuntimeError("Bad likwid installation: can not find "
-                                   "'%s' for '%s'" % (group, arch))
-            return path
-    raise RuntimeError("Can not find likwid.")
-
+#
+# Metric Calculator
+#
 
 SQLITE_TYPE = {
     None: "NULL",
@@ -175,27 +162,32 @@ SQLITE_TYPE = {
 }
 
 
-def str_normalize(content):
-    return re.sub("\s", "_", conent)
+def stringify(content):
+    return re.sub("\s", "_", content)
 
 
-def do_process(data_file, output_file, group_file=None, aggregate="no"):
+def is_event(name):
+    matcher = re.compile(r"\w+:\w+")
+    return matcher.match(name)
+
+
+def calc_likwid_metric(group_file, data_file, output_file, aggregate="no"):
     assert(aggregate in ("no", "thread", "proc_thread"))
-    conn = sqlite3.connect(data_file)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+
+    conn0 = sqlite3.connect(data_file)
+    conn0.row_factory = sqlite3.Row
 
     # Discover the structure of input database
     sql = "select * from result limit 1"
-    r = conn.execute(sql).fetchone()
-    input_keys = r.keys()
-    input_types = [type(x) for x in r]
+    r0 = conn0.execute(sql).fetchone()
+    input_keys = r0.keys()
+    input_types = [type(x) for x in r0]
 
     # Build select pipeline
     def is_value_key(k):
         if k in ("RDTSC", "CallCount"):
             return True
-        if re.match(r"\w+:\w", k):
+        if is_event(k):
             # match the "CPU_CYC_HALT:FIXC0" event counter
             return True
         return False
@@ -208,12 +200,12 @@ def do_process(data_file, output_file, group_file=None, aggregate="no"):
         for k in input_keys:
             if k == "ThreadId":
                 select.append("COUNT(ThreadId) AS ThreadCount")
-            if k == "RDTSC":
+            elif k == "RDTSC":
                 select.append("SUM(RDTSC) AS SumRDTSC")
                 select.append("MAX(RDTSC) AS MaxRDTSC")
             elif k == "CallCount":
                 select.append("SUM(CallCount) AS SumCallCount")
-            elif re.match(r"\w+:\w+", k):
+            elif is_event(k):
                 select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
             else:
                 select.append(k)
@@ -230,7 +222,7 @@ def do_process(data_file, output_file, group_file=None, aggregate="no"):
                 select.append("MAX(RDTSC) AS MaxRDTSC")
             elif k == "CallCount":
                 select.append("SUM(CallCount) AS SumCallCount")
-            elif re.match(r"\w+:\w+", k):
+            elif is_event(k):
                 select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
             else:
                 select.append(k)
@@ -239,44 +231,71 @@ def do_process(data_file, output_file, group_file=None, aggregate="no"):
 
     select = ", ".join(select)
     group_by = ", ".join(group_by)
-    select_sql = "SELECT {0} FROM result GROUP BY {1}".format(select, group_by)
+    select_sql = "SELECT {0} FROM result WHERE {1} GROUP BY {2}".format(
+        select, "TimerName != \"CPU_CYCLES\"", group_by)
+
+    # Query CPU clock cycles stored in the database to calculate derived
+    # metrics.
+    sql = "select RDTSC from result where TimerName = \"CPU_CYCLES\" limit 1"
+    cpu_cycles = conn0.execute(sql).fetchone()["RDTSC"]
 
     # create result sqlite database
-    conn2 = sqlite3.connect(output_file)
     likwid = LikwidMetrics(group_file)
-
-    c0 = conn.cursor()
+    c0 = conn0.cursor()
     c0.execute(select_sql)
     r0 = c0.fetchone()
-    output_keys = [k for k in r0.keys() if not re.match(r"\w+:\w+", k)]
+    output_keys = [k for k in r0.keys() if not is_event(k)]
     output_types = [type(r0[k]) for k in output_keys]
     for i in xrange(likwid.metric_count()):
-        output_keys.append(str_normalize(likwid.metric_name(i)))
+        output_keys.append(stringify(likwid.metric_name(i)))
         output_types.append(float)
 
-    conn2.execute("DROP TABLE IF EXISTS result")
-    create_table_sql = ", ".join("\"{0}\" {1}".format(k, SQLITE_TYPE[v]) for k, v in zip(output_keys, output_types))
-    conn2.execute("CREATE TABLE result ({0})".format(create_table_sql))
+    conn1 = sqlite3.connect(output_file)
+    conn1.execute("DROP TABLE IF EXISTS result")
+    type_pairs = zip(output_keys, output_types)
+    sql = ["\"{0}\" {1}".format(k, SQLITE_TYPE[v]) for k, v in type_pairs]
+    sql = "CREATE TABLE result (%s)" % ", ".join(sql)
+    conn1.execute(sql)
+
+    def compute_metrics(r0):
+        event_values = dict()
+        result = []
+        for k, v in zip(r0.keys(), r0):
+            if is_event(k):
+                counter_name = k.split(":")[-1]
+                event_values[counter_name] = v
+            else:
+                result.append(v)
+        if aggregate != "no":
+            event_values["time"] = r0["MaxRDTSC"]
+        else:
+            event_values["time"] = r0["RDTSC"]
+        event_values["inverseClock"] = 1.0 / cpu_cycles
+        for i in xrange(likwid.metric_count()):
+            result.append(likwid.calc_metric(i, event_values))
+        return result
 
     metrics = compute_metrics(r0)
     ph_sql = ", ".join(["?"] * len(metrics))
     insert_row_sql = "INSERT INTO result VALUES ({0})".format(ph_sql)
-
-    conn2.execute(insert_row_sql, metrics)
+    conn1.execute(insert_row_sql, metrics)
     for r0 in c0.fetchall():
         metrics = compute_metrics(r0)
         ph_sql = ", ".join(["?"] * len(metrics))
         insert_row_sql = "INSERT INTO result VALUES ({0})".format(ph_sql)
-        conn2.execute(insert_row_sql, metrics)
+        conn1.execute(insert_row_sql, metrics)
 
-    conn2.commit()
-    conn2.close()
-
-    conn.close()
+    conn1.commit()
+    conn1.close()
+    conn0.close()
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("group_file",
+                        help="Likwid perfgroup definition")
     parser.add_argument("data_file",
                         help="Database containing raw event values")
     parser.add_argument("output_file",
@@ -284,11 +303,9 @@ def main():
     parser.add_argument("--aggregate", default="thread",
                         choices=["no", "thread", "proc_thread"],
                         help="Data aggregation (default: thread)")
-    parser.add_argument("--group-file", default=None,
-                        help="Likwid perfgroup definition")
 
     args = parser.parse_args()
-    do_process(**vars(args))
+    calc_likwid_metric(**vars(args))
 
 
 if __name__ == "__main__":

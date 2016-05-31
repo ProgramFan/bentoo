@@ -655,6 +655,13 @@ class LikwidOutputParser(object):
                     value = self.likwid.calc_metric(i, tmp)
                     result.append(value)
             self.data.append(result)
+        # Insert a special CPU_CYCLES record for raw result so derived metrics
+        # such as Runtime_unhalted can be calculated.
+        if self.raw_result:
+            cpu_cycles_data = ["CPU_CYCLES", 0, cpu_cycles, 1]
+            for i in xrange(self.likwid.event_count()):
+                cpu_cycles_data.append(0)
+                self.data.append(cpu_cycles_data)
 
 
 class LikwidParser(object):
