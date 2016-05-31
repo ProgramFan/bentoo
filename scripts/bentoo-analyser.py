@@ -19,40 +19,13 @@ cases, namely tasks need to be done quick and often in command line. More
 sphosticated analysis need to be done directly in python using pandas etc.
 '''
 
-# TODO: Implement new design
-# # New design
-#
-# ## Interface
-#
-#  -m, --match
-#  -c, --columns
-#  -g, --groupby
-#  -s, --sortby
-#  -n, --limit
-#  --raw-sql
-#  -p, --pivot # Only with pandas
-#  -d, --dump  # Only with pandas
-#
-#  ## Design
-#
-#  Frontend: sqlite3 sql query, support all SQL properties.
-#  Backend: sqlite3 for sqlite files; other files readin by pandas and convert
-#  to an sqlite database on the fly.
-#  Show: simple without pandas, nice results as pandas dataframe.
-
-
 import argparse
 import fnmatch
 import os
+import pandas
 import re
 import sys
 import sqlite3
-
-try:
-    import pandas
-    HAVE_PANDAS = True
-except ImportError:
-    HAVE_PANDAS = False
 
 
 def parse_list(repr):
@@ -116,7 +89,7 @@ class PandasReader(object):
     def __init__(self, backend="sqlite"):
         self.backend = backend
 
-    def read_frame(self, data_file, matches, columns, groupby, pivot):
+    def read_frame(self, data_file, matches, columns, pivot):
         reader = self.backend
         if self.backend == "auto":
             ext = os.path.splitext(data_file)[1]
@@ -228,28 +201,13 @@ class SqliteReader(object):
         for f in columns:
             real_columns.extend(parse_list(f))
         for f in real_columns:
-            m = re.match(r"\w+\((\w+)\)", f)
-            if m:
-                assert m.group(1) in column_types
-            else:
-                assert f in column_types
+            assert f in column_types
         return ", ".join(real_columns)
-
-    @classmethod
-    def _build_groupby_clause(cls, column_types, groupby):
-        if not groupby:
-            return ""
-        real_groups = []
-        for g in groupby:
-            real_groups.extend(parse_list(g))
-        for g in real_groups:
-            assert g in column_types
-        return "GROUP BY " + ", ".join(real_groups)
 
     def __init__(self, glob_syntax="fnmatch"):
         self.glob_syntax = glob_syntax
 
-    def read_frame(self, data_file, matches, columns, groupby, pivot):
+    def read_frame(self, data_file, matches, columns, pivot):
         conn = sqlite3.connect(data_file)
         if self.glob_syntax == "regex":
             conn.create_function("regexp", 2,
@@ -264,8 +222,7 @@ class SqliteReader(object):
         selects = self._build_select_clause(data_types, columns)
         filters = self._build_where_clause(data_types, matches,
                                            self.glob_syntax)
-        groups = self._build_groupby_clause(data_types, groupby)
-        sql = "SELECT {0} FROM result {1} {2}".format(selects, filters, groups)
+        sql = "SELECT {0} FROM result {1}".format(selects, filters)
         data = pandas.io.sql.read_sql(sql, conn)
 
         if pivot:
@@ -276,20 +233,22 @@ class SqliteReader(object):
         return data
 
 
-def analyse_data(data_file, matchs, columns, groupby, sortby, limit,
-                 glob_syntax="fnmatch", pivot=None, dump=None,
-                 *args, **kwargs):
-    sql = build_sql(matches, columns, groupby, sortby, limit, glob_syntax)
-    data = show_sql(data_file, sql)
-    if HAVE_PANDAS:
-        data = pandas.DataFrame(data)
-        if pivot:
-            data = data.pivot(pivot)
-        print data.to_string()
-        if dump:
-            data.to_csv(dump, index=False)
+def make_reader(reader, *args, **kwargs):
+    if reader == "sqlite":
+        return SqliteReader(glob_syntax=kwargs.get("sqlite_glob_syntax"))
+    elif reader == "pandas":
+        return PandasReader(backend=kwargs.get("pandas_backend"))
     else:
-        print_raw_data(data)
+        raise RuntimeError("Unknown reader '%s'" % reader)
+
+
+def analyse_data(data_file, reader, matches, columns,
+                 pivot=None, save=None, **kwargs):
+    reader = make_reader(reader, **kwargs)
+    data = reader.read_frame(data_file, matches, columns, pivot)
+    print(data.to_string())
+    if save:
+        data.to_csv(save, index=True)
 
 
 def main():
@@ -297,35 +256,35 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("data_file", help="Database file")
+    parser.add_argument("-r", "--reader",
+                        choices=["sqlite", "pandas"], default="pandas",
+                        help="Database reader (default: pandas)")
+    parser.add_argument("-m", "--matches", "--filter",
+                        action='append', default=[],
+                        help="Value filter, name[~=]value")
+    parser.add_argument("-c", "--columns",
+                        action='append', default=[],
+                        help="Columns to display, value or list of values")
+    parser.add_argument("-p", "--pivot", default=None,
+                        help="Pivoting fields, 2 or 3 element list")
+    parser.add_argument("-s", "--save",
+                        help="Save result to a CSV file")
 
-    parser.add_argument("-m", "--match", action='append', default=[],
-                        help="Record filter criteria")
-    parser.add_argument("-c", "--columns", default="*",
-                        help="Columns to extract")
-    parser.add_argument("-g", "--groupby", action='append', default=[],
-                        help="Group by specificed columns")
-    parser.add_argument("-s", "--sortby", "--orderby", default=None,
-                        help="Sort by specified columns")
-    parser.add_argument("-n", "--limit", default=0,
-                        help="Max number of records")
-    parser.add_argument("--raw-sql", default="",
-                        help="Use raw SQL query, suppress other arguments")
-
-    ag.add_argument("--glob-syntax",
+    ag = parser.add_argument_group("Sqlite Reader Options")
+    ag.add_argument("--sqlite-glob-syntax",
                     choices=["fnmatch", "regex"], default="fnmatch",
-                    help="Globbing syntax (default: fnmatch)")
+                    help="Globbing operator syntax (default: fnmatch)")
 
-    if HAVE_PANDAS:
-        parser.add_argument("-p", "--pivot", default=None,
-                            help="Pivoting fields, 2 or 3 element list")
-        parser.add_argument("-d", "--dump", default=None,
-                            help="Save result to a csv/Excel file")
+    ag = parser.add_argument_group("Pandas Reader Options")
+    ag.add_argument("--pandas-backend",
+                    choices=["excel", "sqlite3", "auto"], default="auto",
+                    help="Pandas IO backend (default: auto)")
 
     args = parser.parse_args()
-    analyse_data(args.data_file, args.match, args.columns,
-                 args.groupby, args.sortby, args.limit, args.glob_syntax,
-                 args.pivot if HAVE_PANDAS else None,
-                 args.dump if HAVE_PANDAS else None)
+    analyse_data(args.data_file, args.reader,
+                 args.matches, args.columns, args.pivot, args.save,
+                 sqlite_glob_syntax=args.sqlite_glob_syntax,
+                 pandas_backend=args.pandas_backend)
 
 if __name__ == "__main__":
     main()
