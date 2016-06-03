@@ -601,6 +601,10 @@ def locate_likwid_group_file(arch, group):
     raise RuntimeError("Can not find likwid.")
 
 
+def stringify(content):
+    return re.sub(r"\W", "_", content)
+
+
 class LikwidOutputParser(object):
 
     def __init__(self, group, group_file, raw_result=False):
@@ -634,7 +638,7 @@ class LikwidOutputParser(object):
                     self.column_types.append(float)
             else:
                 for i in xrange(likwid.metric_count()):
-                    name = likwid.metric_name(i).replace(" ", "_")
+                    name = stringify(likwid.metric_name(i))
                     self.column_names.append(name)
                     self.column_types.append(float)
             self.likwid = likwid

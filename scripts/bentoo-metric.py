@@ -163,7 +163,7 @@ SQLITE_TYPE = {
 
 
 def stringify(content):
-    return re.sub("[^_0-9a-zA-Z]", "_", content)
+    return re.sub(r"\W", "_", content)
 
 
 def is_event(name):
