@@ -175,7 +175,8 @@ class CustomCaseGenerator:
         # signal, it's ready and will not be ignored.
         for f in case_spec["results"]:
             filepath = os.path.join(case_path, f)
-            file(filepath, "w").write("")
+            if not os.path.exists(filepath):
+                file(filepath, "w").write("")
 
         return case_spec
 
