@@ -171,7 +171,8 @@ def is_event(name):
     return matcher.match(name)
 
 
-def calc_likwid_metric(group_file, data_file, output_file, aggregate="no"):
+def calc_likwid_metric(group_file, data_file, output_file, aggregate="no",
+                       raw_events=False):
     assert(aggregate in ("no", "thread", "proc_thread"))
 
     conn0 = sqlite3.connect(data_file)
@@ -244,11 +245,15 @@ def calc_likwid_metric(group_file, data_file, output_file, aggregate="no"):
     c0 = conn0.cursor()
     c0.execute(select_sql)
     r0 = c0.fetchone()
-    output_keys = [k for k in r0.keys() if not is_event(k)]
-    output_types = [type(r0[k]) for k in output_keys]
-    for i in xrange(likwid.metric_count()):
-        output_keys.append(stringify(likwid.metric_name(i)))
-        output_types.append(float)
+    if raw_events:
+        output_keys = list(r0.keys)
+        output_types = [type(r0[k]) for k in output_keys]
+    else:
+        output_keys = [k for k in r0.keys() if not is_event(k)]
+        output_types = [type(r0[k]) for k in output_keys]
+        for i in xrange(likwid.metric_count()):
+            output_keys.append(stringify(likwid.metric_name(i)))
+            output_types.append(float)
 
     conn1 = sqlite3.connect(output_file)
     conn1.execute("DROP TABLE IF EXISTS result")
@@ -258,6 +263,8 @@ def calc_likwid_metric(group_file, data_file, output_file, aggregate="no"):
     conn1.execute(sql)
 
     def compute_metrics(r0):
+        if raw_events:
+            return list(r0)
         event_values = dict()
         result = []
         for k, v in zip(r0.keys(), r0):
@@ -303,6 +310,8 @@ def main():
     parser.add_argument("--aggregate", default="thread",
                         choices=["no", "thread", "proc_thread"],
                         help="Data aggregation (default: thread)")
+    parser.add_argument("--raw-events", action="store_true",
+                        help="Output raw events instead of metrics")
 
     args = parser.parse_args()
     calc_likwid_metric(**vars(args))
