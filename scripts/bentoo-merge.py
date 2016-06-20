@@ -45,20 +45,34 @@ def extract_column_names(conn, table="result"):
     return names
 
 
-def merge_db(main_db, ref_db, out_db, replace=None, append=None):
+def merge_db(main_db, ref_db, out_db,
+             replace=None, append=None, replace_with=None):
     conn0 = sqlite3.connect(main_db)
     conn1 = sqlite3.connect(ref_db)
 
     main_cols = extract_column_names(conn0)
     ref_cols = extract_column_names(conn1)
 
-    replace_cols = glob_strings(main_cols, replace)
+    if replace_with:
+        replace_cols = [x.split("=")[0] for x in replace_with]
+        replace_refs = [x.split("=")[1] for x in replace_with]
+    else:
+        replace_cols = glob_strings(main_cols, replace)
     append_cols = glob_strings(ref_cols, append)
     index_cols = [x for x in main_cols if not is_data_column(x)]
 
-    sql = index_cols + replace_cols + append_cols
-    sql = map(quote, sql)
-    sql = "SELECT %s FROM result" % ", ".join(sql)
+    if replace_with:
+        index_sql = ", ".join(map(quote, index_cols))
+        replace_sql = ", ".join("\"{0}\" AS \"{1}\"".format(
+            x, y) for x, y in zip(replace_refs, replace_cols))
+        append_sql = ", ".join(map(quote, append_cols))
+        sql = [index_sql, replace_sql, append_sql]
+        sql = filter(lambda x: x, sql)
+        sql = "SELECT %s FROM result" % ", ".join(sql)
+    else:
+        sql = index_cols + replace_cols + append_cols
+        sql = map(quote, sql)
+        sql = "SELECT %s FROM result" % ", ".join(sql)
     ref_data = pandas.read_sql_query(sql, conn1)
     ref_data = ref_data.set_index(index_cols)
     main_data = pandas.read_sql_query("SELECT * FROM result", conn0)
@@ -87,10 +101,13 @@ def main():
                         help="Database to get update data")
     parser.add_argument("out_db",
                         help="Database to store output")
-    parser.add_argument("-r", "--replace", nargs="+", default=None,
-                        help="Columns to replace, supports shell wildcards ")
     parser.add_argument("-a", "--append", nargs="+", default=None,
                         help="Columns to append, supports shell wildcards")
+    grp = parser.add_mutually_exclusive_group()
+    grp.add_argument("-r", "--replace", nargs="+", default=None,
+                     help="Columns to replace, supports shell wildcards ")
+    grp.add_argument("-w", "--replace-with", action="append", default=[],
+                     help="Replace column x with y (format: x=y)")
 
     args = parser.parse_args()
     merge_db(**vars(args))
