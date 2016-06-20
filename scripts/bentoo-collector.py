@@ -623,11 +623,11 @@ class LikwidOutputParser(object):
         cpu_cycles = line2.split(":")[-1].strip()
         if not self.likwid:
             # OPTIMIZATION: init likwid metrics only once
-            group_file_path = self.group_file
-            if group_file_path == "auto" or not os.path.exists(group_file):
-                group_file_path = locate_likwid_group_file(cpu_model,
-                                                           self.group)
-            likwid = LikwidMetrics(group_file_path)
+            group_filepath = self.group_file
+            if group_filepath == "auto" or not os.path.exists(group_filepath):
+                group_filepath = locate_likwid_group_file(cpu_model,
+                                                          self.group)
+            likwid = LikwidMetrics(group_filepath)
             # OPTIMIZATION: calculate table structure only once
             self.column_names.extend(["TimerName", "ThreadId", "RDTSC",
                                       "CallCount"])
