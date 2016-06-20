@@ -13,17 +13,87 @@ parser.
 
 import argparse
 import sqlite3
+import fnmatch
+import pandas
+import re
+
+
+def glob_strings(source, patterns):
+    if not source or not patterns:
+        return []
+    return [x for x in source for y in patterns if fnmatch.fnmatch(x, y)]
+
+
+def quote(string):
+    return "\"%s\"" % string
+
+
+def is_data_column(column):
+    if re.match(r"\w+:\w+", column):
+        return True
+    if column in ["RDTSC", "CallCount"]:
+        return True
+    return False
+
+
+def extract_column_names(conn, table="result"):
+    orig_row_factory = conn.row_factory
+    conn.row_factory = sqlite3.Row
+    r = conn.execute("SELECT * FROM %s LIMIT 1" % table).fetchone()
+    names = list(r.keys())
+    conn.row_factory = orig_row_factory
+    return names
+
+
+def merge_db(main_db, ref_db, out_db, replace=None, append=None):
+    conn0 = sqlite3.connect(main_db)
+    conn1 = sqlite3.connect(ref_db)
+
+    main_cols = extract_column_names(conn0)
+    ref_cols = extract_column_names(conn1)
+
+    replace_cols = glob_strings(main_cols, replace)
+    append_cols = glob_strings(ref_cols, append)
+    index_cols = [x for x in main_cols if not is_data_column(x)]
+
+    sql = index_cols + replace_cols + append_cols
+    sql = map(quote, sql)
+    sql = "SELECT %s FROM result" % ", ".join(sql)
+    ref_data = pandas.read_sql_query(sql, conn1)
+    ref_data = ref_data.set_index(index_cols)
+    main_data = pandas.read_sql_query("SELECT * FROM result", conn0)
+    main_data = main_data.set_index(index_cols)
+    for x in append_cols:
+        assert(x not in main_data)
+        main_data[x] = 0
+    main_data.update(ref_data)
+
+    conn2 = sqlite3.connect(out_db)
+    main_data.to_sql("result", conn2, if_exists="replace")
+    conn2.commit()
+    conn2.close()
+
+    conn1.close()
+    conn0.close()
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("main_db",
+                        help="Database to be updated")
     parser.add_argument("ref_db",
-                        help="Reference database")
-    parser.add_argument("data_db",
-                        help="Database to update from")
-    parser.parse_args()
+                        help="Database to get update data")
+    parser.add_argument("out_db",
+                        help="Database to store output")
+    parser.add_argument("-r", "--replace", nargs="+", default=None,
+                        help="Columns to replace, supports shell wildcards ")
+    parser.add_argument("-a", "--append", nargs="+", default=None,
+                        help="Columns to append, supports shell wildcards")
+
+    args = parser.parse_args()
+    merge_db(**vars(args))
 
 
 if __name__ == "__main__":
