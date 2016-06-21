@@ -28,12 +28,31 @@ def quote(string):
     return "\"%s\"" % string
 
 
-def is_data_column(column):
-    if re.match(r"\w+:\w+", column):
-        return True
-    if column in ["RDTSC", "CallCount"]:
-        return True
-    return False
+def find_first_of(contents, candidates):
+    for c in candidates:
+        try:
+            i = contents.index(c)
+        except ValueError:
+            i = -1
+        if i >= 0:
+            return (c, i)
+    return (None, -1)
+
+
+def column_split(columns):
+    '''Split data column from index column in a data table'''
+    # This function uses the following huristics: a data table begins with
+    # conseqtive index columns, followed by consequtive data columns. Data
+    # collector and transformers shall gurantee this.
+    timer_index = find_first_of(columns, ["TimerName", "Name"])
+    if not timer_index[0]:
+        raise ValueError("Can not find timer column")
+    procid_index = find_first_of(columns, ["ProcId"])
+    threadid_index = find_first_of(columns, ["ThreadId"])
+    split_index = max(timer_index[1], procid_index[1], threadid_index[1])
+    assert(split_index >= 0)
+    split_index += 1
+    return (columns[0:split_index], columns[split_index:])
 
 
 def extract_column_names(conn, table="result"):
@@ -59,7 +78,7 @@ def merge_db(main_db, ref_db, out_db,
     else:
         replace_cols = glob_strings(main_cols, replace)
     append_cols = glob_strings(ref_cols, append)
-    index_cols = [x for x in main_cols if not is_data_column(x)]
+    index_cols, _ = column_split(ref_cols)
 
     if replace_with:
         index_sql = ", ".join(map(quote, index_cols))
@@ -83,7 +102,10 @@ def merge_db(main_db, ref_db, out_db,
     main_data.update(ref_data)
 
     conn2 = sqlite3.connect(out_db)
-    main_data.to_sql("result", conn2, if_exists="replace")
+    # IMPORTANT: use flattern index so index=False in to_sql works properly,
+    # i.e, dataframe index is ignored.
+    main_data = main_data.reset_index()
+    main_data.to_sql("result", conn2, if_exists="replace", index=False)
     conn2.commit()
     conn2.close()
 
