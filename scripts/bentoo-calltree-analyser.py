@@ -28,12 +28,31 @@ def quote(string):
     return "\"%s\"" % string
 
 
-def is_data_column(column):
-    if re.match(r"\w+:\w+", column):
-        return True
-    if column in ["RDTSC", "CallCount"]:
-        return True
-    return False
+def find_first_of(contents, candidates):
+    for c in candidates:
+        try:
+            i = contents.index(c)
+        except ValueError:
+            i = -1
+        if i >= 0:
+            return (c, i)
+    return (None, -1)
+
+
+def column_split(columns):
+    '''Split data column from index column in a data table'''
+    # This function uses the following huristics: a data table begins with
+    # conseqtive index columns, followed by consequtive data columns. Data
+    # collector and transformers shall gurantee this.
+    timer_index = find_first_of(columns, ["TimerName", "Name"])
+    if not timer_index[0]:
+        raise ValueError("Can not find timer column")
+    procid_index = find_first_of(columns, ["ProcId"])
+    threadid_index = find_first_of(columns, ["ThreadId"])
+    split_index = max(timer_index[1], procid_index[1], threadid_index[1])
+    assert(split_index >= 0)
+    split_index += 1
+    return (columns[0:split_index], columns[split_index:])
 
 
 def extract_column_names(conn, table="result"):
@@ -85,17 +104,18 @@ def build_seq_map(calltree):
     return seq
 
 
-def compute_percentage(ref_db, calltree_file, out_db,
-                       columns=None, timer_column="TimerName"):
+def compute_percentage(ref_db, calltree_file, out_db, columns=None):
     conn0 = sqlite3.connect(ref_db)
 
     ref_columns = extract_column_names(conn0)
-    index_columns = [x for x in ref_columns if not is_data_column(x)]
-    data_columns = [x for x in ref_columns if is_data_column(x)]
+    index_columns, data_columns = column_split(ref_columns)
     if columns:
         for x in columns:
             assert(x in data_columns)
         data_columns = list(columns)
+    timer_column = find_first_of(ref_columns, ["TimerName", "Name"])[0]
+    if not timer_column:
+        raise ValueError("Can not find timer column")
     index_columns.remove(timer_column)
     data_columns.insert(0, timer_column)
 
@@ -131,13 +151,16 @@ def compute_percentage(ref_db, calltree_file, out_db,
             result[rel_c] = result[c] / result[rel_c]
         result["parent"] = [parents[x] for x in result[timer_column]]
         result["sequence"] = [seq[x] for x in result[timer_column]]
-        sys.exit(0)
         return result
 
-    data = data.groupby(index_columns).apply(compute_group_percent)
+    final = []
+    for k, v in data.groupby(index_columns):
+        transformed = compute_group_percent(v)
+        final.append(transformed)
+    final = pandas.concat(final, ignore_index=True)
 
     conn1 = sqlite3.connect(out_db)
-    data.to_sql("result", conn1, if_exists="replace", index=False)
+    final.to_sql("result", conn1, if_exists="replace", index=False)
 
     conn1.close()
     conn0.close()
@@ -155,8 +178,6 @@ def main():
                         help="Database to store output")
     parser.add_argument("-c", "--columns", nargs="+", default=[],
                         help="Compute only these columns")
-    parser.add_argument("--timer-column", default="TimerName",
-                        help="Column name for timer names")
 
     args = parser.parse_args()
     compute_percentage(**vars(args))
