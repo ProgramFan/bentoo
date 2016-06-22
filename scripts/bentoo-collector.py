@@ -778,7 +778,7 @@ class ParserFactory(object):
 
 class SqliteSerializer(object):
     typemap = {
-        None: "NULL",
+        type(None): "NULL",
         int: "INTEGER",
         long: "INTEGER",
         float: "REAL",
