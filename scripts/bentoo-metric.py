@@ -246,7 +246,7 @@ def calc_likwid_metric(group_file, data_file, output_file, aggregate="no",
     c0.execute(select_sql)
     r0 = c0.fetchone()
     if raw_events:
-        output_keys = list(r0.keys)
+        output_keys = list(r0.keys())
         output_types = [type(r0[k]) for k in output_keys]
     else:
         output_keys = [k for k in r0.keys() if not is_event(k)]
