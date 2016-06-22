@@ -130,7 +130,7 @@ def compute_percentage(ref_db, calltree_file, out_db, columns=None):
 
     parents = build_parent_map(calltree)
     seq = build_seq_map(calltree)
-    top_timer = timer_names[0]
+    top_timer = calltree["id"]
 
     def compute_group_percent(group):
         result = pandas.DataFrame(group)
