@@ -63,7 +63,7 @@ class TreeNode(object):
 
     def __repr__(self):
         result = []
-        result.append(" %s %s %r" % (self.id, self.cycle, str(self.digest)))
+        result.append(" %s %s" % (self.id, self.cycle))
         for c in self.children:
             child_repr = repr(c).split("\n")
             result.extend(map(lambda x: "-%s" % x, child_repr))
@@ -110,7 +110,7 @@ class TreeNode(object):
         return self <= x
 
 
-def fold_tree(tree, keep_level=None, remove_calls=None):
+def fold_tree(tree, keep_level=None, remove_calls=None, cascade=False):
 
     def fold_tree_recursive(tree):
         if not tree:
@@ -124,7 +124,45 @@ def fold_tree(tree, keep_level=None, remove_calls=None):
             for i in xrange(1, len(folded_children)):
                 if folded_children[i] != new_children[-1]:
                     new_children.append(folded_children[i])
-        new_tree = OrderedDict()
+        new_tree = TreeNode(tree.id, tree.cycle)
+        for c in new_children:
+            new_tree.append_child(c)
+        return new_tree
+
+    def cascase_tree_recursive(tree):
+        def in_full_order_set(elem, array):
+            if not array:
+                return True
+            for c in array:
+                if elem <= c or elem >= c:
+                    return True
+            return False
+
+        def get_maximum(array):
+            tmp = list(array)
+            tmp.sort()
+            return tmp[-1]
+
+        if not tree:
+            return None
+        folded_children = []
+        for c in tree.children:
+            folded_children.append(cascase_tree_recursive(c))
+
+        new_children = []
+        if folded_children:
+            poss = []
+            pos = []
+            for c in folded_children:
+                if in_full_order_set(c, pos):
+                    pos.append(c)
+                else:
+                    poss.append(pos)
+                    pos = [c]
+            poss.append(pos)
+            for c in poss:
+                new_children.append(get_maximum(c))
+
         new_tree = TreeNode(tree.id, tree.cycle)
         for c in new_children:
             new_tree.append_child(c)
@@ -165,8 +203,10 @@ def fold_tree(tree, keep_level=None, remove_calls=None):
         tree = remove_node_recursive(tree, remove_calls)
     if keep_level:
         tree = cut_tree_recursive(tree, 0, keep_level)
-
-    return fold_tree_recursive(tree)
+    if cascade:
+        return cascase_tree_recursive(tree)
+    else:
+        return fold_tree_recursive(tree)
 
 
 def print_tree(tree, max_level=None):
@@ -192,8 +232,9 @@ def main():
                         help="Max levels to keep when folding tree")
     parser.add_argument("--remove-calls", default=[], nargs="+",
                         help="Remove matched calls, supports shell wildcards")
-    parser.add_argument("--fold", action="store_true",
-                        help="Try hard to fold tree")
+    grp = parser.add_mutually_exclusive_group()
+    grp.add_argument("--fold", action="store_true", help="Fold tree")
+    grp.add_argument("--cascade", action="store_true", help="Cascade tree")
 
     args = parser.parse_args()
 
@@ -201,8 +242,9 @@ def main():
     tree = TreeNode.deserialize(data)
     if tree.id == "ROOT":
         tree = tree.children[0]
-    if args.fold:
-        tree = fold_tree(tree, args.keep_level, args.remove_calls)
+    if args.fold or args.cascade:
+        tree = fold_tree(tree, args.keep_level,
+                         args.remove_calls, args.cascade)
     if args.save:
         data = TreeNode.serialize(tree)
         json.dump(data, file(args.save, "w"), indent=2)
