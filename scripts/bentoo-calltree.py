@@ -16,6 +16,50 @@ import fnmatch
 import hashlib
 
 from collections import OrderedDict
+from functools import reduce
+
+
+def toposort(data):
+    """ Dependencies are expressed as a dictionary whose keys are items and
+    whose values are a set of dependent items. Output is a list of sets in
+    topological order. The first set consists of items with no dependences,
+    each subsequent set consists of items that depend upon items in the
+    preceeding sets.  """
+
+    # Special case empty input.
+    if len(data) == 0:
+        return
+
+    # Copy the input so as to leave it unmodified.
+    data = data.copy()
+
+    # Ignore self dependencies.
+    for k, v in data.items():
+        v.discard(k)
+
+    # Find all items that don't depend on anything.
+    extra_items_in_deps = reduce(set.union, data.values()) - set(data.keys())
+    # Add empty dependences where needed.
+    data.update({item: set() for item in extra_items_in_deps})
+    while True:
+        ordered = set(item for item, dep in data.items() if len(dep) == 0)
+        if not ordered:
+            break
+        yield ordered
+        data = {item: (dep - ordered)
+                for item, dep in data.iteritems()
+                if item not in ordered}
+    if len(data) != 0:
+        raise ValueError('Cyclic dependencies exist among the'
+                         'se items: {}'.format(
+                             ', '.join(repr(x) for x in data.items())))
+
+
+def toposort_flatten(data, sort=True):
+    result = []
+    for d in toposort(data):
+        result.extend((sorted if sort else list)(d))
+    return result
 
 
 class TreeNode(object):
@@ -108,6 +152,42 @@ class TreeNode(object):
         if len(self.children) <= len(x.children):
             return False
         return self <= x
+
+
+def merge_repeative_calls(calls):
+    if not calls:
+        return None
+    # check the input to see if they are from the same call
+    call_ids = set()
+    for c in calls:
+        call_ids.add(c.id)
+    if len(call_ids) != 1:
+        raise ValueError("Not repeative calls: {}".format(calls))
+    # do current level
+    childset = {}
+    graph = {}
+    for c in calls:
+        for child in c.children:
+            cid = child.id
+            if cid not in childset:
+                childset[cid] = list()
+            childset[cid].append(child)
+        child_ids = [child.id for child in c.children]
+        if not child_ids:
+            continue
+        if child_ids[0] not in graph:
+            graph[child_ids[0]] = set()
+        for i in xrange(1, len(child_ids)):
+            cid = child_ids[i]
+            if cid in graph:
+                graph[cid].add(child_ids[i-1])
+            else:
+                graph[cid] = set([child_ids[i-1]])
+    cids = toposort_flatten(graph)
+    node = TreeNode(calls[0].id, calls[0].cycle)
+    for c in cids:
+        node.append_child(merge_repeative_calls(childset[c]))
+    return node
 
 
 def fold_tree(tree, keep_level=None, remove_calls=None, cascade=False):
@@ -204,7 +284,7 @@ def fold_tree(tree, keep_level=None, remove_calls=None, cascade=False):
     if keep_level:
         tree = cut_tree_recursive(tree, 0, keep_level)
     if cascade:
-        return cascase_tree_recursive(tree)
+        return merge_repeative_calls([tree])
     else:
         return fold_tree_recursive(tree)
 
