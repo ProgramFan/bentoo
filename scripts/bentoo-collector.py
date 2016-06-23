@@ -591,7 +591,7 @@ def locate_likwid_group_file(arch, group):
     possible_places = os.environ["PATH"].split(":")
     for p in possible_places:
         if os.path.exists(os.path.join(p, "likwid-perfctr")):
-            likwid_home = os.path.dirname(p)
+            likwid_home = os.path.dirname(os.path.abspath(p))
             path = os.path.join(likwid_home, "share", "likwid", "perfgroups",
                                 arch, group + ".txt")
             if not os.path.exists(path):
