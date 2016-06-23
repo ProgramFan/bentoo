@@ -90,18 +90,20 @@ def build_parent_map(calltree):
     return parents
 
 
-def build_seq_map(calltree):
-    seq = {}
+def build_abs_seq_map(calltree):
+    result = {}
+    level = {}
+    seq = -1
 
-    def visit_tree(tree, top_level=False):
-        if top_level:
-            seq[tree["id"]] = 0
+    def visit_tree(tree, curr_level=0):
+        seq += 1
+        result[x["id"]] = seq
+        level[x["id"]] = curr_level
         for i, x in enumerate(tree["children"]):
-            seq[x["id"]] = i
-            visit_tree(x)
+            visit_tree(x, curr_level)
 
-    visit_tree(calltree, top_level=True)
-    return seq
+    visit_tree(calltree)
+    return (result, level)
 
 
 def compute_percentage(ref_db, calltree_file, out_db, columns=None):
@@ -129,7 +131,7 @@ def compute_percentage(ref_db, calltree_file, out_db, columns=None):
     data = pandas.read_sql_query(sql, conn0)
 
     parents = build_parent_map(calltree)
-    seq = build_seq_map(calltree)
+    abs_seq, level = build_abs_seq_map(calltree)
     top_timer = calltree["id"]
 
     def compute_group_percent(group):
@@ -149,8 +151,8 @@ def compute_percentage(ref_db, calltree_file, out_db, columns=None):
             result[abs_c] = result[c] / top_value
             result[rel_c] = [values[x] for x in result[timer_column]]
             result[rel_c] = result[c] / result[rel_c]
-        result["parent"] = [parents[x] for x in result[timer_column]]
-        result["sequence"] = [seq[x] for x in result[timer_column]]
+        result["abs_seq"] = [abs_seq[x] for x in result[timer_column]]
+        result["level"] = [level[x] for x in result[timer_column]]
         return result
 
     final = []
