@@ -199,7 +199,7 @@ def parse_jasminlog(fn, use_table=None):
         return "_".join(map(string.lower, s.translate(trans_table).split()))
 
     avail_types = {
-        "timer_name": str,
+        "TimerName": str,
         "proc_0": float,
         "proc_0_percent": float,
         "summed": float,
@@ -226,6 +226,8 @@ def parse_jasminlog(fn, use_table=None):
         # Extract table header
         header_ptn = re.compile(r"(Timer Name|Proc: \d+|Summed|Proc|Max)")
         header = map(tokenlize, header_ptn.findall(log_table["header"]))
+        assert(header[0] == "timer_name")
+        header[0] == "TimerName"
         # Parse table rows
         table_contents = []
         for ln in log_table["content"].strip().split("\n"):
@@ -234,7 +236,7 @@ def parse_jasminlog(fn, use_table=None):
             timer_name = tl.strip()
             if timer_name == "TOTAL RUN TIME:":
                 timer_name = "TOTAL_RUN_TIME"
-            timer_rec = {"timer_name": avail_types["timer_name"](timer_name)}
+            timer_rec = {"TimerName": avail_types["TimerName"](timer_name)}
             flt_ptn = r"[-+]?(?:\d+(?:\.\d*)?)(?:[Ee][-+]?\d+)?"
             seg_ptn = re.compile(r"({0})\s*(\({0}%\))?".format(flt_ptn))
             for i, seg in enumerate(seg_ptn.finditer(tr)):
@@ -312,7 +314,7 @@ def parse_jasmin4log(fn, use_table=None):
     '''
 
     avail_types = {
-        "Name": str,
+        "TimerName": str,
         "MaxTime": float,
         "MaxTime_percent": float,
         "AvgTime": float,
@@ -342,6 +344,7 @@ def parse_jasmin4log(fn, use_table=None):
         # Extract table header
         header = log_table["header"].split()
         assert(header[0] == "Name")
+        header[0] == "TimerName"
         timer_name_pos = log_table["header"].index("Name")
         timer_value_pos = timer_name_pos + len("Name")
         # Parse table rows
@@ -629,7 +632,7 @@ class LikwidOutputParser(object):
                                                           self.group)
             likwid = LikwidMetrics(group_filepath)
             # OPTIMIZATION: calculate table structure only once
-            self.column_names.extend(["TimerName", "ThreadId", "RDTSC",
+            self.column_names.extend(["ThreadId", "TimerName", "RDTSC",
                                       "CallCount"])
             self.column_types.extend([str, int, float, int])
             if self.raw_result:
@@ -649,7 +652,7 @@ class LikwidOutputParser(object):
             tmp = {k.split(":")[-1]: v for k, v in record.iteritems()}
             tmp["time"] = tmp["RDTSC"]
             tmp["inverseClock"] = 1.0 / float(cpu_cycles)
-            result = [tmp["RegionTag"], tmp["ThreadId"], tmp["RDTSC"],
+            result = [tmp["ThreadId"], tmp["RegionTag"], tmp["RDTSC"],
                       tmp["CallCount"]]
             if self.raw_result:
                 for i in xrange(self.likwid.event_count()):
@@ -662,7 +665,7 @@ class LikwidOutputParser(object):
         # Insert a special CPU_CYCLES record for raw result so derived metrics
         # such as Runtime_unhalted can be calculated.
         if self.raw_result:
-            cpu_cycles_data = ["CPU_CYCLES", 0, cpu_cycles, 1]
+            cpu_cycles_data = [0, "CPU_CYCLES", cpu_cycles, 1]
             for i in xrange(self.likwid.event_count()):
                 cpu_cycles_data.append(0)
                 self.data.append(cpu_cycles_data)
@@ -729,8 +732,8 @@ class LikwidParser(object):
                 parser.process(iter(block))
                 for d in parser.data:
                     data.append([d[0], proc_id] + d[1:])
-            cn = [parser.column_names[0], "ProcId"] + parser.column_names[1:]
-            ct = [parser.column_types[0], int] + parser.column_types[1:]
+            cn = ["ProcId"] + parser.column_names
+            ct = [int] + parser.column_types
             yield {
                 "table_id": table_id,
                 "column_names": cn,
