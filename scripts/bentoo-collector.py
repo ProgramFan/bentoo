@@ -587,7 +587,11 @@ class LikwidMetrics(object):
         formula = str(self.metrics[metric_id][2])
         for k, v in eventvals.iteritems():
             formula = formula.replace(k, str(v))
-        return eval(formula)
+        try:
+            result = eval(formula)
+        except ZeroDivisionError:
+            result = 0.0
+        return result
 
 
 def locate_likwid_group_file(arch, group):
