@@ -8,20 +8,31 @@ import argparse
 import os
 import re
 import string
+import textwrap
 
 
-SEP_LINE = "-" * 78
+TEXT_WIDTH = 78
+SEP_LINE = "-" * TEXT_WIDTH
+
+
+def wrap_print(msg):
+    print(textwrap.fill(msg, width=TEXT_WIDTH))
+
+
+def wrap_input(msg):
+    return raw_input(textwrap.fill(msg, width=TEXT_WIDTH,
+                                   drop_whitespace=False))
 
 
 def get_choice(message, choices, default=0):
-    print(message + ":")
+    wrap_print(message + ":")
     for i, c in enumerate(choices):
         print("  [%d] %s" % (i, c))
     min_choice = 0
     max_choice = len(choices) - 1
     while True:
-        choice = raw_input("Please choose %d-%d (default: [%d]): "
-                           % (min_choice, max_choice, default))
+        choice = wrap_input("Please choose %d-%d (default: [%d]): "
+                            % (min_choice, max_choice, default))
         if not choice:
             print(SEP_LINE)
             return default
@@ -36,8 +47,8 @@ def get_choice(message, choices, default=0):
 
 def get_confirm(message, default=True):
     while True:
-        result = raw_input("%s? (y/Y/n/N) (default: %s): "
-                           % (message, "y" if default else "n"))
+        result = wrap_input("%s? (y/Y/n/N) (default: %s): "
+                            % (message, "y" if default else "n"))
         if not result:
             print(SEP_LINE)
             return default
@@ -51,14 +62,14 @@ def get_confirm(message, default=True):
 
 
 def show_message(message):
-    print(message)
+    wrap_print(message)
     print(SEP_LINE)
 
 
 def get_list(message, default="nnodes"):
     while True:
-        result = raw_input("%s? (list) (default: '%s'): "
-                           % (message, default))
+        result = wrap_input("%s? (list) (default: '%s'): "
+                            % (message, default))
         print(SEP_LINE)
         if not result:
             result = default
@@ -67,7 +78,7 @@ def get_list(message, default="nnodes"):
 
 def get_input(message):
     while True:
-        result = raw_input("%s: " % message)
+        result = wrap_input("%s: " % message)
         if not result:
             continue
         print(SEP_LINE)
@@ -192,7 +203,7 @@ def main():
 
     show_message("Welcome to the bentoo world. This quickstart will guide "
                  "you through the creation of a bentoo project, by asking "
-                 "you simple questions")
+                 "you simple questions.")
     project_desc = get_input("Project description")
     binary_name = get_input("Execuation binary")
     test_factors = get_list("Test factor names")
