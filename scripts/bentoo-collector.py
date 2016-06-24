@@ -895,7 +895,7 @@ def main():
         case_filter = args.include
         filter_mode = "include"
     elif args.exclude:
-        case_filter = args.include
+        case_filter = args.exclude
         filter_mode = "exclude"
     else:
         case_filter = None
