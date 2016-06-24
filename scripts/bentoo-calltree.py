@@ -303,7 +303,7 @@ def print_tree_salt(tree, max_level=None):
     def print_tree_salt_recursive(tree, level, max_level):
         if max_level and level > max_level:
             return
-        print "+" * level, tree.id, tree.cycle
+        print "+" * level, tree.id
         for c in tree.children:
             print_tree_salt_recursive(c, level + 1, max_level)
     print "@startsalt"
@@ -319,7 +319,7 @@ def print_tree_asciidoc(tree, max_level=None):
     def print_tree_adoc_recursive(tree, level, max_level):
         if max_level and level > max_level:
             return
-        print "*" * level, tree.id, tree.cycle
+        print "*" * level, tree.id
         for c in tree.children:
             print_tree_adoc_recursive(c, level + 1, max_level)
     print_tree_adoc_recursive(tree, 1, max_level)
