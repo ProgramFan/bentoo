@@ -104,6 +104,10 @@ class MetricsParser(object):
                 self.metrics.append((name, "1", formula))
 
 
+def stringify(content):
+    return re.sub(r"\W", "_", content)
+
+
 class LikwidMetrics(object):
 
     def __init__(self, group_file):
@@ -137,6 +141,9 @@ class LikwidMetrics(object):
     def metric_name(self, metric_id):
         return self.metrics[metric_id][0]
 
+    def normal_metric_name(self, metric_id):
+        return stringify(self.metrics[metric_id][0])
+
     def metric_unit(self, metric_id):
         return self.metrics[metric_id][1]
 
@@ -156,7 +163,7 @@ class LikwidMetrics(object):
 #
 
 SQLITE_TYPE = {
-    None: "NULL",
+    type(None): "NULL",
     int: "INTEGER",
     long: "INTEGER",
     float: "REAL",
@@ -166,102 +173,130 @@ SQLITE_TYPE = {
 }
 
 
-def stringify(content):
-    return re.sub(r"\W", "_", content)
+def column_split(columns):
+    '''split 'columns' into (index_columns, data_columns)'''
+    timer_column_index = columns.index("TimerName")
+    return (columns[:timer_column_index+1], columns[timer_column_index+1:])
 
 
-def is_event(name):
-    matcher = re.compile(r"\w+:\w+")
-    return matcher.match(name)
+def locate_likwid_group_file(arch, group):
+    # NOTE: Here we respect Likwid's group file locating mechanism: first try
+    # "~/.likwid/groups/ARCH/GROUP", then "LIKWID_HOME/share/likwid
+    # /perfgroups/ARCH/GROUP".
+    user_conf_path = os.path.expanduser("~/.likwid/groups")
+    group_file = os.path.join(user_conf_path, arch, group + ".txt")
+    if os.path.exists(group_file):
+        return group_file
+    sys_path = os.environ["PATH"].split(":")
+    for p in sys_path:
+        if os.path.exists(os.path.join(p, "likwid-perfctr")):
+            likwid_home = os.path.dirname(os.path.abspath(p))
+            group_file = os.path.join(likwid_home, "share", "likwid",
+                                      "perfgroups", arch, group + ".txt")
+            if not os.path.exists(group_file):
+                raise ValueError("Bad likwid installation: can not find "
+                                 "'%s' for '%s' in '%s'" % (group, arch,
+                                                            likwid_home))
+            return group_file
+    raise ValueError("Can not find likwid group '%s' for '%s'" % (group, arch))
 
 
-def calc_likwid_metric(group_file, data_file, output_file, aggregate="no",
-                       raw_events=False):
-    assert(aggregate in ("no", "thread", "proc_thread"))
+def calc_likwid_metric(raw_db, output_db, aggregate="no", likwid_group=None,
+                       likwid_group_file=None, raw_events=False):
+    # determine operation type
+    if not raw_events and not likwid_group and not likwid_group_file:
+        raise ValueError("Incorrect operation selection")
 
-    conn0 = sqlite3.connect(data_file)
+    conn0 = sqlite3.connect(raw_db)
     conn0.row_factory = sqlite3.Row
 
     # Discover the structure of input database
     sql = "select * from result limit 1"
     r0 = conn0.execute(sql).fetchone()
-    input_keys = r0.keys()
-    input_types = [type(x) for x in r0]
+    input_columns = r0.keys()
+    index_columns, data_columns = column_split(input_columns)
 
-    # Build select pipeline
-    def is_value_key(k):
-        if k in ("RDTSC", "CallCount"):
-            return True
-        if is_event(k):
-            # match the "CPU_CYC_HALT:FIXC0" event counter
-            return True
-        return False
+    sql = "select * from result where "
+    sql += "TimerName glob \"CPU_CYCLES@*\" limit 1"
+    r0 = conn0.execute(sql).fetchone()
+    cpu_cycles_timer_name = r0["TimerName"]
+    cpu_cycles = r0["RDTSC"]
+    cpu_model = cpu_cycles_timer_name.split("@")[-1]
+
+    if not raw_events:
+        if likwid_group_file:
+            likwid = LikwidMetrics(likwid_group_file)
+        elif likwid_group:
+            # find out correct group file
+            group_file = locate_likwid_group_file(cpu_model, likwid_group)
+            likwid = LikwidMetrics(group_file)
+
+    def quote(x):
+        return "\"{}\"".format(x)
+
     select = []
     group_by = []
     if aggregate == "no":
-        select = ["\"%s\"" % k for k in input_keys]
-        group_by = [k for k in input_keys if not is_value_key(k)]
+        group_by = map(quote, index_columns)
+        select = map(quote, input_columns)
     elif aggregate == "thread":
-        for k in input_keys:
-            if k == "ThreadId":
-                select.append("COUNT(ThreadId) AS ThreadCount")
-            elif k == "RDTSC":
+        new_index_columns = list(index_columns)
+        new_index_columns.remove("ThreadId")
+        group_by = map(quote, new_index_columns)
+        select.extend(group_by)
+        select.append("COUNT(ThreadId) AS ThreadCount")
+        for k in data_columns:
+            if k == "RDTSC":
                 select.append("SUM(RDTSC) AS SumRDTSC")
                 select.append("MAX(RDTSC) AS MaxRDTSC")
             elif k == "CallCount":
                 select.append("SUM(CallCount) AS SumCallCount")
-            elif is_event(k):
-                select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
             else:
-                select.append(k)
-                # group by all remaining non value keys
-                group_by.append("\"%s\"" % k)
+                select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
     else:
-        for k in input_keys:
-            if k == "ProcId":
-                select.append("COUNT(ProcId) AS ProcCount")
-            elif k == "ThreadId":
-                select.append("COUNT(ThreadId) AS ThreadCount")
-            elif k == "RDTSC":
+        new_index_columns = list(index_columns)
+        new_index_columns.remove("ThreadId")
+        new_index_columns.remove("ProcId")
+        group_by = map(quote, new_index_columns)
+        select.extend(group_by)
+        select.append("COUNT(ProcId) AS ProcCount")
+        select.append("COUNT(ThreadId) AS ThreadCount")
+        for k in data_columns:
+            if k == "RDTSC":
                 select.append("SUM(RDTSC) AS SumRDTSC")
                 select.append("MAX(RDTSC) AS MaxRDTSC")
             elif k == "CallCount":
                 select.append("SUM(CallCount) AS SumCallCount")
-            elif is_event(k):
-                select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
             else:
-                select.append(k)
-                # group by all remaining non value keys
-                group_by.append("\"%s\"" % k)
+                select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
 
     select = ", ".join(select)
+    where = "TimerName != \"%s\"" % cpu_cycles_timer_name
     group_by = ", ".join(group_by)
     select_sql = "SELECT {0} FROM result WHERE {1} GROUP BY {2}".format(
-        select, "TimerName != \"CPU_CYCLES\"", group_by)
+        select, where, group_by)
 
-    # Query CPU clock cycles stored in the database to calculate derived
-    # metrics.
-    sql = "select RDTSC from result where TimerName = \"CPU_CYCLES\" limit 1"
-    cpu_cycles = conn0.execute(sql).fetchone()["RDTSC"]
+    def is_event_column(c):
+        return re.match(r"[_A-Z0-9]+:[_A-Z0-9]+", c)
 
     # create result sqlite database
-    likwid = LikwidMetrics(group_file)
     c0 = conn0.cursor()
-    c0.execute(select_sql)
+    r0 = c0.execute(select_sql)
     r0 = c0.fetchone()
     if raw_events:
-        output_keys = list(r0.keys())
-        output_types = [type(r0[k]) for k in output_keys]
+        output_columns = list(r0.keys())
+        output_types = [type(r0[k]) for k in output_columns]
     else:
-        output_keys = [k for k in r0.keys() if not is_event(k)]
-        output_types = [type(r0[k]) for k in output_keys]
+        output_keys = r0.keys()
+        output_columns = [c for c in output_keys if not is_event_column(c)]
+        output_types = [type(r0[c]) for c in output_columns]
         for i in xrange(likwid.metric_count()):
-            output_keys.append(stringify(likwid.metric_name(i)))
+            output_columns.append(likwid.normal_metric_name(i))
             output_types.append(float)
 
-    conn1 = sqlite3.connect(output_file)
+    conn1 = sqlite3.connect(output_db)
     conn1.execute("DROP TABLE IF EXISTS result")
-    type_pairs = zip(output_keys, output_types)
+    type_pairs = zip(output_columns, output_types)
     sql = ["\"{0}\" {1}".format(k, SQLITE_TYPE[v]) for k, v in type_pairs]
     sql = "CREATE TABLE result (%s)" % ", ".join(sql)
     conn1.execute(sql)
@@ -272,7 +307,7 @@ def calc_likwid_metric(group_file, data_file, output_file, aggregate="no",
         event_values = dict()
         result = []
         for k, v in zip(r0.keys(), r0):
-            if is_event(k):
+            if is_event_column(k):
                 counter_name = k.split(":")[-1]
                 event_values[counter_name] = v
             else:
@@ -305,17 +340,20 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("group_file",
-                        help="Likwid perfgroup definition")
-    parser.add_argument("data_file",
+    parser.add_argument("raw_db",
                         help="Database containing raw event values")
-    parser.add_argument("output_file",
+    parser.add_argument("output_db",
                         help="Database to store calculated metrics")
     parser.add_argument("--aggregate", default="thread",
                         choices=["no", "thread", "proc_thread"],
                         help="Data aggregation (default: thread)")
-    parser.add_argument("--raw-events", action="store_true",
-                        help="Output raw events instead of metrics")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--likwid-group", default=None,
+                       help="Likwid perfgroup name")
+    group.add_argument("--likwid-group-file", default=None,
+                       help="Likwid perfgroup file")
+    group.add_argument("--raw-events", action="store_true",
+                       help="Compute raw events instead of metrics")
 
     args = parser.parse_args()
     calc_likwid_metric(**vars(args))
