@@ -219,7 +219,8 @@ class YhrunRunner:
         argparser.add_argument("--batch", action="store_true",
                                help="Use yhbatch instead of yhrun")
         argparser.add_argument("--fix-glex", choices=("none", "v0", "v1"),
-                               default="none", help="Fix GLEX settings")
+                               default="none",
+                               help="Fix GLEX settings (default: none)")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):

@@ -289,7 +289,7 @@ def fold_tree(tree, keep_level=None, remove_calls=None, cascade=False):
         return fold_tree_recursive(tree)
 
 
-def print_tree(tree, max_level=None):
+def print_tree_plain(tree, max_level=None):
     def print_tree_recursive(tree, level, max_level):
         if max_level and level > max_level:
             return
@@ -297,6 +297,32 @@ def print_tree(tree, max_level=None):
         for c in tree.children:
             print_tree_recursive(c, level + 1, max_level)
     print_tree_recursive(tree, 1, max_level)
+
+
+def print_tree_salt(tree, max_level=None):
+    def print_tree_salt_recursive(tree, level, max_level):
+        if max_level and level > max_level:
+            return
+        print "+" * level, tree.id, tree.cycle
+        for c in tree.children:
+            print_tree_salt_recursive(c, level + 1, max_level)
+    print "@startsalt"
+    print "{"
+    print "{T"
+    print_tree_salt_recursive(tree, 1, max_level)
+    print "}"
+    print "}"
+    print "@endsalt"
+
+
+def print_tree_asciidoc(tree, max_level=None):
+    def print_tree_adoc_recursive(tree, level, max_level):
+        if max_level and level > max_level:
+            return
+        print "*" * level, tree.id, tree.cycle
+        for c in tree.children:
+            print_tree_adoc_recursive(c, level + 1, max_level)
+    print_tree_adoc_recursive(tree, 1, max_level)
 
 
 def main():
@@ -312,6 +338,9 @@ def main():
                         help="Max levels to keep when folding tree")
     parser.add_argument("--remove-calls", default=[], nargs="+",
                         help="Remove matched calls, supports shell wildcards")
+    parser.add_argument("--print-style", default="plain",
+                        choices=["plain", "asciidoc", "plantuml"],
+                        help="Tree print style (default: plain)")
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument("--fold", action="store_true", help="Fold tree")
     grp.add_argument("--cascade", action="store_true", help="Cascade tree")
@@ -328,7 +357,13 @@ def main():
     if args.save:
         data = TreeNode.serialize(tree)
         json.dump(data, file(args.save, "w"), indent=2)
-    print_tree(tree, args.max_depth)
+
+    if args.print_style == "plain":
+        print_tree_plain(tree, args.max_depth)
+    elif args.print_style == "asciidoc":
+        print_tree_asciidoc(tree, args.max_depth)
+    elif args.print_style == "plantuml":
+        print_tree_salt(tree, args.max_depth)
 
 
 if __name__ == "__main__":
