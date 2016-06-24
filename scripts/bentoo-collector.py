@@ -681,14 +681,15 @@ class LikwidParser(object):
     def register_cmd_args(argparser):
         argparser.add_argument("--likwid-group-file", default="auto",
                                help="Performance group file (default: auto)")
-        argparser.add_argument("--likwid-raw-result", action="store_true",
-                               help="Save raw event counts (default: false)")
+        argparser.add_argument("--likwid-raw-events", action="store_true",
+                               help="Store raw events instead of metrics "
+                               "(default: false)")
 
     @staticmethod
     def retrive_cmd_args(namespace):
         return {
             "group_file": namespace.likwid_group_file,
-            "raw_result": namespace.likwid_raw_result
+            "raw_events": namespace.likwid_raw_events
         }
 
     def __init__(self, use_table, args):
@@ -714,7 +715,7 @@ class LikwidParser(object):
         files = [file(path) for path in likwid_data]
 
         parser = LikwidOutputParser(likwid_group, self.args["group_file"],
-                                    self.args["raw_result"])
+                                    self.args["raw_events"])
         likwid_block = BlockReader("@start_likwid\n", "@end_likwid\n")
         # Count blocks to ease table_id generating
         nblocks = len(list(likwid_block.iterblocks(files[0])))
