@@ -516,181 +516,62 @@ class BlockReader(object):
         return block
 
 
-class EventsetParser(object):
-
-    def __init__(self):
-        self.events = []
-        self.counters = []
-
-    def process(self, iterable):
-        for line in iterable:
-            counter, event = line.split()
-            self.events.append(event)
-            self.counters.append(counter)
-
-
-class MetricsParser(object):
-
-    def __init__(self):
-        self.metrics = []
-
-    def process(self, iterable):
-        for line in iterable:
-            if re.findall(r"\[.*\]", line):
-                name, unit, formula = map(lambda x: x.strip(),
-                                          re.match(r"^(.*?)\[(.*?)\](.*)$",
-                                                   line).groups())
-                self.metrics.append((name, unit, formula))
-            else:
-                name, formula = map(lambda x: x.strip(),
-                                    re.match(r"^(.*?)(\S+)$", line).groups())
-                self.metrics.append((name, "1", formula))
-
-
-class LikwidMetrics(object):
-
-    def __init__(self, group_file):
-        with open(group_file) as groupfile:
-            eventset_reader = BlockReader("EVENTSET\n", "\n")
-            metrics_reader = BlockReader("METRICS\n", "\n")
-            ep = EventsetParser()
-            mp = MetricsParser()
-            ep.process(eventset_reader.findblock(groupfile))
-            mp.process(metrics_reader.findblock(groupfile))
-            self.eventset = {"events": ep.events, "counters": ep.counters,
-                             "pair": ["%s:%s" % x for x in zip(ep.events,
-                                                               ep.counters)]}
-            self.metrics = mp.metrics
-
-    def event_count(self):
-        return len(self.eventset["events"])
-
-    def event_name(self, event_id):
-        return self.eventset["events"][event_id]
-
-    def counter_name(self, event_id):
-        return self.eventset["counters"][event_id]
-
-    def event_counter_pair(self, event_id):
-        return self.eventset["pair"][event_id]
-
-    def metric_count(self):
-        return len(self.metrics)
-
-    def metric_name(self, metric_id):
-        return self.metrics[metric_id][0]
-
-    def metric_unit(self, metric_id):
-        return self.metrics[metric_id][1]
-
-    def calc_metric(self, metric_id, eventvals):
-        formula = str(self.metrics[metric_id][2])
-        for k, v in eventvals.iteritems():
-            formula = formula.replace(k, str(v))
-        try:
-            result = eval(formula)
-        except ZeroDivisionError:
-            result = 0.0
-        return result
-
-
-def locate_likwid_group_file(arch, group):
-    possible_places = os.environ["PATH"].split(":")
-    for p in possible_places:
-        if os.path.exists(os.path.join(p, "likwid-perfctr")):
-            likwid_home = os.path.dirname(os.path.abspath(p))
-            path = os.path.join(likwid_home, "share", "likwid", "perfgroups",
-                                arch, group + ".txt")
-            if not os.path.exists(path):
-                raise RuntimeError("Bad likwid installation: can not find "
-                                   "'%s' for '%s'" % (group, arch))
-            return path
-    raise RuntimeError("Can not find likwid.")
-
-
 def stringify(content):
     return re.sub(r"\W", "_", content)
 
 
-class LikwidOutputParser(object):
+class LikwidBlockParser(object):
 
-    def __init__(self, group, group_file, raw_result=False):
-        self.likwid = None
-        self.group = group
+    def __init__(self):
         self.column_names = []
         self.column_types = []
         self.data = []
-        self.group_file = group_file
-        self.raw_result = raw_result
+
+    def clear(self):
+        self.column_names = []
+        self.column_types = []
+        self.data = []
 
     def process(self, iterable):
+        self.clear()
         line1 = iterable.next()
         line2 = iterable.next()
         cpu_model = line1.split(":")[-1].strip()
         cpu_cycles = line2.split(":")[-1].strip()
-        if not self.likwid:
-            # OPTIMIZATION: init likwid metrics only once
-            group_filepath = self.group_file
-            if group_filepath == "auto" or not os.path.exists(group_filepath):
-                group_filepath = locate_likwid_group_file(cpu_model,
-                                                          self.group)
-            likwid = LikwidMetrics(group_filepath)
-            # OPTIMIZATION: calculate table structure only once
-            self.column_names.extend(["ThreadId", "TimerName", "RDTSC",
-                                      "CallCount"])
-            self.column_types.extend([str, int, float, int])
-            if self.raw_result:
-                for i in xrange(likwid.event_count()):
-                    self.column_names.append(likwid.event_counter_pair(i))
-                    self.column_types.append(float)
-            else:
-                for i in xrange(likwid.metric_count()):
-                    name = stringify(likwid.metric_name(i))
-                    self.column_names.append(name)
-                    self.column_types.append(float)
-            self.likwid = likwid
-        self.data = []
         other = [x for x in iterable]
         other = cStringIO.StringIO("".join(other[1:-1]))
-        for record in csv.DictReader(other):
-            tmp = {k.split(":")[-1]: v for k, v in record.iteritems()}
-            tmp["time"] = tmp["RDTSC"]
-            tmp["inverseClock"] = 1.0 / float(cpu_cycles)
-            result = [tmp["ThreadId"], tmp["RegionTag"], tmp["RDTSC"],
-                      tmp["CallCount"]]
-            if self.raw_result:
-                for i in xrange(self.likwid.event_count()):
-                    result.append(record[self.likwid.event_counter_pair(i)])
-            else:
-                for i in xrange(self.likwid.metric_count()):
-                    value = self.likwid.calc_metric(i, tmp)
-                    result.append(value)
+        likwid_data = csv.DictReader(other)
+        # NOTE: likwid output use RegionTag as TimerName, as well as a
+        # different order. We fix it here.
+        start_columns = "ThreadId,TimerName,RDTSC,CallCount".split(",")
+        self.column_names.extend(start_columns)
+        self.column_types.extend([int, str, float, int])
+        other_columns = list(likwid_data.fieldnames[4:])
+        self.column_names.extend(other_columns)
+        self.column_types.extend([float] * len(other_columns))
+        self.data = []
+        for record in likwid_data:
+            result = [record["ThreadId"], record["RegionTag"], record["RDTSC"],
+                      record["CallCount"]]
+            result.extend(record[f] for f in other_columns)
             self.data.append(result)
-        # Insert a special CPU_CYCLES record for raw result so derived metrics
-        # such as Runtime_unhalted can be calculated.
-        if self.raw_result:
-            cpu_cycles_data = [0, "CPU_CYCLES", cpu_cycles, 1]
-            for i in xrange(self.likwid.event_count()):
-                cpu_cycles_data.append(0)
-                self.data.append(cpu_cycles_data)
+        # Insert a special CPU_CYCLES record, so derived metrics such as
+        # Runtime_unhalted can be calculated. The record is special formatted
+        # so cpu_model can also be included.
+        cpu_cycles_data = [0, "CPU_CYCLES@%s" % cpu_model, cpu_cycles, 1]
+        cpu_cycles_data.extend(0 for f in other_columns)
+        self.data.append(cpu_cycles_data)
 
 
 class LikwidParser(object):
 
     @staticmethod
     def register_cmd_args(argparser):
-        argparser.add_argument("--likwid-group-file", default="auto",
-                               help="Performance group file (default: auto)")
-        argparser.add_argument("--likwid-raw-events", action="store_true",
-                               help="Store raw events instead of metrics "
-                               "(default: false)")
+        pass
 
     @staticmethod
     def retrive_cmd_args(namespace):
-        return {
-            "group_file": namespace.likwid_group_file,
-            "raw_events": namespace.likwid_raw_events
-        }
+        return {}
 
     def __init__(self, use_table, args):
         self.args = args
@@ -709,18 +590,18 @@ class LikwidParser(object):
         likwid_data = glob.glob(os.path.join(result_dir,
                                              "likwid_counters.*.dat"))
         if not likwid_data:
-            print("WARNING: No likwid data file found in '%s'" % fn)
+            print("WARNING: No likwid data file found in '%s'" % result_dir)
             return
 
         files = [file(path) for path in likwid_data]
 
-        parser = LikwidOutputParser(likwid_group, self.args["group_file"],
-                                    self.args["raw_events"])
+        parser = LikwidBlockParser()
         likwid_block = BlockReader("@start_likwid\n", "@end_likwid\n")
         # Count blocks to ease table_id generating
         nblocks = len(list(likwid_block.iterblocks(files[0])))
         if nblocks == 0:
-            print("WARNING: No likwid data table found in '%s'" % fn)
+            print("WARNING: No likwid data table found in '%s'"
+                  % likwid_data[0])
             return
         # Reset files[0] as iterblocks have already arrive eof.
         files[0] = file(likwid_data[0])
@@ -736,7 +617,7 @@ class LikwidParser(object):
                 assert(block)
                 parser.process(iter(block))
                 for d in parser.data:
-                    data.append([d[0], proc_id] + d[1:])
+                    data.append([proc_id] + d)
             cn = ["ProcId"] + parser.column_names
             ct = [int] + parser.column_types
             yield {
