@@ -227,7 +227,7 @@ def parse_jasminlog(fn, use_table=None):
         header_ptn = re.compile(r"(Timer Name|Proc: \d+|Summed|Proc|Max)")
         header = map(tokenlize, header_ptn.findall(log_table["header"]))
         assert(header[0] == "timer_name")
-        header[0] == "TimerName"
+        header[0] = "TimerName"
         # Parse table rows
         table_contents = []
         for ln in log_table["content"].strip().split("\n"):
