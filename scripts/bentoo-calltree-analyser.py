@@ -104,7 +104,8 @@ def build_abs_seq_map(calltree):
     return (result, level)
 
 
-def compute_percentage(ref_db, calltree_file, out_db, columns=None):
+def compute_percentage(ref_db, calltree_file, out_db,
+                       columns=None, append=None):
     conn0 = sqlite3.connect(ref_db)
 
     ref_columns = extract_column_names(conn0)
@@ -113,6 +114,8 @@ def compute_percentage(ref_db, calltree_file, out_db, columns=None):
         for x in columns:
             assert(x in data_columns)
         data_columns = list(columns)
+    if append:
+        data_columns.extend(append)
     timer_column = find_first_of(ref_columns, ["TimerName", "Name"])[0]
     if not timer_column:
         raise ValueError("Can not find timer column")
@@ -179,6 +182,8 @@ def main():
                         help="Database to store output")
     parser.add_argument("-c", "--columns", nargs="+", default=[],
                         help="Compute only these columns")
+    parser.add_argument("-a", "--append", nargs="+", default=[],
+                        help="Append these columns (no compute)")
 
     args = parser.parse_args()
     compute_percentage(**vars(args))
