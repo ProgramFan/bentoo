@@ -93,14 +93,12 @@ def build_parent_map(calltree):
 def build_abs_seq_map(calltree):
     result = {}
     level = {}
-    seq = -1
 
-    def visit_tree(tree, curr_level=0):
-        seq += 1
-        result[x["id"]] = seq
-        level[x["id"]] = curr_level
+    def visit_tree(tree, curr_seq=0, curr_level=0):
+        result[tree["id"]] = curr_seq
+        level[tree["id"]] = curr_level
         for i, x in enumerate(tree["children"]):
-            visit_tree(x, curr_level)
+            visit_tree(x, curr_seq+i+1, curr_level+1)
 
     visit_tree(calltree)
     return (result, level)
@@ -153,6 +151,7 @@ def compute_percentage(ref_db, calltree_file, out_db, columns=None):
             result[rel_c] = result[c] / result[rel_c]
         result["abs_seq"] = [abs_seq[x] for x in result[timer_column]]
         result["level"] = [level[x] for x in result[timer_column]]
+        result["parent"] = [parents[x] for x in result[timer_column]]
         return result
 
     final = []
