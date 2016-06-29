@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import sys
+import string
 
 from collections import OrderedDict
 
@@ -123,6 +124,91 @@ class CartProductVectorGenerator:
         factor_values = [self.factor_values[k] for k in self.test_factors]
         for v in itertools.product(*factor_values):
             yield OrderedDict(zip(self.test_factors, v))
+
+
+def replace_template(template, varvalues):
+    return string.Template(str(template)).safe_substitute(varvalues)
+
+
+def safe_eval(expr):
+    try:
+        result = eval(str(expr))
+    except ZeroDivisionError:
+        result = 0
+    except NameError:
+        result = str(expr)
+    return result
+
+
+class TemplateCaseGenerator(object):
+    def __init__(self, template):
+        assert("case_spec" in template)
+        self.template = template.copy()
+        if "case_files" not in self.template:
+            self.template["case_files"] = OrderedDict()
+        assert(isinstance(self.template["case_files"], OrderedDict))
+
+    def make_case(self, conf_root, output_root, case_path, test_vector):
+        '''Generate a test case according to the specified test vector'''
+        # copy case files: each file is defiend as (src, dst), where src is
+        # relative to conf_root and dst is relative to case_path.
+        for src, dst in self.template["copy_files"].iteritems():
+            srcpath = replace_template(src, test_vector)
+            dstpath = replace_template(dst, test_vector)
+            assert(not os.path.isabs(srcpath))
+            assert(not os.path.isabs(dstpath))
+            srcpath = os.path.join(conf_root, srcpath)
+            dstpath = os.path.join(case_path, dstpath)
+            if os.path.exists(dstpath):
+                if os.path.isdir(dstpath):
+                    shutil.rmtree(dstpath)
+                else:
+                    os.remove(dstpath)
+            if not os.path.exists(srcpath):
+                raise ValueError("Case file '%s' not found" % srcpath)
+            if os.path.isdir(srcpath):
+                shutil.copytree(srcpath, dstpath)
+            else:
+                shutil.copyfile(srcpath, dstpath)
+
+        # generate case spec
+        temp_vars = {k: str(v) for k, v in test_vector.iteritems()}
+        spec_template = self.template["case_spec"]
+        cmd_template = spec_template["cmd"]
+        cmd = [replace_template(x, temp_vars) for x in cmd_template]
+        # support output_root in command binary
+        binfile = replace_template(cmd[0], {"output_root": output_root})
+        if os.path.isabs(binfile):
+            binfile = os.path.relpath(binfile, case_path)
+        if not os.path.exists(os.path.join(case_path, binfile)):
+            raise ValueError("Command binary '%s' does not exists" % cmd[0])
+        cmd[0] = binfile
+
+        run_template = spec_template["run"]
+        run = OrderedDict()
+        for k in ["nnodes", "procs_per_node", "tasks_per_proc", "nprocs"]:
+            v = replace_template(run_template[k], test_vector)
+            v = safe_eval(v)
+            run[k] = v
+        rlt_template = spec_template["results"]
+        results = [replace_template(x, test_vector) for x in rlt_template]
+        envs_template = spec_template["envs"]
+        envs = OrderedDict()
+        for k, v in envs_template.iteritems():
+            v = replace_template(v, test_vector)
+            v = safe_eval(v)
+            envs[k] = v
+        case_spec = OrderedDict(zip(["cmd", "envs", "run", "results"],
+                                    [cmd, envs, run, results]))
+
+        # create empty output file, so when output file is used for special
+        # signal, it's ready and will not be ignored.
+        for f in case_spec["results"]:
+            filepath = os.path.join(case_path, f)
+            if not os.path.exists(filepath):
+                file(filepath, "w").write("")
+
+        return case_spec
 
 
 class CustomCaseGenerator:
@@ -256,6 +342,9 @@ class TestProjectBuilder:
             func = info["func"]
             args = info.get("args", {})
             self.test_case_generator = CustomCaseGenerator(module, func, args)
+        elif test_case_generator_name == "template":
+            template = spec["template_case_generator"]
+            self.test_case_generator = TemplateCaseGenerator(template)
         else:
             raise RuntimeError(
                 "Unknown test case generator '%s'" %
@@ -270,44 +359,6 @@ class TestProjectBuilder:
             output_root = os.path.abspath(output_root)
         if not os.path.exists(output_root):
             os.makedirs(output_root)
-
-        # Generate test cases and write test case config
-        for case in self.test_vector_generator.iteritems():
-            case_path = self.output_organizer.get_case_path(case)
-            case_fullpath = os.path.join(output_root, case_path)
-            if not os.path.exists(case_fullpath):
-                os.makedirs(case_fullpath)
-
-            # copy common case files to case path, only ordinary file is, each
-            # file is copied to the case path, without reconstructing the dir.
-            for path in self.common_case_files:
-                srcpath = path
-                if not os.path.isabs(path):
-                    srcpath = os.path.join(self.conf_root, path)
-                if not os.path.isfile(srcpath):
-                    raise ValueError(
-                        "Common case file '%s' is not a file." % path)
-                if not os.path.exists(srcpath):
-                    raise ValueError("Common case file '%s' not found" % path)
-                dstpath = os.path.join(case_fullpath, os.path.basename(path))
-                if os.path.exists(dstpath):
-                    os.remove(dstpath)
-                shutil.copyfile(srcpath, dstpath)
-
-            cwd = os.path.abspath(os.getcwd())
-            os.chdir(case_fullpath)
-            try:
-                case_spec = self.test_case_generator.make_case(
-                    self.conf_root,
-                    output_root,
-                    case_fullpath,
-                    case)
-            finally:
-                os.chdir(cwd)
-
-            case_spec_path = self.output_organizer.get_case_spec_path(case)
-            case_spec_fullpath = os.path.join(output_root, case_spec_path)
-            json.dump(case_spec, file(case_spec_fullpath, "w"), indent=2)
 
         # Handle data files: leave absolute path as-is, copy or link relative
         # path to the output directory
@@ -352,6 +403,44 @@ class TestProjectBuilder:
                     shutil.copystat(srcpath, dstpath)
             else:
                 raise RuntimeError("File type not supported: '%s'" % path)
+
+        # Generate test cases and write test case config
+        for case in self.test_vector_generator.iteritems():
+            case_path = self.output_organizer.get_case_path(case)
+            case_fullpath = os.path.join(output_root, case_path)
+            if not os.path.exists(case_fullpath):
+                os.makedirs(case_fullpath)
+
+            # copy common case files to case path, only ordinary file is, each
+            # file is copied to the case path, without reconstructing the dir.
+            for path in self.common_case_files:
+                srcpath = path
+                if not os.path.isabs(path):
+                    srcpath = os.path.join(self.conf_root, path)
+                if not os.path.isfile(srcpath):
+                    raise ValueError(
+                        "Common case file '%s' is not a file." % path)
+                if not os.path.exists(srcpath):
+                    raise ValueError("Common case file '%s' not found" % path)
+                dstpath = os.path.join(case_fullpath, os.path.basename(path))
+                if os.path.exists(dstpath):
+                    os.remove(dstpath)
+                shutil.copyfile(srcpath, dstpath)
+
+            cwd = os.path.abspath(os.getcwd())
+            os.chdir(case_fullpath)
+            try:
+                case_spec = self.test_case_generator.make_case(
+                    self.conf_root,
+                    output_root,
+                    case_fullpath,
+                    case)
+            finally:
+                os.chdir(cwd)
+
+            case_spec_path = self.output_organizer.get_case_spec_path(case)
+            case_spec_fullpath = os.path.join(output_root, case_spec_path)
+            json.dump(case_spec, file(case_spec_fullpath, "w"), indent=2)
 
         # Write project config
         info = [("version", 1), ("name", self.name),
