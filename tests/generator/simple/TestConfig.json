@@ -1,8 +1,0 @@
-{
-    "project": {
-        "name": "simple project",
-        "dimensions": ["nnodes", "threads_per_node"],
-        "comment": "A demo of simple project"
-    },
-    "sub_directories": ["1", "2", "4", "8"]
-}

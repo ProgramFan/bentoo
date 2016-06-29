@@ -1,0 +1,41 @@
+{
+    "version": 1,
+    "project": {
+        "name": "test project",
+        "test_factors": ["nnodes", "mode", "eventset", "test_id"],
+        "test_vector_generator": "cart_product",
+        "test_case_generator": "template",
+        "data_files": ["bin", "database"]
+    },
+    "cart_product_vector_generator": {
+        "test_factor_values": {
+            "nnodes": [1, 2],
+            "mode": ["mpi", "omp"],
+            "eventset": ["MEM", "FLOP_SP", "L3"],
+            "test_id": [0]
+        }
+    },
+    "template_case_generator": {
+        "copy_files": {
+            "input/$nnodes/test.input": "test.input",
+            "input/$nnodes/data_dir": "data_dir"
+        },
+        "case_spec": {
+            "cmd": ["${output_root}/bin/main2d", "test.input"],
+            "envs": {
+                "JASMIN_NUM_DSM_THREADS": "1 if \"$mode\" == \"mpi\" else 2",
+                "JASMIN_NUM_SMP_THREADS": "1 if \"$mode\" == \"mpi\" else 12",
+                "LIKWID_ENABLE": 1,
+                "LIKWID_OVERHEAD_PERCENTAGE": 1000,
+                "LIKWID_EVENTS": "$eventset"
+            },
+            "run": {
+                "nnodes": "$nnodes",
+                "procs_per_node": "24 if \"$mode\" == \"mpi\" else 1",
+                "tasks_per_proc": "1 if \"$mode\" == \"mpi\" else 24",
+                "nprocs": "$nnodes * (1 if \"mode\" == \"mpi\" else 24)"
+            },
+            "results": ["LIKWID_$eventset", "test.log"]
+        }
+    }
+}
