@@ -144,9 +144,11 @@ class TemplateCaseGenerator(object):
     def __init__(self, template):
         assert("case_spec" in template)
         self.template = template.copy()
-        if "case_files" not in self.template:
-            self.template["case_files"] = OrderedDict()
-        assert(isinstance(self.template["case_files"], OrderedDict))
+        if "copy_files" not in self.template:
+            self.template["copy_files"] = OrderedDict()
+        assert(isinstance(self.template["copy_files"], OrderedDict))
+        if "inst_files" not in self.template:
+            self.template["inst_files"] = OrderedDict()
 
     def make_case(self, conf_root, output_root, case_path, test_vector):
         '''Generate a test case according to the specified test vector'''
@@ -171,11 +173,36 @@ class TemplateCaseGenerator(object):
             else:
                 shutil.copyfile(srcpath, dstpath)
 
+        # instantiate template files based on template substitution
+        inst_files = self.template["inst_files"]
+        if inst_files:
+            var_values = {}
+            for k, v in inst_files["variables"].iteritems():
+                v = replace_template(v, test_vector)
+                v = safe_eval(v)
+                var_values[k] = v
+            for src, dst in inst_files["templates"].iteritems():
+                srcpath = replace_template(src, test_vector)
+                dstpath = replace_template(dst, test_vector)
+                assert(not os.path.isabs(srcpath))
+                assert(not os.path.isabs(dstpath))
+                srcpath = os.path.join(conf_root, srcpath)
+                dstpath = os.path.join(case_path, dstpath)
+                if not os.path.exists(srcpath):
+                    raise ValueError("Template '%s' does not exist" % srcpath)
+                if not os.path.isfile(srcpath):
+                    raise ValueError("Template '%s' is not a file" % srcpath)
+                if os.path.exists(dstpath):
+                    os.remove(dstpath)
+                if not os.path.exists(os.path.dirname(dstpath)):
+                    os.makedirs(os.path.dirname(dstpath))
+                content = replace_template(file(srcpath).read(), var_values)
+                file(dstpath, "w").write(content)
+
         # generate case spec
-        temp_vars = {k: str(v) for k, v in test_vector.iteritems()}
         spec_template = self.template["case_spec"]
         cmd_template = spec_template["cmd"]
-        cmd = [replace_template(x, temp_vars) for x in cmd_template]
+        cmd = [replace_template(x, test_vector) for x in cmd_template]
         # support output_root in command binary
         binfile = replace_template(cmd[0], {"output_root": output_root})
         if os.path.isabs(binfile):

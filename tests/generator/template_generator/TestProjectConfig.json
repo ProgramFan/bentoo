@@ -17,8 +17,15 @@
     },
     "template_case_generator": {
         "copy_files": {
-            "input/$nnodes/test.input": "test.input",
             "input/$nnodes/data_dir": "data_dir"
+        },
+        "inst_files": {
+            "templates": {
+                "input/test.input.tpl": "test.input"
+            },
+            "variables": {
+                "cx": "$nnodes % 2"    
+            }
         },
         "case_spec": {
             "cmd": ["${output_root}/bin/main2d", "test.input"],
