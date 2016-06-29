@@ -224,6 +224,8 @@ class TestProjectBuilder:
         self.test_factors = project_info["test_factors"]
         data_files = project_info.get("data_files", [])
         self.data_files = data_files
+        common_case_files = project_info.get("common_case_files", [])
+        self.common_case_files = common_case_files
 
         # Build test vector generator
         test_vector_generator_name = project_info["test_vector_generator"]
@@ -275,6 +277,23 @@ class TestProjectBuilder:
             case_fullpath = os.path.join(output_root, case_path)
             if not os.path.exists(case_fullpath):
                 os.makedirs(case_fullpath)
+
+            # copy common case files to case path, only ordinary file is, each
+            # file is copied to the case path, without reconstructing the dir.
+            for path in self.common_case_files:
+                srcpath = path
+                if not os.path.isabs(path):
+                    srcpath = os.path.join(self.conf_root, path)
+                if not os.path.isfile(srcpath):
+                    raise ValueError(
+                        "Common case file '%s' is not a file." % path)
+                if not os.path.exists(srcpath):
+                    raise ValueError("Common case file '%s' not found" % path)
+                dstpath = os.path.join(case_fullpath, os.path.basename(path))
+                if os.path.exists(dstpath):
+                    os.remove(dstpath)
+                shutil.copyfile(srcpath, dstpath)
+
             cwd = os.path.abspath(os.getcwd())
             os.chdir(case_fullpath)
             try:
@@ -285,6 +304,7 @@ class TestProjectBuilder:
                     case)
             finally:
                 os.chdir(cwd)
+
             case_spec_path = self.output_organizer.get_case_spec_path(case)
             case_spec_fullpath = os.path.join(output_root, case_spec_path)
             json.dump(case_spec, file(case_spec_fullpath, "w"), indent=2)
