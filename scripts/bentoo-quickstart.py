@@ -135,6 +135,29 @@ def make_config(project_dir, project_desc, binary_name, test_factors,
         "args": {
         }
     }'''
+    elif case_gen == "template":
+        case_generator_config = r'''"template_case_generator": {
+        "copy_files": {
+        },
+        "inst_files": {
+            "templates": {
+            },
+            "variables": {
+            }
+        },
+        "case_spec": {
+            "cmd": [CMD, ARGS, ...],
+            "envs": {
+            },
+            "run": {
+                "nnodes": NNODES,
+                "procs_per_node": PROCS_PER_NODE,
+                "tasks_per_proc": TASKS_PER_PROC,
+                "nprocs": NPROCS
+            },
+            "results": [RESULTS]
+        }
+    }'''
     else:
         raise NotImplementedError()
     tpl = string.Template(TEST_PROJECT_CONFIG_JSON_TPL)
@@ -212,9 +235,11 @@ def main():
     vector_gen = get_choice("Test vector generator", [
         "Generate by Cartetian product of test factor values (cart_product)",
         "List all cases (simple)"], default=0)
-    all_case_gen = ["custom"]
+    all_case_gen = ["custom", "template"]
     case_gen = get_choice("Test case generator", [
-                          "Custom generator (using python)"], default=0)
+                          "Custom generator (using python)",
+                          "Tempalte generator (evaluable templates)"],
+                          default=0)
     vector_gen = all_vector_gen[vector_gen]
     case_gen = all_case_gen[case_gen]
     project_dir = get_input("Write project to directory")
