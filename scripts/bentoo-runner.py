@@ -16,6 +16,7 @@ import json
 import string
 import subprocess
 import pprint
+import time
 from collections import OrderedDict
 
 
@@ -475,7 +476,7 @@ class SimpleProgressReporter:
 
 def run_project(project, runner, reporter, timeout=None, make_script=True,
                 dryrun=False, verbose=False, exclude=[], include=[],
-                skip_finished=False):
+                skip_finished=False, sleep=0):
     stats = OrderedDict(zip(["success", "timeout", "failed", "skipped"],
                             [[], [], [], []]))
     if skip_finished and project.last_stats:
@@ -504,6 +505,8 @@ def run_project(project, runner, reporter, timeout=None, make_script=True,
                             make_script=make_script, dryrun=dryrun)
         reporter.case_end(project, case, result)
         stats[result].append(case_id)
+        if sleep:
+            time.sleep(sleep)
     reporter.project_end(project, stats)
 
     if not dryrun:
@@ -532,6 +535,8 @@ def main():
                     default="auto", help="Runner to choose (default: auto)")
     ag.add_argument("-t", "--timeout", default=None,
                     help="Timeout for each case, in minites")
+    ag.add_argument("--sleep", type=int, default=0,
+                    help="Sleep specified seconds between jobs")
     ag.add_argument("--make-script", action="store_true",
                     help="Generate job script for each case")
     ag.add_argument("--dryrun", action="store_true",
@@ -573,7 +578,8 @@ def main():
     run_project(proj, runner, SimpleProgressReporter(), timeout=config.timeout,
                 make_script=config.make_script, dryrun=config.dryrun,
                 verbose=config.verbose, exclude=config.exclude,
-                include=config.include, skip_finished=config.skip_finished)
+                include=config.include, skip_finished=config.skip_finished,
+                sleep=config.sleep)
 
 
 if __name__ == "__main__":
