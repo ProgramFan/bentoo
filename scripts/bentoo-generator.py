@@ -135,7 +135,7 @@ def safe_eval(expr):
         result = eval(str(expr))
     except ZeroDivisionError:
         result = 0
-    except NameError:
+    except Exception:
         result = str(expr)
     return result
 
