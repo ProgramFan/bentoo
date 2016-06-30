@@ -1,0 +1,143 @@
+{
+  "id": "TOTAL_RUN_TIME", 
+  "cycle": 1, 
+  "children": [
+    {
+      "id": "algs::SimpleHierarchyTimeIntegrator::advanceHierarchy()", 
+      "cycle": 1, 
+      "children": [
+        {
+          "id": "algs::SimpleHierarchyTimeIntegrator::std_advance_level", 
+          "cycle": 1, 
+          "children": [
+            {
+              "id": "jsnts::memalloc::total", 
+              "cycle": 1, 
+              "children": []
+            }, 
+            {
+              "id": "jsnts::outiter::total", 
+              "cycle": 1, 
+              "children": [
+                {
+                  "id": "jsnts::outiter::sorsum", 
+                  "cycle": 1, 
+                  "children": []
+                }, 
+                {
+                  "id": "jsnts::outiter::fscon", 
+                  "cycle": 1, 
+                  "children": []
+                }, 
+                {
+                  "id": "jsnts::outiter::mgiter", 
+                  "cycle": 1, 
+                  "children": [
+                    {
+                      "id": "jsnts::mgiter::sinm", 
+                      "cycle": 1, 
+                      "children": []
+                    }, 
+                    {
+                      "id": "jsnts::mgiter::inneriter", 
+                      "cycle": 1, 
+                      "children": [
+                        {
+                          "id": "jsnts::inneriter::totalsor", 
+                          "cycle": 1, 
+                          "children": []
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::m2d", 
+                          "cycle": 1, 
+                          "children": []
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::negsorfix", 
+                          "cycle": 1, 
+                          "children": []
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::sweep", 
+                          "cycle": 1, 
+                          "children": []
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::savepc", 
+                          "cycle": 1, 
+                          "children": []
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::d2m", 
+                          "cycle": 1, 
+                          "children": []
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::fluxconv", 
+                          "cycle": 1, 
+                          "children": []
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::acc", 
+                          "cycle": 1, 
+                          "children": [
+                            {
+                              "id": "jsnts::inneracc::pcrsetup", 
+                              "cycle": 1, 
+                              "children": [
+                                {
+                                  "id": "jsnts::pcrsetup::linearassmble", 
+                                  "cycle": 1, 
+                                  "children": []
+                                }, 
+                                {
+                                  "id": "jsnts::pcrsetup::linearsolve", 
+                                  "cycle": 1, 
+                                  "children": []
+                                }, 
+                                {
+                                  "id": "jsnts::pcrsetup::flxscc", 
+                                  "cycle": 1, 
+                                  "children": []
+                                }
+                              ]
+                            }, 
+                            {
+                              "id": "jsnts::inneracc::pcrapply", 
+                              "cycle": 1, 
+                              "children": []
+                            }
+                          ]
+                        }, 
+                        {
+                          "id": "jsnts::inneriter::keypos", 
+                          "cycle": 1, 
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                }, 
+                {
+                  "id": "jsnts::outiter::sorsum", 
+                  "cycle": 1, 
+                  "children": []
+                }, 
+                {
+                  "id": "jsnts::outiter::fscon", 
+                  "cycle": 1, 
+                  "children": []
+                }
+              ]
+            }, 
+            {
+              "id": "jsnts::output::total", 
+              "cycle": 1, 
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
