@@ -281,7 +281,16 @@ class JasminParser(object):
         self.use_table = use_table
 
     def itertables(self, fn):
-        return parse_jasminlog(fn, self.use_table)
+        tables = [t for t in parse_jasminlog(fn)]
+        if not tables:
+            yield
+            return
+        if self.use_table:
+            for i in self.use_table:
+                yield tables[i]
+        else:
+            for t in tables:
+                yield t
 
 
 def parse_jasmin4log(fn, use_table=None):
@@ -411,7 +420,16 @@ class Jasmin4Parser(object):
         self.use_table = use_table
 
     def itertables(self, fn):
-        return parse_jasmin4log(fn, self.use_table)
+        tables = [t for t in parse_jasmin4log(fn)]
+        if not tables:
+            yield
+            return
+        if self.use_table:
+            for i in self.use_table:
+                yield tables[i]
+        else:
+            for t in tables:
+                yield t
 
 
 class UnifiedJasminParser(object):
@@ -457,7 +475,16 @@ class UnifiedJasminParser(object):
 
     def itertables(self, fn):
         filetype = self.filetype_detector(fn)
-        return self.parser_funcs[filetype](fn, self.use_table)
+        tables = [t for t in self.parser_funcs[filetype](fn)]
+        if not tables:
+            yield
+            return
+        if self.use_table:
+            for i in self.use_table:
+                yield tables[i]
+        else:
+            for t in tables:
+                yield t
 
 
 #
@@ -625,6 +652,9 @@ class LikwidParser(object):
                 "data": data
             })
 
+        if not all_tables:
+            yield
+            return
         if self.use_table:
             for i in self.use_table:
                 yield all_tables[i]
