@@ -154,6 +154,63 @@ class TreeNode(object):
         return self <= x
 
 
+def revert_unrolled_loop(callseq):
+    if len(callseq) <= 1:
+        return (callseq, False)
+    callseqlen = len(callseq)
+    for subseqlen in xrange(1, callseqlen / 2 + 1):
+        # skip bad subsequence length
+        if callseqlen % subseqlen != 0:
+            continue
+        nsubseqs = callseqlen / subseqlen
+        assert(nsubseqs > 1)
+        is_an_unroll = True
+        for subseqid in xrange(1, nsubseqs):
+            cs = subseqid * subseqlen
+            ce = cs + subseqlen
+            ps = cs - subseqlen
+            if callseq[ps:cs] != callseq[cs:ce]:
+                is_an_unroll = False
+                break
+        if is_an_unroll:
+            return (list(callseq[:subseqlen]), True)
+    return (callseq, False)
+
+
+def prune_unrolled_loop(callseq):
+    if len(callseq) <= 1:
+        return (callseq, False)
+    found_unrolled_loop = False
+    do_unroll = True
+    while do_unroll:
+        callseqlen = len(callseq)
+        found_unrolled_loop_this = False
+        for start in xrange(callseqlen):
+            for end in xrange(callseqlen, start + 1, -1):
+                result, success = revert_unrolled_loop(callseq[start:end])
+                if success:
+                    found_unrolled_loop = True
+                    found_unrolled_loop_this = True
+                    callseq = callseq[:start] + result + callseq[end:]
+                    break
+            if found_unrolled_loop_this:
+                break
+        if not found_unrolled_loop_this:
+            do_unroll = False
+    return (callseq, found_unrolled_loop)
+
+
+def prune_unrolled_loops(tree):
+    if not tree:
+        return None
+    children = [prune_unrolled_loops(c) for c in tree.children]
+    new_children, _ = prune_unrolled_loop(children)
+    node = TreeNode(tree.id, tree.cycle)
+    for c in new_children:
+        node.append_child(c)
+    return node
+
+
 def merge_repeative_calls(calls):
     if not calls:
         return None
@@ -190,7 +247,8 @@ def merge_repeative_calls(calls):
     return node
 
 
-def fold_tree(tree, keep_level=None, remove_calls=None, cascade=False):
+def fold_tree(tree, keep_level=None, remove_calls=None, cascade=False,
+              prune_loops=True):
 
     def fold_tree_recursive(tree):
         if not tree:
@@ -283,6 +341,8 @@ def fold_tree(tree, keep_level=None, remove_calls=None, cascade=False):
         tree = remove_node_recursive(tree, remove_calls)
     if keep_level:
         tree = cut_tree_recursive(tree, 0, keep_level)
+    if prune_loops:
+        tree = prune_unrolled_loops(tree)
     if cascade:
         return merge_repeative_calls([tree])
     else:
@@ -334,10 +394,14 @@ def main():
     parser.add_argument("--save", help="Output filename", default=None)
     parser.add_argument("--max-depth", default=None, type=int,
                         help="Max depth for output tree")
+    parser.add_argument("--use-tree", default=0, type=int,
+                        help="Id of tree to use (default: 0)")
     parser.add_argument("--keep-level", default=None, type=int,
                         help="Max levels to keep when folding tree")
     parser.add_argument("--remove-calls", default=[], nargs="+",
                         help="Remove matched calls, supports shell wildcards")
+    parser.add_argument("--prune-unrolled-loops", action="store_true",
+                        help="Fold unrolled loops into one block")
     parser.add_argument("--print-style", default="plain",
                         choices=["plain", "asciidoc", "plantuml"],
                         help="Tree print style (default: plain)")
@@ -350,10 +414,11 @@ def main():
     data = json.load(file(args.call_tree), object_hook=OrderedDict)
     tree = TreeNode.deserialize(data)
     if tree.id == "ROOT":
-        tree = tree.children[0]
+        tree = tree.children[args.use_tree]
     if args.fold or args.cascade:
         tree = fold_tree(tree, args.keep_level,
-                         args.remove_calls, args.cascade)
+                         args.remove_calls, args.cascade,
+                         args.prune_unrolled_loops)
     if args.save:
         data = TreeNode.serialize(tree)
         json.dump(data, file(args.save, "w"), indent=2)
