@@ -606,10 +606,8 @@ class LikwidParser(object):
         # Reset files[0] as iterblocks have already arrive eof.
         files[0] = file(likwid_data[0])
 
+        all_tables = []
         for table_id in xrange(nblocks):
-            # skip unwanted table
-            if self.use_table and table_id not in self.use_table:
-                continue
             data = []
             for i, f in enumerate(files):
                 proc_id = int(os.path.basename(likwid_data[i]).split(".")[1])
@@ -620,12 +618,19 @@ class LikwidParser(object):
                     data.append([proc_id] + d)
             cn = ["ProcId"] + parser.column_names
             ct = [int] + parser.column_types
-            yield {
+            all_tables.append({
                 "table_id": table_id,
                 "column_names": cn,
                 "column_types": ct,
                 "data": data
-            }
+            })
+
+        if self.use_table:
+            for i in self.use_table:
+                yield all_tables[i]
+        else:
+            for t in all_tables:
+                yield t
 
 
 class ParserFactory(object):
