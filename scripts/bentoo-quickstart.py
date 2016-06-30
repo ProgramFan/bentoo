@@ -139,7 +139,9 @@ def make_config(project_dir, project_desc, binary_name, test_factors,
         case_generator_config = r'''"template_case_generator": {
         "copy_files": {
         },
-        "inst_files": {
+        "link_files": {
+        },
+        "inst_templates": {
             "templates": {
             },
             "variables": {

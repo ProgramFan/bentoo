@@ -147,8 +147,10 @@ class TemplateCaseGenerator(object):
         if "copy_files" not in self.template:
             self.template["copy_files"] = OrderedDict()
         assert(isinstance(self.template["copy_files"], OrderedDict))
-        if "inst_files" not in self.template:
-            self.template["inst_files"] = OrderedDict()
+        if "link_files" not in self.template:
+            self.template["link_files"] = OrderedDict()
+        if "inst_templates" not in self.template:
+            self.template["inst_templates"] = OrderedDict()
 
     def make_case(self, conf_root, output_root, case_path, test_vector):
         '''Generate a test case according to the specified test vector'''
@@ -173,15 +175,38 @@ class TemplateCaseGenerator(object):
             else:
                 shutil.copyfile(srcpath, dstpath)
 
+        # link case files: each file is defiend as (src, dst), where src is
+        # relative to output_root and dst is relative to case_path.
+        for src, dst in self.template["link_files"].iteritems():
+            srcpath = replace_template(src, test_vector)
+            dstpath = replace_template(dst, test_vector)
+            assert(not os.path.isabs(srcpath))
+            assert(not os.path.isabs(dstpath))
+            srcpath = os.path.join(output_root, srcpath)
+            dstpath = os.path.join(case_path, dstpath)
+            if os.path.exists(dstpath):
+                if os.path.isdir(dstpath):
+                    shutil.rmtree(dstpath)
+                else:
+                    os.remove(dstpath)
+            if not os.path.exists(srcpath):
+                raise ValueError("Case file '%s' not found" % srcpath)
+            srcpath = os.path.relpath(srcpath, case_path)
+            if not os.path.exists(os.path.dirname(dstpath)):
+                os.makedirs(os.path.dirname(dstpath))
+            if os.path.exists(dstpath):
+                os.remove(dstpath)
+            os.symlink(srcpath, dstpath)
+
         # instantiate template files based on template substitution
-        inst_files = self.template["inst_files"]
-        if inst_files:
+        inst_tpls = self.template["inst_templates"]
+        if inst_tpls:
             var_values = {}
-            for k, v in inst_files["variables"].iteritems():
+            for k, v in inst_tpls["variables"].iteritems():
                 v = replace_template(v, test_vector)
                 v = safe_eval(v)
                 var_values[k] = v
-            for src, dst in inst_files["templates"].iteritems():
+            for src, dst in inst_tpls["templates"].iteritems():
                 srcpath = replace_template(src, test_vector)
                 dstpath = replace_template(dst, test_vector)
                 assert(not os.path.isabs(srcpath))
