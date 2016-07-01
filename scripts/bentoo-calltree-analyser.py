@@ -93,19 +93,21 @@ def build_parent_map(calltree):
 def build_abs_seq_map(calltree):
     result = {}
     level = {}
+    seq_obj = {"seq": 0}
 
-    def visit_tree(tree, curr_seq=0, curr_level=0):
-        result[tree["id"]] = curr_seq
+    def visit_tree(tree, curr_level=0):
         level[tree["id"]] = curr_level
+        result[tree["id"]] = seq_obj["seq"]
+        seq_obj["seq"] += 1
         for i, x in enumerate(tree["children"]):
-            visit_tree(x, curr_seq+i+1, curr_level+1)
+            visit_tree(x, curr_level+1)
 
     visit_tree(calltree)
     return (result, level)
 
 
 def compute_percentage(ref_db, calltree_file, out_db,
-                       columns=None, append=None):
+                       columns=None, append=None, treelize_timer_name=False):
     conn0 = sqlite3.connect(ref_db)
 
     ref_columns = extract_column_names(conn0)
@@ -153,9 +155,16 @@ def compute_percentage(ref_db, calltree_file, out_db,
             result[abs_c] = result[c] / top_value
             result[rel_c] = [values[x] for x in result[timer_column]]
             result[rel_c] = result[c] / result[rel_c]
+
+        def treelize(x):
+            return "|" + "--" * level[x] + " " + x
         result["abs_seq"] = [abs_seq[x] for x in result[timer_column]]
-        result["level"] = [level[x] for x in result[timer_column]]
-        result["parent"] = [parents[x] for x in result[timer_column]]
+        if treelize_timer_name:
+            result[timer_column] = map(treelize, result[timer_column])
+        else:
+            result["level"] = [level[x] for x in result[timer_column]]
+            result["parent"] = [parents[x] for x in result[timer_column]]
+
         return result
 
     final = []
@@ -185,6 +194,8 @@ def main():
                         help="Compute only these columns")
     parser.add_argument("-a", "--append", nargs="+", default=[],
                         help="Append these columns (no compute)")
+    parser.add_argument("--treelize-timer-name", action="store_true",
+                        help="Create a pretty tree repr for timer names")
 
     args = parser.parse_args()
     compute_percentage(**vars(args))
