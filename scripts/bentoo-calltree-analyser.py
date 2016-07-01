@@ -114,8 +114,9 @@ def compute_percentage(ref_db, calltree_file, out_db,
         for x in columns:
             assert(x in data_columns)
         data_columns = list(columns)
+    append_columns = []
     if append:
-        data_columns.extend(append)
+        append_columns.extend(append)
     timer_column = find_first_of(ref_columns, ["TimerName", "Name"])[0]
     if not timer_column:
         raise ValueError("Can not find timer column")
@@ -125,7 +126,7 @@ def compute_percentage(ref_db, calltree_file, out_db,
     calltree = json.load(file(calltree_file))
     timer_names = extract_timer_names(calltree)
 
-    sql = map(quote, index_columns + data_columns)
+    sql = map(quote, index_columns + data_columns + append_columns)
     sql = "SELECT %s FROM result WHERE " % ", ".join(sql)
     sql += " OR ".join("%s = \"%s\"" % (timer_column, x) for x in timer_names)
     sql += " ORDER BY %s" % ", ".join(map(quote, index_columns))
