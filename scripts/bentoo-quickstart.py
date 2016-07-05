@@ -232,7 +232,6 @@ def main():
     project_desc = get_input("Project description")
     binary_name = get_input("Execuation binary")
     test_factors = get_list("Test factor names")
-    print(test_factors)
     all_vector_gen = ["cart_product", "simple"]
     vector_gen = get_choice("Test vector generator", [
         "Generate by Cartetian product of test factor values (cart_product)",
