@@ -28,7 +28,6 @@ import fnmatch
 from collections import OrderedDict
 from functools import reduce
 
-
 #
 # Design Of Collector
 #
@@ -45,13 +44,12 @@ from functools import reduce
 # duck-typing to support multiple types of parsers and backends.
 #
 
-
 #
 # ResultScanner
 #
 
-class TestProjectReader(object):
 
+class TestProjectReader(object):
     '''Scan a test project for test cases'''
 
     def __init__(self, project_root):
@@ -63,8 +61,8 @@ class TestProjectReader(object):
         conf = json.load(file(conf_fn))
         version = conf.get("version", 1)
         if version != 1:
-            raise RuntimeError(
-                "Unsupported project version '%s': Only 1 " % version)
+            raise RuntimeError("Unsupported project version '%s': Only 1 " %
+                               version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
         self.test_cases = conf["test_cases"]
@@ -72,10 +70,8 @@ class TestProjectReader(object):
 
     def itercases(self):
         for case in self.test_cases:
-            case_spec_fullpath = os.path.join(
-                self.project_root,
-                case["path"],
-                "TestCase.json")
+            case_spec_fullpath = os.path.join(self.project_root, case["path"],
+                                              "TestCase.json")
             case_spec = json.load(file(case_spec_fullpath))
             yield {
                 "id": case["path"],
@@ -89,9 +85,8 @@ class TestProjectReader(object):
 
 
 class FnmatchFilter(object):
-
     def __init__(self, patterns, mode="include"):
-        assert(mode in ("include", "exclude"))
+        assert (mode in ("include", "exclude"))
         self.patterns = patterns
 
         def match_any(path, patterns):
@@ -121,8 +116,10 @@ class FnmatchFilter(object):
 
 
 class ResultScanner(object):
-
-    def __init__(self, project_root, case_filter=None, filter_mode="include",
+    def __init__(self,
+                 project_root,
+                 case_filter=None,
+                 filter_mode="include",
                  result_selector=None):
         '''
         Parameters
@@ -156,7 +153,6 @@ class ResultScanner(object):
                            case["test_vector"] + [result_id])
                 spec = OrderedDict(spec)
                 yield {"spec": spec, "fullpath": fn}
-
 
 #
 # DataParser
@@ -226,7 +222,7 @@ def parse_jasminlog(fn, use_table=None):
         # Extract table header
         header_ptn = re.compile(r"(Timer Name|Proc: \d+|Summed|Proc|Max)")
         header = map(tokenlize, header_ptn.findall(log_table["header"]))
-        assert(header[0] == "timer_name")
+        assert (header[0] == "timer_name")
         header[0] = "TimerName"
         # Parse table rows
         table_contents = []
@@ -268,7 +264,6 @@ def parse_jasminlog(fn, use_table=None):
 
 
 class JasminParser(object):
-
     @staticmethod
     def register_cmd_args(argparser):
         pass
@@ -352,7 +347,7 @@ def parse_jasmin4log(fn, use_table=None):
         table_name = log_table["name"]
         # Extract table header
         header = log_table["header"].split()
-        assert(header[0] == "Name")
+        assert (header[0] == "Name")
         header[0] == "TimerName"
         timer_name_pos = log_table["header"].index("Name")
         timer_value_pos = timer_name_pos + len("Name")
@@ -407,7 +402,6 @@ def parse_jasmin4log(fn, use_table=None):
 
 
 class Jasmin4Parser(object):
-
     @staticmethod
     def register_cmd_args(argparser):
         pass
@@ -433,7 +427,6 @@ class Jasmin4Parser(object):
 
 
 class UnifiedJasminParser(object):
-
     @staticmethod
     def register_cmd_args(argparser):
         pass
@@ -486,27 +479,29 @@ class UnifiedJasminParser(object):
             for t in tables:
                 yield t
 
-
 #
 # Likwid Parser
 #
 
-class BlockReader(object):
 
+class BlockReader(object):
     def __init__(self, start, end, use_regex=False):
         if use_regex:
             self.start_ = re.compile(start)
 
             def match_start(x):
                 return self.start_.match(x)
+
             self.match_start = match_start
 
             self.end = re.compile(end)
 
             def match_end(x):
                 return self.end_.match(x)
+
             self.match_end = match_end
         else:
+
             def match_start(x):
                 return x == self.start_
 
@@ -548,7 +543,6 @@ def stringify(content):
 
 
 class LikwidBlockParser(object):
-
     def __init__(self):
         self.column_names = []
         self.column_types = []
@@ -591,7 +585,6 @@ class LikwidBlockParser(object):
 
 
 class LikwidParser(object):
-
     @staticmethod
     def register_cmd_args(argparser):
         pass
@@ -627,8 +620,8 @@ class LikwidParser(object):
         # Count blocks to ease table_id generating
         nblocks = len(list(likwid_block.iterblocks(files[0])))
         if nblocks == 0:
-            print("WARNING: No likwid data table found in '%s'"
-                  % likwid_data[0])
+            print("WARNING: No likwid data table found in '%s'" %
+                  likwid_data[0])
             return
         # Reset files[0] as iterblocks have already arrive eof.
         files[0] = file(likwid_data[0])
@@ -639,7 +632,107 @@ class LikwidParser(object):
             for i, f in enumerate(files):
                 proc_id = int(os.path.basename(likwid_data[i]).split(".")[1])
                 block = likwid_block.findblock(f)
-                assert(block)
+                assert (block)
+                parser.process(iter(block))
+                for d in parser.data:
+                    data.append([proc_id] + d)
+            cn = ["ProcId"] + parser.column_names
+            ct = [int] + parser.column_types
+            all_tables.append({
+                "table_id": table_id,
+                "column_names": cn,
+                "column_types": ct,
+                "data": data
+            })
+
+        if not all_tables:
+            yield
+            return
+        if self.use_table:
+            for i in self.use_table:
+                yield all_tables[i]
+        else:
+            for t in all_tables:
+                yield t
+
+
+class UdcBlockParser(object):
+    def __init__(self):
+        self.column_names = []
+        self.column_types = []
+        self.data = []
+
+    def clear(self):
+        self.column_names = []
+        self.column_types = []
+        self.data = []
+
+    def process(self, iterable):
+        self.clear()
+        content = [x for x in iterable]
+        content = cStringIO.StringIO("".join(content[1:-1]))
+        data = csv.DictReader(content)
+        start_columns = "ThreadId,TimerName".split(",")
+        self.column_names.extend(start_columns)
+        self.column_types.extend([int, str])
+        other_columns = list(data.fieldnames[2:])
+        self.column_names.extend(other_columns)
+        self.column_types.extend([float] * len(other_columns))
+        self.data = []
+        for record in data:
+            result = [record["ThreadId"], record["TimerName"]]
+            result.extend(record[f] for f in other_columns)
+            self.data.append(result)
+
+
+class UdcParser(object):
+    @staticmethod
+    def register_cmd_args(argparser):
+        pass
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {}
+
+    def __init__(self, use_table, args):
+        self.args = args
+        self.use_table = use_table
+
+    def itertables(self, fn):
+        # We only accept fake file "LIKWID_${GROUP}", so check it.
+        filename = os.path.basename(fn)
+        if filename != "USER_DEFINED_COUNTERS":
+            raise ValueError(
+                "Invalid data file '%s', shall be 'USER_DEFINED_COUNTERS'" %
+                fn)
+        # Search for real data file, it shall be of regex
+        # 'user_defined_counters.\d+.dat'
+        result_dir = os.path.dirname(fn)
+        udc_data = glob.glob(os.path.join(
+            result_dir, "user_defined_counters.*.dat"))
+        if not udc_data:
+            print("WARNING: No data file found in '%s'" % result_dir)
+            return
+
+        files = [file(path) for path in udc_data]
+
+        parser = UdcBlockParser()
+        block_reader = BlockReader("@start_udc\n", "@end_udc\n")
+        # Count blocks to ease table_id generating
+        nblocks = len(list(block_reader.iterblocks(files[0])))
+        if nblocks == 0:
+            print("WARNING: No udc data table found in '%s'" % udc_data[0])
+            return
+        # Reset files[0] as iterblocks have already arrive eof.
+        files[0] = file(udc_data[0])
+
+        all_tables = []
+        for table_id in xrange(nblocks):
+            data = []
+            for i, f in enumerate(files):
+                proc_id = int(os.path.basename(udc_data[i]).split(".")[1])
+                block = block_reader.findblock(f)
+                assert (block)
                 parser.process(iter(block))
                 for d in parser.data:
                     data.append([proc_id] + d)
@@ -664,7 +757,6 @@ class LikwidParser(object):
 
 
 class ParserFactory(object):
-
     @staticmethod
     def create(name, namespace):
         use_table = map(int, namespace.use_table)
@@ -680,6 +772,9 @@ class ParserFactory(object):
         elif name == "likwid":
             args = LikwidParser.retrive_cmd_args(namespace)
             return LikwidParser(use_table, args)
+        elif name == "udc":
+            args = UdcParser.retrive_cmd_args(namespace)
+            return UdcParser(use_table, args)
         else:
             raise ValueError("Unsupported parser: %s" % name)
 
@@ -693,7 +788,6 @@ class ParserFactory(object):
         UnifiedJasminParser.register_cmd_args(group)
         group = argparser.add_argument_group("Likwid Parser Arguments")
         LikwidParser.register_cmd_args(group)
-
 
 #
 # StorageBackend
@@ -753,10 +847,10 @@ class SqliteSerializer(object):
 
 
 class PandasSerializer(object):
-
     @staticmethod
     def register_cmd_args(argparser):
-        argparser.add_argument("--pandas-format", default="xlsx",
+        argparser.add_argument("--pandas-format",
+                               default="xlsx",
                                choices=("xls", "xlsx", "csv"),
                                help="Output file format")
 
@@ -780,12 +874,11 @@ class PandasSerializer(object):
         elif self.file_format == "csv":
             frame.to_csv(self.data_file, index=False)
         else:
-            raise RuntimeError(
-                "Unsupported output format '%s'" % self.file_format)
+            raise RuntimeError("Unsupported output format '%s'" %
+                               self.file_format)
 
 
 class SerializerFactory(object):
-
     @staticmethod
     def create(name, namespace):
         if name == "sqlite3":
@@ -804,7 +897,6 @@ class SerializerFactory(object):
         group = argparser.add_argument_group("Pandas Serializer Arguments")
         PandasSerializer.register_cmd_args(group)
 
-
 #
 # DataAggragator
 #
@@ -816,9 +908,8 @@ class SerializerFactory(object):
 
 
 class DataAggregator(object):
-
     def __init__(self, column_filter=None, filter_mode="include"):
-        assert(filter_mode in ("include", "exclude"))
+        assert (filter_mode in ("include", "exclude"))
         self.filter = FnmatchFilter(column_filter, filter_mode)
 
     def aggregate(self, tables):
@@ -860,7 +951,6 @@ class DataAggregator(object):
 
 
 class Collector(object):
-
     def __init__(self):
         pass
 
@@ -872,11 +962,11 @@ class Collector(object):
                     spec = OrderedDict(file_spec)
                     spec["table_id"] = tbl["table_id"]
                     yield {"id": spec, "content": tbl}
+
         final_table = aggregator.aggregate(table_geneartor())
         if not final_table:
             return
-        serializer.serialize(final_table["data"],
-                             final_table["column_names"],
+        serializer.serialize(final_table["data"], final_table["column_names"],
                              final_table["column_types"])
 
 
@@ -889,37 +979,58 @@ def main():
 
     group = parser.add_argument_group("Scanner Arguments")
     grp = group.add_mutually_exclusive_group()
-    grp.add_argument("-i", "--include", default=None, nargs="+",
+    grp.add_argument("-i",
+                     "--include",
+                     default=None,
+                     nargs="+",
                      metavar="CASE_PATH",
                      help="Include only matched cases (shell wildcards)")
-    grp.add_argument("-e", "--exclude", default=None, nargs="+",
+    grp.add_argument("-e",
+                     "--exclude",
+                     default=None,
+                     nargs="+",
                      metavar="CASE_PATH",
                      help="Excluded matched cases (shell wildcards)")
-    group.add_argument("--use-result", default=[0], nargs="+",
+    group.add_argument("--use-result",
+                       default=[0],
+                       nargs="+",
                        metavar="RESULT_ID",
                        help="Choose result files to use (as index)")
 
     group = parser.add_argument_group("Parser Arguments")
-    group.add_argument("-p", "--parser", default="jasmin",
-                       choices=["jasmin3", "jasmin4", "jasmin", "likwid"],
+    group.add_argument("-p",
+                       "--parser",
+                       default="jasmin",
+                       choices=["jasmin3", "jasmin4", "jasmin", "likwid",
+                                "udc"],
                        help="Parser for raw result files (default: jasmin)")
-    group.add_argument("--use-table", default=[], nargs="+",
+    group.add_argument("--use-table",
+                       default=[],
+                       nargs="+",
                        metavar="TABLE_ID",
                        help="Choose which data table to use (as index)")
     ParserFactory.register_cmd_args(parser)
 
     group = parser.add_argument_group("Aggregator Arguments")
     grp = group.add_mutually_exclusive_group()
-    grp.add_argument("-d", "--drop-columns", default=None, nargs="+",
+    grp.add_argument("-d",
+                     "--drop-columns",
+                     default=None,
+                     nargs="+",
                      metavar="COLUMN_NAME",
                      help="Drop un-wanted table columns")
-    grp.add_argument("-k", "--keep-columns", default=None, nargs="+",
+    grp.add_argument("-k",
+                     "--keep-columns",
+                     default=None,
+                     nargs="+",
                      metavar="COLUMN_NAME",
                      help="Keep only speciied table columns")
 
     group = parser.add_argument_group("Serializer Arguments")
-    group.add_argument("-s", "--serializer",
-                       choices=["sqlite3", "pandas"], default="sqlite3",
+    group.add_argument("-s",
+                       "--serializer",
+                       choices=["sqlite3", "pandas"],
+                       default="sqlite3",
                        help="Serializer to dump results (default: sqlite3)")
     SerializerFactory.register_cmd_args(parser)
 
@@ -956,6 +1067,7 @@ def main():
     # assemble collector and do acutal collecting
     collector = Collector()
     collector.collect(scanner, parser, aggregator, serializer)
+
 
 if __name__ == "__main__":
     main()
