@@ -216,14 +216,14 @@ def calc_likwid_metric(raw_db, output_db, aggregate="no", likwid_group=None,
     input_columns = r0.keys()
     index_columns, data_columns = column_split(input_columns)
 
-    sql = "select * from result where "
-    sql += "TimerName glob \"CPU_CYCLES@*\" limit 1"
-    r0 = conn0.execute(sql).fetchone()
-    cpu_cycles_timer_name = r0["TimerName"]
-    cpu_cycles = r0["RDTSC"]
-    cpu_model = cpu_cycles_timer_name.split("@")[-1]
-
+    cpu_cycles_timer_name = "CPU_CYCLES"
     if not raw_events:
+        sql = "select * from result where "
+        sql += "TimerName glob \"CPU_CYCLES@*\" limit 1"
+        r0 = conn0.execute(sql).fetchone()
+        cpu_cycles_timer_name = r0["TimerName"]
+        cpu_cycles = r0["RDTSC"]
+        cpu_model = cpu_cycles_timer_name.split("@")[-1]
         if likwid_group_file:
             likwid = LikwidMetrics(likwid_group_file)
         elif likwid_group:

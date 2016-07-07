@@ -670,7 +670,7 @@ class UdcBlockParser(object):
     def process(self, iterable):
         self.clear()
         content = [x for x in iterable]
-        content = cStringIO.StringIO("".join(content[1:-1]))
+        content = cStringIO.StringIO("".join(content))
         data = csv.DictReader(content)
         start_columns = "ThreadId,TimerName".split(",")
         self.column_names.extend(start_columns)
