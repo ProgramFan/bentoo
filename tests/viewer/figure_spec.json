@@ -1,0 +1,30 @@
+{
+  "subgroups": [
+    {
+      "data": [ "abs_seq", "level", "TimerName" ], 
+      "type": "tree", 
+      "label": "Tree Structure"
+    }, 
+    {
+      "subgroups": [
+        {
+          "data": "MaxRDTSC_abs_percent", 
+          "type": "percent", 
+          "label": "Time"
+        }, 
+        {
+          "data": "Float_ops_abs_percent", 
+          "type": "percent", 
+          "label": "Flops"
+        }, 
+        {
+          "data": "MFLOP_s", 
+          "type": "bars", 
+          "label": "MFlops"
+        }
+      ], 
+      "label": "Percentage"
+    }
+  ], 
+  "label": "Utilization Analysis of Moasp"
+}
