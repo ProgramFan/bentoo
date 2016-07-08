@@ -11,7 +11,8 @@ setup(
              "scripts/bentoo-collector.py", "scripts/bentoo-analyser.py",
              "scripts/bentoo-likwid-metric.py", "scripts/bentoo-quickstart.py",
              "scripts/bentoo-calltree.py", "scripts/bentoo-merge.py",
-             "scripts/bentoo-calltree-analyser.py"],
+             "scripts/bentoo-calltree-analyser.py",
+             "scripts/bentoo-viewer.py", "scripts/bentoo-svgconvert.py"],
     package_data={
         '': ['*.adoc', '*.rst', '*.md']
     },
