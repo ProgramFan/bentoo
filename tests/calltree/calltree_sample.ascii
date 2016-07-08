@@ -1,0 +1,14 @@
+# This is a sample tree
+#
+
+- ROOT
+-- TOTAL_RUN_TIME
+--- Stage_0
+--- Stage_1
+---- Stage_1_0
+---- Stage_1_1
+----- Stage_1_1_0
+--- Stage_2
+---- Stage_2_0
+---- Stage_2_1
+--- Stage_3

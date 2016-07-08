@@ -1,7 +1,6 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 #
-
 '''
 calltree.py - Call tree manipulator
 
@@ -14,6 +13,7 @@ import copy
 import json
 import fnmatch
 import hashlib
+import re
 
 from collections import OrderedDict
 from functools import reduce
@@ -47,12 +47,11 @@ def toposort(data):
             break
         yield ordered
         data = {item: (dep - ordered)
-                for item, dep in data.iteritems()
-                if item not in ordered}
+                for item, dep in data.iteritems() if item not in ordered}
     if len(data) != 0:
         raise ValueError('Cyclic dependencies exist among the'
-                         'se items: {}'.format(
-                             ', '.join(repr(x) for x in data.items())))
+                         'se items: {}'.format(', '.join(repr(
+                             x) for x in data.items())))
 
 
 def toposort_flatten(data, sort=True):
@@ -63,7 +62,6 @@ def toposort_flatten(data, sort=True):
 
 
 class TreeNode(object):
-
     @classmethod
     def serialize(cls, node):
         if not node:
@@ -81,11 +79,53 @@ class TreeNode(object):
     def deserialize(cls, data):
         if not data:
             return None
-        node = TreeNode(data["id"], data["cycle"])
+        node = TreeNode(data["id"], data.get("cycle", 1))
         for c in data["children"]:
             child = cls.deserialize(c)
             node.append_child(child)
         return node
+
+    @classmethod
+    def from_ascii(cls, data):
+        data = re.sub(r"#.*", "", data)
+        tree_nodes = []
+        for line in data.strip().split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            segs = map(lambda x: x.strip(), line.split())
+            assert (len(segs) >= 2)
+            if len(segs) == 2:
+                level = len(segs[0]) - 1
+                content = (segs[1], 1)
+            else:
+                level = len(segs[0]) - 1
+                content = (segs[1], segs[2])
+            tree_nodes.append((level, content))
+
+        def build_recursive(nodes):
+            if not nodes:
+                return []
+            result = []
+            min_level = min(x[0] for x in nodes)
+            assert (nodes[0][0] == min_level)
+            content, children = (nodes[0][1], [])
+            for l, n in nodes[1:]:
+                if l == min_level:
+                    result.append({"id": content[0],
+                                   "cycle": content[1],
+                                   "children": build_recursive(children)})
+                    content, children = (n, [])
+                else:
+                    children.append((l, n))
+            result.append({"id": content[0],
+                           "cycle": content[1],
+                           "children": build_recursive(children)})
+            return result
+
+        data = build_recursive(tree_nodes)
+        assert (len(data) == 1)
+        return cls.deserialize(data[0])
 
     def __init__(self, id, cycle=1):
         self.id = id
@@ -163,7 +203,7 @@ def revert_unrolled_loop(callseq):
         if callseqlen % subseqlen != 0:
             continue
         nsubseqs = callseqlen / subseqlen
-        assert(nsubseqs > 1)
+        assert (nsubseqs > 1)
         is_an_unroll = True
         for subseqid in xrange(1, nsubseqs):
             cs = subseqid * subseqlen
@@ -243,6 +283,7 @@ def remove_tree_levels(tree, max_level):
         for c in children:
             new_tree.append_child(c)
         return new_tree
+
     return remove_recursive(tree, 0, max_level)
 
 
@@ -272,9 +313,9 @@ def merge_repeative_calls(calls):
         for i in xrange(1, len(child_ids)):
             cid = child_ids[i]
             if cid in graph:
-                graph[cid].add(child_ids[i-1])
+                graph[cid].add(child_ids[i - 1])
             else:
-                graph[cid] = set([child_ids[i-1]])
+                graph[cid] = set([child_ids[i - 1]])
     cids = toposort_flatten(graph)
     node = TreeNode(calls[0].id, calls[0].cycle)
     for c in cids:
@@ -283,7 +324,6 @@ def merge_repeative_calls(calls):
 
 
 def fold_tree(tree, cascade=False):
-
     def fold_tree_recursive(tree):
         if not tree:
             return None
@@ -357,6 +397,7 @@ def print_tree_plain(tree, max_level=None):
         print "--" * level, tree.id, tree.cycle
         for c in tree.children:
             print_tree_recursive(c, level + 1, max_level)
+
     print_tree_recursive(tree, 1, max_level)
 
 
@@ -367,6 +408,7 @@ def print_tree_salt(tree, max_level=None):
         print "+" * level, tree.id
         for c in tree.children:
             print_tree_salt_recursive(c, level + 1, max_level)
+
     print "@startsalt"
     print "{"
     print "{T"
@@ -383,6 +425,7 @@ def print_tree_asciidoc(tree, max_level=None):
         print "*" * level, tree.id
         for c in tree.children:
             print_tree_adoc_recursive(c, level + 1, max_level)
+
     print_tree_adoc_recursive(tree, 1, max_level)
 
 
@@ -392,22 +435,37 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("call_tree",
                         help="Call tree file (json) generated by JASMIN")
-    parser.add_argument("--use-tree", default=0, type=int,
+    parser.add_argument("--format",
+                        choices=("json", "ascii"),
+                        default="json",
+                        help="Call tree file format (default: json)")
+    parser.add_argument("--use-tree",
+                        default=0,
+                        type=int,
                         help="Tree to use when multiple trees (default: 0)")
-    parser.add_argument("--print-depth", default=None, type=int,
+    parser.add_argument("--print-depth",
+                        default=None,
+                        type=int,
                         help="Max depth to print")
-    parser.add_argument("--print-style", default="plain",
+    parser.add_argument("--print-style",
+                        default="plain",
                         choices=["plain", "asciidoc", "plantuml"],
                         help="Print style (default: plain)")
-    parser.add_argument("--remove-levels", default=None, type=int,
+    parser.add_argument("--remove-levels",
+                        default=None,
+                        type=int,
                         help="Remove tree nodes whose level is higher than "
-                             "specified")
-    parser.add_argument("--remove-nodes", default=[], nargs="+",
+                        "specified")
+    parser.add_argument("--remove-nodes",
+                        default=[],
+                        nargs="+",
                         help="Remove tree nodes whose name match, "
-                             "supports shell-style wildcards")
-    parser.add_argument("--prune-unrolled-loops", action="store_true",
+                        "supports shell-style wildcards")
+    parser.add_argument("--prune-unrolled-loops",
+                        action="store_true",
                         help="Fold unrolled loops into one single block")
-    parser.add_argument("--save", default=None,
+    parser.add_argument("--save",
+                        default=None,
                         help="Save processed tree to file")
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument("--fold", action="store_true", help="Fold tree")
@@ -415,10 +473,17 @@ def main():
 
     args = parser.parse_args()
 
-    data = json.load(file(args.call_tree), object_hook=OrderedDict)
-    tree = TreeNode.deserialize(data)
+    if args.format == "json":
+        data = json.load(file(args.call_tree), object_hook=OrderedDict)
+        tree = TreeNode.deserialize(data)
+    elif args.format == "ascii":
+        content = file(args.call_tree).read()
+        tree = TreeNode.from_ascii(content)
+    else:
+        raise ValueError("Unknown calltree file format: '%s'" % args.format)
     if tree.id == "ROOT":
         tree = tree.children[args.use_tree]
+
     if args.remove_nodes:
         tree = remove_tree_nodes(tree, args.remove_nodes)
     if args.remove_levels:
