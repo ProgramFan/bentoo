@@ -1,0 +1,19 @@
+label: Utilization Analysis of Moasp
+subgroups:
+  - label: Tree Structure
+    type: tree,
+    data:
+      - abs_seq
+      - level
+      - TimerName
+  - label: Percentage
+    subgroups:
+      - label: Time
+        type: percent
+        data: MaxRDTSC_abs_percent
+      - label: Flops
+        type: percent
+        data: Float_ops_abs_percent
+      - label: MFlops
+        type: bars
+        data: MFLOP_s
