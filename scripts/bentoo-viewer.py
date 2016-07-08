@@ -15,6 +15,7 @@ import pandas
 import json
 import re
 import toyplot
+import toyplot.color
 import toyplot.svg
 import toyplot.pdf
 import toyplot.png
@@ -87,7 +88,7 @@ def compute_color(colormap, tree):
     return [colormap.color(i) for i in color_index]
 
 
-def draw_tree(axes, data, colors, indent=0.1):
+def draw_tree(axes, data, colors, indent=0.05):
     data_1 = [x * indent for x in data["level"]][::-1]
     data_2 = [1 - x for x in data_1]
     series = numpy.column_stack([data_1, data_2])
@@ -99,6 +100,7 @@ def draw_tree(axes, data, colors, indent=0.1):
     axes.bars(series,
               along="y",
               color=numpy.array([data_1_color, data_2_color]).T)
+    axes.x.domain.max = 1
     for i, n in enumerate(data["name"][::-1]):
         axes.text(data_1[i],
                   i,
@@ -174,15 +176,9 @@ def update_colspans(spec, ignore_root=True):
     update_(spec)
 
 
-def create_table(canvas,
-                 spec,
-                 data,
-                 ignore_root=True,
-                 header_column_width=None):
+def create_table(canvas, spec, data, ignore_root=True):
     hrows, hcols = compute_header_shape(spec, ignore_root)
     table = canvas.table(rows=len(data), columns=hcols, hrows=hrows)
-    if header_column_width:
-        table.column(0).width = canvas.width * header_column_width
     return table
 
 
@@ -256,16 +252,11 @@ def draw_body(table, spec, data, colormap):
     draw_(spec)
 
 
-def draw_table(canvas,
-               spec,
-               data,
-               colormap="Set1",
-               ignore_root=True,
-               header_column_width=None):
+def draw_table(canvas, spec, data, colormap="Set1", ignore_root=True):
     spec = spec.copy()
     update_colspans(spec)
     colormap = toyplot.color.brewer.map(colormap)
-    table = create_table(canvas, spec, data, ignore_root, header_column_width)
+    table = create_table(canvas, spec, data, ignore_root)
     draw_grid(table)
     draw_header(table, spec, colormap, ignore_root)
     draw_body(table, spec, data, colormap)
@@ -276,7 +267,6 @@ def view_data(ref_db,
               sql=None,
               width=800,
               height=600,
-              header_column_width=None,
               colormap="Set1",
               no_ignore_root=False,
               save=None):
@@ -290,8 +280,7 @@ def view_data(ref_db,
     spec = json.loads(spec_text)
 
     canvas = toyplot.canvas.Canvas(width, height)
-    draw_table(canvas, spec, data, colormap, not no_ignore_root,
-               header_column_width)
+    draw_table(canvas, spec, data, colormap, not no_ignore_root)
 
     if save:
         _, ext = os.path.splitext(save)
@@ -325,10 +314,6 @@ def main():
                         default=600,
                         type=int,
                         help="Canvas height, in px")
-    parser.add_argument("--header-column-width",
-                        default=None,
-                        type=float,
-                        help="Header column width, in percent")
     parser.add_argument("--colormap",
                         default="Set1",
                         help="Color Brewer colormap to use (default: Set1)")
