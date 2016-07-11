@@ -31,9 +31,10 @@ def draw_line(axes, x0, y0, x1, y1, *args, **kwargs):
 
 
 def draw_points(axes, data, *args, **kwargs):
-    x = [c[0] for c in data]
-    y = [c[1] for c in data]
-    axes.scatterplot(x, y, *args, **kwargs)
+    x = [c[0][0] for c in data]
+    y = [c[0][1] for c in data]
+    color = [c[1] for c in data]
+    axes.scatterplot(x, y, color=color, *args, **kwargs)
 
 
 #
@@ -75,7 +76,8 @@ def build_tree(data):
     return trees[0]
 
 
-def compute_layout(tree):
+def compute_layout(data, colors):
+    tree = build_tree(data)
 
     # id -> (level, name)
     rows = {}
@@ -106,7 +108,8 @@ def compute_layout(tree):
         start_row = rowids[tree["id"]]
         end_row = children[-1]
         rows = children
-        lines.append(((start_row, end_row, level), rows))
+        color = colors[children[0]]
+        lines.append(((start_row, end_row, level), rows, color))
         for c in tree["children"]:
             compute_lines(c, level + 1)
 
@@ -121,18 +124,18 @@ def draw_stem(axes, layout, indent=0.1):
     lines = []
     end_points = []
     corner_points = []
-    for (start_row, end_row, level), rows in layout["lines"]:
+    for (start_row, end_row, level), rows, color in layout["lines"]:
         # NOTE: the axes grows from bottom to top, so reverse it.
         p0 = ((level + 0.5) * indent, row_max - start_row - 0.5)
         p1 = ((level + 0.5) * indent, row_max - end_row)
-        end_points.append(p0)
-        corner_points.append(p1)
-        lines.append([p0[0], p0[1], p1[0], p1[1]])
+        end_points.append([p0, color])
+        corner_points.append([p1, color])
+        lines.append([p0[0], p0[1], p1[0], p1[1], color])
         for row in rows:
             p0 = ((level + 0.5) * indent, row_max - row)
             p1 = ((level + 1) * indent, row_max - row)
-            lines.append([p0[0], p0[1], p1[0], p1[1]])
-            end_points.append(p1)
+            lines.append([p0[0], p0[1], p1[0], p1[1], color])
+            end_points.append([p1, color])
     # draw graph elements
     for l in lines:
         draw_line(axes,
@@ -141,9 +144,9 @@ def draw_stem(axes, layout, indent=0.1):
                   l[2],
                   l[3],
                   style={"stroke-width": 2},
-                  color="blue")
-    draw_points(axes, end_points, size=4, marker="o", color="blue")
-    draw_points(axes, corner_points, size=1, marker="o", color="blue")
+                  color=l[4])
+    draw_points(axes, end_points, size=4, marker="o")
+    draw_points(axes, corner_points, size=1, marker="o")
 
 
 def draw_nodes(axes, layout, indent=0.1):
@@ -173,7 +176,7 @@ def compute_color_index(data):
             assign_color(c)
 
     tree = build_tree(data)
-    tree["color"] = 0
+    tree["color"] = uuid.id()
     assign_color(tree)
 
     colors = {}
@@ -215,8 +218,7 @@ def draw_tree(axes, data, colors, indent=0.05):
                   style={"text-anchor": "start",
                          "-toyplot-anchor-shift": "5px"})
 
-    tree = build_tree(data)
-    layout = compute_layout(tree)
+    layout = compute_layout(data, colors)
     draw_stem(axes, layout, indent)
 
 
