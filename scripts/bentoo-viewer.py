@@ -21,6 +21,25 @@ import toyplot.pdf
 import toyplot.png
 import toyplot.browser
 
+#
+# Auxiliary functions
+#
+
+
+def draw_line(axes, x0, y0, x1, y1, *args, **kwargs):
+    axes.plot([x0, x1], [y0, y1], *args, **kwargs)
+
+
+def draw_points(axes, data, *args, **kwargs):
+    x = [c[0] for c in data]
+    y = [c[1] for c in data]
+    axes.scatterplot(x, y, *args, **kwargs)
+
+
+#
+# Layout algorithm for tree representation
+#
+
 
 class UniqueId(object):
     def __init__(self, start=0):
@@ -31,7 +50,7 @@ class UniqueId(object):
         return self.value - 1
 
 
-def compute_color_index(tree):
+def build_tree(data):
     def flat_to_recursive(nodes):
         if not nodes:
             return []
@@ -49,11 +68,97 @@ def compute_color_index(tree):
         result.append({"id": nid, "children": flat_to_recursive(children)})
         return result
 
-    nodes = [(tree["level"][i], tree["id"][i])
-             for i in xrange(len(tree["id"]))]
-    d = flat_to_recursive(nodes)
-    assert (len(d) == 1)
+    nodes = [(data["level"][i], data["id"][i])
+             for i in xrange(len(data["id"]))]
+    trees = flat_to_recursive(nodes)
+    assert (len(trees) == 1)
+    return trees[0]
 
+
+def compute_layout(tree):
+
+    # id -> (level, name)
+    rows = {}
+    rowids = {}
+    uuid = UniqueId()
+
+    def compute_rows(tree, level=0):
+        if not tree:
+            return
+        node_id = uuid.id()
+        rows[node_id] = (level, tree["id"])
+        rowids[tree["id"]] = node_id
+        for c in tree["children"]:
+            compute_rows(c, level + 1)
+
+    compute_rows(tree)
+
+    lines = []
+
+    def compute_lines(tree, level=0):
+        if not tree:
+            return
+        children = []
+        for c in tree["children"]:
+            children.append(rowids[c["id"]])
+        if not children:
+            return
+        start_row = rowids[tree["id"]]
+        end_row = children[-1]
+        rows = children
+        lines.append(((start_row, end_row, level), rows))
+        for c in tree["children"]:
+            compute_lines(c, level + 1)
+
+    compute_lines(tree)
+
+    return {"lines": lines, "rows": rows}
+
+
+def draw_stem(axes, layout, indent=0.1):
+    row_max = len(layout["rows"]) - 1
+    # compute graph elements
+    lines = []
+    end_points = []
+    corner_points = []
+    for (start_row, end_row, level), rows in layout["lines"]:
+        # NOTE: the axes grows from bottom to top, so reverse it.
+        p0 = ((level + 0.5) * indent, row_max - start_row - 0.5)
+        p1 = ((level + 0.5) * indent, row_max - end_row)
+        end_points.append(p0)
+        corner_points.append(p1)
+        lines.append([p0[0], p0[1], p1[0], p1[1]])
+        for row in rows:
+            p0 = ((level + 0.5) * indent, row_max - row)
+            p1 = ((level + 1) * indent, row_max - row)
+            lines.append([p0[0], p0[1], p1[0], p1[1]])
+            end_points.append(p1)
+    # draw graph elements
+    for l in lines:
+        draw_line(axes,
+                  l[0],
+                  l[1],
+                  l[2],
+                  l[3],
+                  style={"stroke-width": 2},
+                  color="blue")
+    draw_points(axes, end_points, size=4, marker="o", color="blue")
+    draw_points(axes, corner_points, size=1, marker="o", color="blue")
+
+
+def draw_nodes(axes, layout, indent=0.1):
+    rows = layout["rows"]
+    ids = sorted(rows.keys())
+    level = [rows[k][0] for k in ids]
+    # NOTE: the axes grows from bottom to top, so reverse it.
+    space = [x * indent for x in level][::-1]
+    block = [1 - x for x in space]
+    series = numpy.column_stack([space, block])
+    axes.x.domain.max = 1
+    axes.bars(series, along="y")
+
+
+def compute_color_index(data):
     uuid = UniqueId()
 
     def assign_color(tree):
@@ -67,8 +172,9 @@ def compute_color_index(tree):
         for c in tree["children"]:
             assign_color(c)
 
-    d[0]["color"] = uuid.id()
-    assign_color(d[0])
+    tree = build_tree(data)
+    tree["color"] = 0
+    assign_color(tree)
 
     colors = {}
 
@@ -79,8 +185,8 @@ def compute_color_index(tree):
         for c in tree["children"]:
             get_colors(c)
 
-    get_colors(d[0])
-    return [colors[n] for n in tree["id"]]
+    get_colors(tree)
+    return [colors[n] for n in data["id"]]
 
 
 def compute_color(colormap, tree):
@@ -108,6 +214,10 @@ def draw_tree(axes, data, colors, indent=0.05):
                   color="white",
                   style={"text-anchor": "start",
                          "-toyplot-anchor-shift": "5px"})
+
+    tree = build_tree(data)
+    layout = compute_layout(tree)
+    draw_stem(axes, layout, indent)
 
 
 def draw_percent(axes, data, colors):
