@@ -21,16 +21,11 @@
         {
           "data": "Memory_data_volume_abs_percent",
           "type": "percent",
-          "label": "Memory R/W Access (Bytes)"
+          "label": "Memory Read/Write"
         }
-      ], 
-      "label": "Percentage"
-    },
-    {
-      "data": "MFLOP_s", 
-      "type": "bars", 
-      "label": "MFlops"
+      ],
+      "label": "Metric Distribution"
     }
   ], 
-  "label": "Utilization Analysis of Moasp"
+  "label": "Hotspot Analysis of Moasp"
 }

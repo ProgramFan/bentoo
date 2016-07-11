@@ -1,0 +1,31 @@
+{
+  "subgroups": [
+    {
+      "data": [ "abs_seq", "level", "TimerName" ], 
+      "type": "tree", 
+      "label": "Tree Structure",
+      "width": 450
+    }, 
+    {
+      "subgroups": [
+        {
+          "data": "MaxRDTSC", 
+          "type": "bars", 
+          "label": "Walltime (s)"
+        }, 
+        {
+          "data": "MFLOP_s", 
+          "type": "bars", 
+          "label": "MFLOP/s"
+        },
+        {
+          "data": "Memory_bandwidth",
+          "type": "bars",
+          "label": "Memory BW (MB/s)"
+        }
+      ], 
+      "label": "Metric Values"
+    }
+  ], 
+  "label": "Performance Overview of Moasp"
+}
