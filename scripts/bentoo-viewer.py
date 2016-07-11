@@ -291,6 +291,23 @@ def update_colspans(spec, ignore_root=True):
 def create_table(canvas, spec, data, ignore_root=True):
     hrows, hcols = compute_header_shape(spec, ignore_root)
     table = canvas.table(rows=len(data), columns=hcols, hrows=hrows)
+
+    colid = {"value": 0}
+    colwidths = {}
+
+    def compute_column_widths(spec):
+        if "subgroups" in spec:
+            for s in spec["subgroups"]:
+                compute_column_widths(s)
+        else:
+            if "width" in spec:
+                colwidths[colid["value"]] = spec["width"]
+            colid["value"] += 1
+
+    compute_column_widths(spec)
+    for i in xrange(hcols):
+        if i in colwidths:
+            table.column(i).width = colwidths[i]
     return table
 
 
