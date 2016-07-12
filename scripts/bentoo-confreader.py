@@ -2,6 +2,15 @@
 # -*- coding: utf-8 -*-
 #
 
+'''
+bentoo-confreader - Read and convert config files
+
+This module reads input files and convert them to json or yaml format. It reads
+both yaml and json files and write to yaml file if pyyaml is installed.
+Otherwise, only json to json is supported.
+'''
+
+import argparse
 import collections
 
 try:
@@ -54,9 +63,14 @@ except ImportError:
 
 
 def main():
-    import sys
-    dump(load(file(sys.argv[1])), file(sys.argv[2], "w"))
-    print dumps(loads(file(sys.argv[1]).read()))
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("src_file", help="Source file to convert")
+    parser.add_argument("dst_file", help="Dest file to write to")
+
+    args = parser.parse_args()
+    dump(load(file(args.src_file)), file(args.dst_file, "w"))
 
 
 if __name__ == "__main__":
