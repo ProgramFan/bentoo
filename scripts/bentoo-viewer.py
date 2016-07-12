@@ -22,6 +22,37 @@ import toyplot.png
 import toyplot.browser
 
 #
+# data reader
+#
+
+import collections
+
+try:
+    import yaml
+
+    def dict_representer(dumper, data):
+        return dumper.represent_dict(data.iteritems())
+
+    def dict_constructor(loader, node):
+        return collections.OrderedDict(loader.construct_pairs(node))
+
+    yaml.add_representer(collections.OrderedDict, dict_representer)
+    yaml.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+                         dict_constructor)
+
+    def loads(string, *args, **kwargs):
+        return yaml.load(string, *args, **kwargs)
+
+except ImportError:
+    import json
+
+    def loads(string, *args, **kwargs):
+        return json.loads(string,
+                          object_pairs_hook=collections.OrderedDict,
+                          *args,
+                          **kwargs)
+
+#
 # Auxiliary functions
 #
 
@@ -35,7 +66,6 @@ def draw_points(axes, data, *args, **kwargs):
     y = [c[0][1] for c in data]
     color = [c[1] for c in data]
     axes.scatterplot(x, y, color=color, *args, **kwargs)
-
 
 #
 # Layout algorithm for tree representation
@@ -405,8 +435,9 @@ def view_data(ref_db,
         real_sql = "SELECT * FROM ({}) ORDER BY abs_seq".format(sql)
     data = pandas.read_sql_query(real_sql, conn)
     spec_text = file(spec_file).read()
-    spec_text = re.sub(r"//.*", "", spec_text)
-    spec = json.loads(spec_text)
+    if os.path.splitext(spec_file)[-1] == ".json":
+        spec_text = re.sub(r"//.*", "", spec_text)
+    spec = loads(spec_text)
 
     canvas = toyplot.canvas.Canvas(width, height)
     draw_table(canvas, spec, data, colormap, not no_ignore_root)

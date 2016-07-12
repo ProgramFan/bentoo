@@ -1,4 +1,5 @@
 {
+  "label": "Utilization Analysis of Moasp",
   "subgroups": [
     {
       "data": [ "abs_seq", "level", "TimerName" ], 
@@ -31,6 +32,5 @@
       "type": "bars", 
       "label": "MFlops"
     }
-  ], 
-  "label": "Utilization Analysis of Moasp"
+  ] 
 }
