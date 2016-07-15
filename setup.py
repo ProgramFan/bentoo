@@ -5,14 +5,15 @@ from setuptools import setup, find_packages
 setup(
     name="bentoo",
     description="Benchmarking tools",
-    version="0.14.dev",
+    version="0.14",
     packages=find_packages(),
     scripts=["scripts/bentoo-generator.py", "scripts/bentoo-runner.py",
              "scripts/bentoo-collector.py", "scripts/bentoo-analyser.py",
              "scripts/bentoo-likwid-metric.py", "scripts/bentoo-quickstart.py",
              "scripts/bentoo-calltree.py", "scripts/bentoo-merge.py",
              "scripts/bentoo-calltree-analyser.py",
-             "scripts/bentoo-viewer.py", "scripts/bentoo-svgconvert.py"],
+             "scripts/bentoo-viewer.py", "scripts/bentoo-svgconvert.py",
+             "scripts/bentoo-confreader.py"],
     package_data={
         '': ['*.adoc', '*.rst', '*.md']
     },
