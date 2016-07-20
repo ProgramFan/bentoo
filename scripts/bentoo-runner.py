@@ -347,6 +347,110 @@ class YhrunRunner:
                 return "failed"
 
 
+pbs_template = '''#PBS -N ${jobname}
+#PBS -l nodes=${nnodes}:ppn=${ppn} 
+#PBS -j oe
+#PBS -n
+#PBS -V
+#PBS -o STDOUT
+${queue}
+
+${envs}
+
+cd $PBS_O_WORKDIR
+mpirun -np ${nprocs} -ppn ${procs_per_node} -machinefile $PBS_NODEFILE ${iface} ${cmd}
+'''
+
+class PbsRunner:
+
+    @classmethod
+    def is_available(cls):
+        if has_program(["qstat", "-h"]):
+            return True
+        else:
+            return False
+
+    @classmethod
+    def register_cmdline_args(cls, argparser):
+        argparser.add_argument("-Q", "--Queue",
+                               metavar="QUEUE", dest="queue",
+                               help="Select job queue to use")
+        argparser.add_argument("--iface",
+                               help="Network interface to use")
+
+    @classmethod
+    def parse_cmdline_args(cls, namespace):
+        return {"queue": namespace.queue,
+                "iface": namespace.iface}
+
+    def __init__(self, args):
+        self.args = args
+
+    def run(self, case, timeout=None, make_script=False, dryrun=False,
+            verbose=False, **kwargs):
+        test_vector = case["test_vector"]
+        path = case["path"]
+        spec = case["spec"]
+        assert os.path.isabs(path)
+
+        run = spec["run"]
+        nnodes = str(run["nnodes"])
+        procs_per_node = str(run["procs_per_node"])
+        nprocs = str(run["nprocs"])
+        exec_cmd = " ".join(map(lambda x: "\"{0}\"".format(x), spec["cmd"]))
+
+        tplvars = {
+            "nprocs": nprocs,
+            "procs_per_node": procs_per_node,
+            "nnodes": nnodes,
+            "cwd": path,
+            "cmd": exec_cmd,
+            "iface": "",
+            "queue": "",
+            "jobname": "job_spec",
+            "ppn": 1
+        }
+        if self.args["iface"]:
+            tplvars["iface"] = "-iface {}".format(self.args["iface"])
+        if self.args["queue"]:
+            tplvars["queue"] = "#PBS -q {}".format(self.args["queue"])
+            
+        envs_str = []
+        for k, v in spec["envs"].iteritems():
+            envs_str.append("export {0}={1}".format(k, shell_quote(v)))
+        envs_str = "\n".join(envs_str)
+        tplvars["envs"] = envs_str
+
+        pbs_file = os.path.join(path, "job_spec.pbs")
+        tpl = string.Template(pbs_template)
+        file(pbs_file, "w").write(tpl.safe_substitute(tplvars))
+
+        if make_script:
+            content = ["#!/bin/bash"]
+            content.append("")
+            content.append("qsub ./job_spec.pbs")
+            script_file = os.path.join(path, "run.sh")
+            file(script_file, "w").write("\n".join(content))
+            os.chmod(script_file, 0755)
+
+        if dryrun:
+            return "skipped"
+
+        env = dict(os.environ)
+        for k, v in spec["envs"].iteritems():
+            env[k] = str(v)
+        cmd = ["qsub", "./job_spec.pbs"]
+        ret = subprocess.call(cmd, env=env, cwd=path, shell=False)
+
+        if ret == 0:
+            return "success"
+        # FIXME: find the correct return code for timeout
+        elif ret == 124:
+            return "timeout"
+        else:
+            return "failed"
+
+
 class BsubRunner:
 
     @classmethod
@@ -531,7 +635,7 @@ def main():
 
     ag = parser.add_argument_group("Runner options")
     ag.add_argument("--case-runner",
-                    choices=["yhrun", "bsub", "mpirun", "auto"],
+                    choices=["yhrun", "bsub", "mpirun", "pbs", "auto"],
                     default="auto", help="Runner to choose (default: auto)")
     ag.add_argument("-t", "--timeout", default=None,
                     help="Timeout for each case, in minites")
@@ -553,6 +657,9 @@ def main():
     ag = parser.add_argument_group("bsub options")
     BsubRunner.register_cmdline_args(ag)
 
+    ag = parser.add_argument_group("pbs options")
+    PbsRunner.register_cmdline_args(ag)
+
     config = parser.parse_args()
 
     proj = TestProjectReader(config.project_root)
@@ -560,12 +667,16 @@ def main():
         runner = MpirunRunner(MpirunRunner.parse_cmdline_args(config))
     elif config.case_runner == "yhrun":
         runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
+    elif config.case_runner == "pbs":
+        runner = PbsRunner(PbsRunner.parse_cmdline_args(config))
     elif config.case_runner == "bsub":
         runner = BsubRunner(BsubRunner.parse_cmdline_args(config))
     else:
         # automatically determine which is the best
         if YhrunRunner.is_available():
             runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
+        elif PbsRunner.is_available():
+            runner = PbsRunner(PbsRunner.parse_cmdline_args(config))
         elif BsubRunner.is_available():
             runner = BsubRunner(BsubRunner.parse_cmdline_args(config))
         elif MpirunRunner.is_available():
