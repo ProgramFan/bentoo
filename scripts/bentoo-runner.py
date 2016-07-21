@@ -1,8 +1,10 @@
 #!/usr/bin/env python2.7
 # coding: utf-8
-''' Runner - Versatile testcase runner
+#
 
-Runner run a hierarchy of test cases and store the results in another
+''' bentoo-runner - Versatile testcase runner
+
+bentoo-runner runs a hierarchy of test cases and store the results in another
 hierarchy.  It provides options such as test case filter, timeout etc, to make
 repeated test easy.
 '''
@@ -21,7 +23,6 @@ from collections import OrderedDict
 
 
 class TestProjectReader:
-
     '''Scan a test project for test cases'''
 
     def __init__(self, project_root):
@@ -33,8 +34,8 @@ class TestProjectReader:
         conf = json.load(file(conf_fn))
         version = conf.get("version", 1)
         if version != 1:
-            raise RuntimeError(
-                "Unsupported project version '%s': Only 1 " % version)
+            raise RuntimeError("Unsupported project version '%s': Only 1 " %
+                               version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
         self.data_files = conf["data_files"]
@@ -61,9 +62,8 @@ class TestProjectReader:
         for k, v in self.test_cases.iteritems():
             case_fullpath = os.path.join(self.project_root, v)
             if not os.path.exists(case_fullpath):
-                raise RuntimeError(
-                    "Test case '%s' not found in '%s'" %
-                    (k, case_fullpath))
+                raise RuntimeError("Test case '%s' not found in '%s'" %
+                                   (k, case_fullpath))
             case_spec_fullpath = os.path.join(case_fullpath, "TestCase.json")
             if not os.path.exists(case_spec_fullpath):
                 raise RuntimeError(
@@ -73,10 +73,8 @@ class TestProjectReader:
 
     def itercases(self):
         for case in self.test_cases:
-            case_spec_fullpath = os.path.join(
-                self.project_root,
-                case["path"],
-                "TestCase.json")
+            case_spec_fullpath = os.path.join(self.project_root, case["path"],
+                                              "TestCase.json")
             case_spec = json.load(file(case_spec_fullpath))
             yield {
                 "test_vector": case["test_vector"],
@@ -120,8 +118,7 @@ def make_bash_script(cmd, envs, outfile):
     os.chmod(outfile, 0755)
 
 
-class MpirunRunner:
-
+class MpirunLauncher:
     @classmethod
     def is_available(cls):
         if has_program(["mpirun", "-h"]):
@@ -133,23 +130,27 @@ class MpirunRunner:
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument("--hosts", default=None,
+        argparser.add_argument("--hosts",
+                               default=None,
                                help="Comma seperated host list")
-        argparser.add_argument("--ppn", default=None,
+        argparser.add_argument("--ppn",
+                               default=None,
                                help="Processes per node")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {
-            "hosts": namespace.hosts,
-            "ppn": namespace.ppn
-        }
+        return {"hosts": namespace.hosts, "ppn": namespace.ppn}
 
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None, make_script=False, dryrun=False,
-            verbose=False, **kwargs):
+    def run(self,
+            case,
+            timeout=None,
+            make_script=False,
+            dryrun=False,
+            verbose=False,
+            **kwargs):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -179,15 +180,20 @@ class MpirunRunner:
         err_fn = os.path.join(path, "STDERR")
 
         if verbose:
-            proc1 = subprocess.Popen(cmd, env=env, cwd=path,
+            proc1 = subprocess.Popen(cmd,
+                                     env=env,
+                                     cwd=path,
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT)
-            proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
+            proc2 = subprocess.Popen(["tee", out_fn],
+                                     cwd=path,
                                      stdin=proc1.stdout)
             proc1.stdout.close()
             ret = proc2.wait()
         else:
-            ret = subprocess.call(cmd, env=env, cwd=path,
+            ret = subprocess.call(cmd,
+                                  env=env,
+                                  cwd=path,
                                   stdout=file(out_fn, "w"),
                                   stderr=file(err_fn, "w"))
 
@@ -199,8 +205,7 @@ class MpirunRunner:
             return "failed"
 
 
-class YhrunRunner:
-
+class YhrunLauncher:
     @classmethod
     def is_available(cls):
         if has_program(["yhrun", "-h"]):
@@ -210,16 +215,24 @@ class YhrunRunner:
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument("-p", "--partition",
-                               metavar="PARTITION", dest="partition",
+        argparser.add_argument("-p",
+                               "--partition",
+                               metavar="PARTITION",
+                               dest="partition",
                                help="Select job partition to use")
-        argparser.add_argument("-x", metavar="NODELIST", dest="excluded_nodes",
+        argparser.add_argument("-x",
+                               metavar="NODELIST",
+                               dest="excluded_nodes",
                                help="Exclude nodes from job allocation")
-        argparser.add_argument("-w", metavar="NODELIST", dest="only_nodes",
+        argparser.add_argument("-w",
+                               metavar="NODELIST",
+                               dest="only_nodes",
                                help="Use only selected nodes")
-        argparser.add_argument("--batch", action="store_true",
+        argparser.add_argument("--batch",
+                               action="store_true",
                                help="Use yhbatch instead of yhrun")
-        argparser.add_argument("--fix-glex", choices=("none", "v0", "v1"),
+        argparser.add_argument("--fix-glex",
+                               choices=("none", "v0", "v1"),
                                default="none",
                                help="Fix GLEX settings (default: none)")
 
@@ -234,8 +247,13 @@ class YhrunRunner:
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None, make_script=False, dryrun=False,
-            verbose=False, **kwargs):
+    def run(self,
+            case,
+            timeout=None,
+            make_script=False,
+            dryrun=False,
+            verbose=False,
+            **kwargs):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -317,8 +335,8 @@ class YhrunRunner:
 
         else:
             if make_script:
-                make_bash_script(
-                    cmd, spec["envs"], os.path.join(path, "run.sh"))
+                make_bash_script(cmd, spec["envs"],
+                                 os.path.join(path, "run.sh"))
             if dryrun:
                 return "skipped"
 
@@ -326,15 +344,20 @@ class YhrunRunner:
             err_fn = os.path.join(path, "STDERR")
 
             if verbose:
-                proc1 = subprocess.Popen(cmd, env=env, cwd=path,
+                proc1 = subprocess.Popen(cmd,
+                                         env=env,
+                                         cwd=path,
                                          stdout=subprocess.PIPE,
                                          stderr=subprocess.STDOUT)
-                proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
+                proc2 = subprocess.Popen(["tee", out_fn],
+                                         cwd=path,
                                          stdin=proc1.stdout)
                 proc1.stdout.close()
                 ret = proc2.wait()
             else:
-                ret = subprocess.call(cmd, env=env, cwd=path,
+                ret = subprocess.call(cmd,
+                                      env=env,
+                                      cwd=path,
                                       stdout=file(out_fn, "w"),
                                       stderr=file(err_fn, "w"))
 
@@ -348,7 +371,7 @@ class YhrunRunner:
 
 
 pbs_template = '''#PBS -N ${jobname}
-#PBS -l nodes=${nnodes}:ppn=${ppn} 
+#PBS -l nodes=${nnodes}:ppn=${ppn}
 #PBS -j oe
 #PBS -n
 #PBS -V
@@ -358,11 +381,12 @@ ${queue}
 ${envs}
 
 cd $PBS_O_WORKDIR
-mpirun -np ${nprocs} -ppn ${procs_per_node} -machinefile $PBS_NODEFILE ${iface} ${cmd}
+mpirun -np ${nprocs} -ppn ${procs_per_node} -machinefile \
+    $PBS_NODEFILE ${iface} ${cmd}
 '''
 
-class PbsRunner:
 
+class PbsLauncher:
     @classmethod
     def is_available(cls):
         if has_program(["qstat", "-h"]):
@@ -372,22 +396,27 @@ class PbsRunner:
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument("-Q", "--Queue",
-                               metavar="QUEUE", dest="queue",
+        argparser.add_argument("-Q",
+                               "--Queue",
+                               metavar="QUEUE",
+                               dest="queue",
                                help="Select job queue to use")
-        argparser.add_argument("--iface",
-                               help="Network interface to use")
+        argparser.add_argument("--iface", help="Network interface to use")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {"queue": namespace.queue,
-                "iface": namespace.iface}
+        return {"queue": namespace.queue, "iface": namespace.iface}
 
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None, make_script=False, dryrun=False,
-            verbose=False, **kwargs):
+    def run(self,
+            case,
+            timeout=None,
+            make_script=False,
+            dryrun=False,
+            verbose=False,
+            **kwargs):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -414,7 +443,7 @@ class PbsRunner:
             tplvars["iface"] = "-iface {}".format(self.args["iface"])
         if self.args["queue"]:
             tplvars["queue"] = "#PBS -q {}".format(self.args["queue"])
-            
+
         envs_str = []
         for k, v in spec["envs"].iteritems():
             envs_str.append("export {0}={1}".format(k, shell_quote(v)))
@@ -451,8 +480,7 @@ class PbsRunner:
             return "failed"
 
 
-class BsubRunner:
-
+class BsubLauncher:
     @classmethod
     def is_available(cls):
         if has_program(["bsub", "-h"]):
@@ -462,17 +490,19 @@ class BsubRunner:
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument("-q", "--queue",
-                               metavar="QUEUE", dest="queue",
+        argparser.add_argument("-q",
+                               "--queue",
+                               metavar="QUEUE",
+                               dest="queue",
                                help="Select job queue to use")
-        argparser.add_argument("-b", action="store_true", dest="large_seg",
+        argparser.add_argument("-b",
+                               action="store_true",
+                               dest="large_seg",
                                help="Use large segment support")
         argparser.add_argument("--cgsp",
                                help="Number of slave cores per core group")
-        argparser.add_argument("--share_size",
-                               help="Share region size")
-        argparser.add_argument("--host_stack",
-                               help="Host stack size")
+        argparser.add_argument("--share_size", help="Share region size")
+        argparser.add_argument("--host_stack", help="Host stack size")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -485,8 +515,13 @@ class BsubRunner:
     def __init__(self, args):
         self.args = args
 
-    def run(self, case, timeout=None, make_script=False, dryrun=False,
-            verbose=False, **kwargs):
+    def run(self,
+            case,
+            timeout=None,
+            make_script=False,
+            dryrun=False,
+            verbose=False,
+            **kwargs):
         test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
@@ -521,8 +556,7 @@ class BsubRunner:
             env[k] = str(v)
 
         if make_script:
-            make_bash_script(
-                cmd, spec["envs"], os.path.join(path, "run.sh"))
+            make_bash_script(cmd, spec["envs"], os.path.join(path, "run.sh"))
         if dryrun:
             return "skipped"
 
@@ -530,15 +564,20 @@ class BsubRunner:
         err_fn = os.path.join(path, "STDERR")
 
         if verbose:
-            proc1 = subprocess.Popen(cmd, env=env, cwd=path,
+            proc1 = subprocess.Popen(cmd,
+                                     env=env,
+                                     cwd=path,
                                      stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT)
-            proc2 = subprocess.Popen(["tee", out_fn], cwd=path,
+            proc2 = subprocess.Popen(["tee", out_fn],
+                                     cwd=path,
                                      stdin=proc1.stdout)
             proc1.stdout.close()
             ret = proc2.wait()
         else:
-            ret = subprocess.call(cmd, env=env, cwd=path,
+            ret = subprocess.call(cmd,
+                                  env=env,
+                                  cwd=path,
                                   stdout=file(out_fn, "w"),
                                   stderr=file(err_fn, "w"))
 
@@ -552,7 +591,6 @@ class BsubRunner:
 
 
 class SimpleProgressReporter:
-
     def project_begin(self, project):
         sys.stdout.write("Start project %s:\n" % project.name)
         sys.stdout.flush()
@@ -578,9 +616,17 @@ class SimpleProgressReporter:
         sys.stdout.flush()
 
 
-def run_project(project, runner, reporter, timeout=None, make_script=True,
-                dryrun=False, verbose=False, exclude=[], include=[],
-                skip_finished=False, sleep=0):
+def run_project(project,
+                runner,
+                reporter,
+                timeout=None,
+                make_script=True,
+                dryrun=False,
+                verbose=False,
+                exclude=[],
+                include=[],
+                skip_finished=False,
+                sleep=0):
     stats = OrderedDict(zip(["success", "timeout", "failed", "skipped"],
                             [[], [], [], []]))
     if skip_finished and project.last_stats:
@@ -605,8 +651,11 @@ def run_project(project, runner, reporter, timeout=None, make_script=True,
             stats["skipped"].append(case_id)
             continue
         reporter.case_begin(project, case)
-        result = runner.run(case, verbose=verbose, timeout=timeout,
-                            make_script=make_script, dryrun=dryrun)
+        result = runner.run(case,
+                            verbose=verbose,
+                            timeout=timeout,
+                            make_script=make_script,
+                            dryrun=dryrun)
         reporter.case_end(project, case, result)
         stats[result].append(case_id)
         if sleep:
@@ -622,74 +671,95 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
 
     ag = parser.add_argument_group("Global options")
-    ag.add_argument("project_root",
-                    help="Root directory of the test project")
-    ag.add_argument("--skip-finished", action="store_true",
+    ag.add_argument("project_root", help="Root directory of the test project")
+    ag.add_argument("--skip-finished",
+                    action="store_true",
                     help="Skip already finished cases")
 
     ag = parser.add_argument_group("Filter options")
-    ag.add_argument("-e", "--exclude", action="append", default=[],
+    ag.add_argument("-e",
+                    "--exclude",
+                    action="append",
+                    default=[],
                     help="Excluded case paths, support shell wildcards")
-    ag.add_argument("-i", "--include", action="append", default=[],
+    ag.add_argument("-i",
+                    "--include",
+                    action="append",
+                    default=[],
                     help="Included case paths, support shell wildcards")
 
-    ag = parser.add_argument_group("Runner options")
-    ag.add_argument("--case-runner",
+    ag = parser.add_argument_group("Launcher options")
+    ag.add_argument("--launcher",
                     choices=["yhrun", "bsub", "mpirun", "pbs", "auto"],
-                    default="auto", help="Runner to choose (default: auto)")
-    ag.add_argument("-t", "--timeout", default=None,
+                    default="auto",
+                    help="Job launcher (default: auto)")
+    ag.add_argument("-t",
+                    "--timeout",
+                    default=None,
                     help="Timeout for each case, in minites")
-    ag.add_argument("--sleep", type=int, default=0,
+    ag.add_argument("--sleep",
+                    type=int,
+                    default=0,
                     help="Sleep specified seconds between jobs")
-    ag.add_argument("--make-script", action="store_true",
+    ag.add_argument("--make-script",
+                    action="store_true",
                     help="Generate job script for each case")
-    ag.add_argument("--dryrun", action="store_true",
+    ag.add_argument("--dryrun",
+                    action="store_true",
                     help="Don't actually run cases")
-    ag.add_argument("--verbose", action="store_true", default=False,
+    ag.add_argument("--verbose",
+                    action="store_true",
+                    default=False,
                     help="Be verbose (print jobs output currently)")
 
     ag = parser.add_argument_group("yhrun options")
-    YhrunRunner.register_cmdline_args(ag)
+    YhrunLauncher.register_cmdline_args(ag)
 
     ag = parser.add_argument_group("mpirun options")
-    MpirunRunner.register_cmdline_args(ag)
+    MpirunLauncher.register_cmdline_args(ag)
 
     ag = parser.add_argument_group("bsub options")
-    BsubRunner.register_cmdline_args(ag)
+    BsubLauncher.register_cmdline_args(ag)
 
     ag = parser.add_argument_group("pbs options")
-    PbsRunner.register_cmdline_args(ag)
+    PbsLauncher.register_cmdline_args(ag)
 
     config = parser.parse_args()
 
     proj = TestProjectReader(config.project_root)
-    if config.case_runner == "mpirun":
-        runner = MpirunRunner(MpirunRunner.parse_cmdline_args(config))
-    elif config.case_runner == "yhrun":
-        runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
-    elif config.case_runner == "pbs":
-        runner = PbsRunner(PbsRunner.parse_cmdline_args(config))
-    elif config.case_runner == "bsub":
-        runner = BsubRunner(BsubRunner.parse_cmdline_args(config))
+    if config.launcher == "mpirun":
+        runner = MpirunLauncher(MpirunLauncher.parse_cmdline_args(config))
+    elif config.launcher == "yhrun":
+        runner = YhrunLauncher(YhrunLauncher.parse_cmdline_args(config))
+    elif config.launcher == "pbs":
+        runner = PbsLauncher(PbsLauncher.parse_cmdline_args(config))
+    elif config.launcher == "bsub":
+        runner = BsubLauncher(BsubLauncher.parse_cmdline_args(config))
     else:
         # automatically determine which is the best
-        if YhrunRunner.is_available():
-            runner = YhrunRunner(YhrunRunner.parse_cmdline_args(config))
-        elif PbsRunner.is_available():
-            runner = PbsRunner(PbsRunner.parse_cmdline_args(config))
-        elif BsubRunner.is_available():
-            runner = BsubRunner(BsubRunner.parse_cmdline_args(config))
-        elif MpirunRunner.is_available():
-            runner = MpirunRunner(MpirunRunner.parse_cmdline_args(config))
+        if YhrunLauncher.is_available():
+            runner = YhrunLauncher(YhrunLauncher.parse_cmdline_args(config))
+        elif PbsLauncher.is_available():
+            runner = PbsLauncher(PbsLauncher.parse_cmdline_args(config))
+        elif BsubLauncher.is_available():
+            runner = BsubLauncher(BsubLauncher.parse_cmdline_args(config))
+        elif MpirunLauncher.is_available():
+            runner = MpirunLauncher(MpirunLauncher.parse_cmdline_args(config))
         else:
             raise RuntimeError(
-                "Failed to automatically determine runner, please specify "
-                "one via --case-runner")
+                "Failed to automatically determine launcher, please specify "
+                "one via --launcher")
 
-    run_project(proj, runner, SimpleProgressReporter(), timeout=config.timeout,
-                make_script=config.make_script, dryrun=config.dryrun,
-                verbose=config.verbose, exclude=config.exclude,
-                include=config.include, skip_finished=config.skip_finished,
+    run_project(proj,
+                runner,
+                SimpleProgressReporter(),
+                timeout=config.timeout,
+                make_script=config.make_script,
+                dryrun=config.dryrun,
+                verbose=config.verbose,
+                exclude=config.exclude,
+                include=config.include,
+                skip_finished=config.skip_finished,
                 sleep=config.sleep)
 
 
