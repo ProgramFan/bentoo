@@ -252,13 +252,14 @@ def draw_tree(axes, data, colors, indent=0.05):
     draw_stem(axes, layout, indent)
 
 
-def draw_percent(axes, data, colors):
+def draw_percent(axes, data, colors, data_format=".1g"):
     data = data[::-1]
     axes.bars(data, along="y", color=colors[::-1])
     for i, n in enumerate(data):
+        format_spec = "{:%s}%%" % data_format
         axes.text(n,
                   i,
-                  "{:.1f}%".format(n * 100),
+                  format_spec.format(n * 100),
                   color="black",
                   style={"text-anchor": "start",
                          "-toyplot-anchor-shift": "5px"})
@@ -399,7 +400,8 @@ def draw_body(table, spec, data, colormap):
                 axes = table.body.column(col_start).merge().axes(
                     cell_padding=2)
                 column_data = data[spec["data"]]
-                draw_percent(axes, column_data, colors["value"])
+                data_format = spec.get("format", ".1g")
+                draw_percent(axes, column_data, colors["value"], data_format)
             elif tp == "bars":
                 axes = table.body.column(col_start).merge().axes(
                     cell_padding=2)
