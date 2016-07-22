@@ -14,12 +14,30 @@ import collections
 
 try:
     import ruamel.yaml
+    import json
+    import re
+
+    def is_json(content):
+        # Fast check to disginguish json from yml by checking yaml's flow style
+        # list and . It's not complete but works well.
+        if re.findall(r"^\s*- \S+", content):
+            return False
+        elif re.findall(r"\w+\s*:\s*\S+", content):
+            return False
+        else:
+            return True
 
     def load(fileobj, *args, **kwargs):
-        return ruamel.yaml.load(fileobj, ruamel.yaml.RoundTripLoader)
+        return loads(fileobj.read(), *args, **kwargs)
 
     def loads(string, *args, **kwargs):
-        return ruamel.yaml.load(fileobj, ruamel.yaml.RoundTripLoader)
+        if is_json(string):
+            return json.loads(string,
+                              object_pairs_hook=collections.OrderedDict,
+                              *args,
+                              **kwargs)
+        else:
+            return ruamel.yaml.load(string, ruamel.yaml.RoundTripLoader)
 
     def dump(data, fileobj, *args, **kwargs):
         ruamel.yaml.dump(data, fileobj, Dumper=ruamel.yaml.RoundTripDumper)
