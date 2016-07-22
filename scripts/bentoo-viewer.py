@@ -227,7 +227,8 @@ def compute_color(colormap, tree):
     return [colormap.color(i) for i in color_index]
 
 
-def draw_tree(axes, data, colors, indent=0.05):
+def draw_tree(axes, data, colors, indent=0.05, theme="dark"):
+    assert theme in ("light", "dark")
     data_1 = [x * indent for x in data["level"]][::-1]
     data_2 = [1 - x for x in data_1]
     series = numpy.column_stack([data_1, data_2])
@@ -236,15 +237,18 @@ def draw_tree(axes, data, colors, indent=0.05):
     for c in data_2_color:
         color = toyplot.color.rgba(c["r"], c["g"], c["b"], 0.1)
         data_1_color.append(color)
+    if theme != "dark":
+        data_2_color = data_1_color
     axes.bars(series,
               along="y",
               color=numpy.array([data_1_color, data_2_color]).T)
     axes.x.domain.max = 1
+    text_color = "white" if theme == "dark" else "black"
     for i, n in enumerate(data["name"][::-1]):
         axes.text(data_1[i],
                   i,
                   n,
-                  color="white",
+                  color=text_color,
                   style={"text-anchor": "start",
                          "-toyplot-anchor-shift": "5px"})
 
@@ -395,7 +399,8 @@ def draw_body(table, spec, data, colormap):
                 colors["value"] = compute_color(colormap, tree_data)
                 axes = table.body.column(col_start).merge().axes(
                     cell_padding=2)
-                draw_tree(axes, tree_data, colors["value"])
+                theme = spec.get("theme", "light")
+                draw_tree(axes, tree_data, colors["value"], theme=theme)
             elif tp == "percent":
                 axes = table.body.column(col_start).merge().axes(
                     cell_padding=2)
