@@ -568,6 +568,7 @@ class LikwidBlockParser(object):
         self.column_names.extend(start_columns)
         self.column_types.extend([int, str, float, int])
         other_columns = list(likwid_data.fieldnames[4:])
+        other_columns = filter(lambda x: x, other_columns)
         self.column_names.extend(other_columns)
         self.column_types.extend([float] * len(other_columns))
         self.data = []
