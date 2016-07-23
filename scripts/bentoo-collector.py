@@ -677,6 +677,7 @@ class UdcBlockParser(object):
         self.column_names.extend(start_columns)
         self.column_types.extend([int, str])
         other_columns = list(data.fieldnames[2:])
+        other_columns = filter(lambda x: x, other_columns)
         self.column_names.extend(other_columns)
         self.column_types.extend([float] * len(other_columns))
         self.data = []
