@@ -348,7 +348,7 @@ def parse_jasmin4log(fn, use_table=None):
         # Extract table header
         header = log_table["header"].split()
         assert (header[0] == "Name")
-        header[0] == "TimerName"
+        header[0] = "TimerName"
         timer_name_pos = log_table["header"].index("Name")
         timer_value_pos = timer_name_pos + len("Name")
         # Parse table rows
@@ -361,7 +361,7 @@ def parse_jasmin4log(fn, use_table=None):
             # split out the timer name column first, it may contain strange
             # charactors such as spaces.
             timer_name = ln[:timer_value_pos]
-            timer_rec["Name"] = timer_name.strip()
+            timer_rec["TimerName"] = timer_name.strip()
             timer_values = ln[timer_value_pos:]
             seg_ptn = re.compile(r"(\S+)")
             for i, seg in enumerate(seg_ptn.finditer(timer_values)):
