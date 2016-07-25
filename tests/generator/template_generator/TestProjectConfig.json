@@ -42,7 +42,14 @@
                 "tasks_per_proc": "1 if \"$mode\" == \"mpi\" else 24",
                 "nprocs": "$nnodes * (1 if \"mode\" == \"mpi\" else 24)"
             },
-            "results": ["LIKWID_$eventset", "test.log"]
+            "results": ["LIKWID_$eventset", "test.log"],
+            "validate": {
+                "exists": ["test.log", "LIKWID_$eventset"],
+                "contains": {
+                    "test.log": "TOTAL_RUN_TIME",
+                    "LIKWID_$eventset": "TOTAL_RUN_TIME"
+                }
+            }
         }
     }
 }
