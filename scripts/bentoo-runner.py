@@ -630,6 +630,26 @@ class SimpleProgressReporter:
         sys.stdout.flush()
 
 
+def validate_case(case):
+    # No 'validate' method means always valid
+    if "validate" not in case["run"]:
+        return True
+    validator = case["run"]["validate"]
+    if "exists" in validator:
+        for f in validator["exists"]:
+            fullpath = os.path.join(case["path"], f)
+            if not os.path.exists(fullpath):
+                return False
+    if "contains" in validator:
+        for k, v in validator["contains"].iteritems():
+            fullpath = os.path.join(case["path"], k)
+            if not os.path.exists(fullpath):
+                return False
+            if not re.search(v, file(fullpath).read()):
+                return False
+    return True
+
+
 def run_project(project,
                 runner,
                 reporter,
@@ -640,7 +660,8 @@ def run_project(project,
                 exclude=[],
                 include=[],
                 skip_finished=False,
-                sleep=0):
+                sleep=0,
+                rerun_failed=False):
     stats = OrderedDict(
         zip(["success", "timeout", "failed", "skipped"], [[], [], [], []]))
     if skip_finished and project.last_stats:
@@ -654,6 +675,8 @@ def run_project(project,
 
     reporter.project_begin(project)
     for case in project.itercases():
+        if rerun_failed and validate_case(case):
+            continue
         if skip_finished and case in stats["success"]:
             continue
         case_path = os.path.relpath(case["path"], project.project_root)
@@ -690,6 +713,10 @@ def main():
         "--skip-finished",
         action="store_true",
         help="Skip already finished cases")
+    ag.add_argument(
+        "--rerun-failed",
+        action="store_true",
+        help="Rerun failed jobs (using validator to determine)")
 
     ag = parser.add_argument_group("Filter options")
     ag.add_argument(
@@ -782,7 +809,8 @@ def main():
         exclude=config.exclude,
         include=config.include,
         skip_finished=config.skip_finished,
-        sleep=config.sleep)
+        sleep=config.sleep,
+        rerun_failed=config.rerun_failed)
 
 
 if __name__ == "__main__":
