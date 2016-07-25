@@ -11,151 +11,26 @@ calculate automatically derived formulee defined in likwid perfgroup format.
 Note that only raw performance counters shall be stored in the database.
 '''
 
+#
+# sample inputs:
+#
+# {
+#    "trans_names": {
+#       "CASXXX": "MBOXC1"
+#    },
+#    "metrics": {
+#       "MFlop/s": "MBOXC1 * 64"
+#    }
+# }
+#
+# If one want to retain the order of metrics, use OrderedDict instead.
+# Each metric is of type "float".
+#
+
 import os
 import re
 import argparse
 import sqlite3
-
-
-#
-# Likwid Helpers
-#
-
-class BlockReader(object):
-
-    def __init__(self, start, end, use_regex=False):
-        if use_regex:
-            self.start_ = re.compile(start)
-
-            def match_start(x):
-                return self.start_.match(x)
-            self.match_start = match_start
-
-            self.end = re.compile(end)
-
-            def match_end(x):
-                return self.end_.match(x)
-            self.match_end = match_end
-        else:
-            def match_start(x):
-                return x == self.start_
-
-            def match_end(x):
-                return x == self.end_
-
-            self.start_ = start
-            self.end_ = end
-            self.match_start = match_start
-            self.match_end = match_end
-
-    def iterblocks(self, iterable):
-        while True:
-            try:
-                block = []
-                while not self.match_start(iterable.next()):
-                    continue
-                line = iterable.next()
-                while not self.match_end(line):
-                    block.append(line)
-                    line = iterable.next()
-                yield block
-            except StopIteration:
-                return
-
-    def findblock(self, iterable):
-        block = []
-        while not self.match_start(iterable.next()):
-            continue
-        line = iterable.next()
-        while not self.match_end(line):
-            block.append(line)
-            line = iterable.next()
-        return block
-
-
-class EventsetParser(object):
-
-    def __init__(self):
-        self.events = []
-        self.counters = []
-
-    def process(self, iterable):
-        for line in iterable:
-            counter, event = line.split()
-            self.events.append(event)
-            self.counters.append(counter)
-
-
-class MetricsParser(object):
-
-    def __init__(self):
-        self.metrics = []
-
-    def process(self, iterable):
-        for line in iterable:
-            if re.findall(r"\[.*\]", line):
-                name, unit, formula = map(lambda x: x.strip(),
-                                          re.match(r"^(.*?)\[(.*?)\](.*)$",
-                                                   line).groups())
-                self.metrics.append((name, unit, formula))
-            else:
-                name, formula = map(lambda x: x.strip(),
-                                    re.match(r"^(.*?)(\S+)$", line).groups())
-                self.metrics.append((name, "1", formula))
-
-
-def stringify(content):
-    return re.sub(r"\W", "_", content)
-
-
-class LikwidMetrics(object):
-
-    def __init__(self, group_file):
-        with open(group_file) as groupfile:
-            eventset_reader = BlockReader("EVENTSET\n", "\n")
-            metrics_reader = BlockReader("METRICS\n", "\n")
-            ep = EventsetParser()
-            mp = MetricsParser()
-            ep.process(eventset_reader.findblock(groupfile))
-            mp.process(metrics_reader.findblock(groupfile))
-            self.eventset = {"events": ep.events, "counters": ep.counters,
-                             "pair": ["%s:%s" % x for x in zip(ep.events,
-                                                               ep.counters)]}
-            self.metrics = mp.metrics
-
-    def event_count(self):
-        return len(self.eventset["events"])
-
-    def event_name(self, event_id):
-        return self.eventset["events"][event_id]
-
-    def counter_name(self, event_id):
-        return self.eventset["counters"][event_id]
-
-    def event_counter_pair(self, event_id):
-        return self.eventset["pair"][event_id]
-
-    def metric_count(self):
-        return len(self.metrics)
-
-    def metric_name(self, metric_id):
-        return self.metrics[metric_id][0]
-
-    def normal_metric_name(self, metric_id):
-        return stringify(self.metrics[metric_id][0])
-
-    def metric_unit(self, metric_id):
-        return self.metrics[metric_id][1]
-
-    def calc_metric(self, metric_id, eventvals):
-        formula = str(self.metrics[metric_id][2])
-        for k, v in eventvals.iteritems():
-            formula = formula.replace(k, str(v))
-        try:
-            result = eval(formula)
-        except ZeroDivisionError:
-            result = 0.0
-        return result
 
 
 #
@@ -179,34 +54,17 @@ def column_split(columns):
     return (columns[:timer_column_index+1], columns[timer_column_index+1:])
 
 
-def locate_likwid_group_file(arch, group):
-    # NOTE: Here we respect Likwid's group file locating mechanism: first try
-    # "~/.likwid/groups/ARCH/GROUP", then "LIKWID_HOME/share/likwid
-    # /perfgroups/ARCH/GROUP".
-    user_conf_path = os.path.expanduser("~/.likwid/groups")
-    group_file = os.path.join(user_conf_path, arch, group + ".txt")
-    if os.path.exists(group_file):
-        return group_file
-    sys_path = os.environ["PATH"].split(":")
-    for p in sys_path:
-        if os.path.exists(os.path.join(p, "likwid-perfctr")):
-            likwid_home = os.path.dirname(os.path.abspath(p))
-            group_file = os.path.join(likwid_home, "share", "likwid",
-                                      "perfgroups", arch, group + ".txt")
-            if not os.path.exists(group_file):
-                raise ValueError("Bad likwid installation: can not find "
-                                 "'%s' for '%s' in '%s'" % (group, arch,
-                                                            likwid_home))
-            return group_file
-    raise ValueError("Can not find likwid group '%s' for '%s'" % (group, arch))
+def eval_metric(formula, values):
+    for k, v in values.iteritems():
+        formula = formula.replace(str(k), str(v))
+    try:
+        result = eval(formula)
+    except ValueError:
+        result = 0.0
+    return result
 
 
-def calc_likwid_metric(raw_db, output_db, aggregate="no", likwid_group=None,
-                       likwid_group_file=None, raw_events=False):
-    # determine operation type
-    if not raw_events and not likwid_group and not likwid_group_file:
-        raise ValueError("Incorrect operation selection")
-
+def calc_metric(raw_db, output_db, formula):
     conn0 = sqlite3.connect(raw_db)
     conn0.row_factory = sqlite3.Row
 
@@ -216,83 +74,22 @@ def calc_likwid_metric(raw_db, output_db, aggregate="no", likwid_group=None,
     input_columns = r0.keys()
     index_columns, data_columns = column_split(input_columns)
 
-    cpu_cycles_timer_name = "CPU_CYCLES"
-    if not raw_events:
-        sql = "select * from result where "
-        sql += "TimerName glob \"CPU_CYCLES@*\" limit 1"
-        r0 = conn0.execute(sql).fetchone()
-        cpu_cycles_timer_name = r0["TimerName"]
-        cpu_cycles = r0["RDTSC"]
-        cpu_model = cpu_cycles_timer_name.split("@")[-1]
-        if likwid_group_file:
-            likwid = LikwidMetrics(likwid_group_file)
-        elif likwid_group:
-            # find out correct group file
-            group_file = locate_likwid_group_file(cpu_model, likwid_group)
-            likwid = LikwidMetrics(group_file)
+    output_columns = index_columns + formula["metrics"].keys()
+    output_types = [type(x) for x in r0]
+    output_types.extend(float for x in formula["metrics"])
 
     def quote(x):
         return "\"{}\"".format(x)
 
-    select = []
-    group_by = []
-    if aggregate == "no":
-        group_by = map(quote, index_columns)
-        select = map(quote, input_columns)
-    elif aggregate == "thread":
-        new_index_columns = list(index_columns)
-        new_index_columns.remove("ThreadId")
-        group_by = map(quote, new_index_columns)
-        select.extend(group_by)
-        select.append("COUNT(ThreadId) AS ThreadCount")
-        for k in data_columns:
-            if k == "RDTSC":
-                select.append("SUM(RDTSC) AS SumRDTSC")
-                select.append("MAX(RDTSC) AS MaxRDTSC")
-            elif k == "CallCount":
-                select.append("SUM(CallCount) AS SumCallCount")
-            else:
-                select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
-    else:
-        new_index_columns = list(index_columns)
-        new_index_columns.remove("ThreadId")
-        new_index_columns.remove("ProcId")
-        group_by = map(quote, new_index_columns)
-        select.extend(group_by)
-        select.append("COUNT(ProcId) AS ProcCount")
-        select.append("COUNT(ThreadId) AS ThreadCount")
-        for k in data_columns:
-            if k == "RDTSC":
-                select.append("SUM(RDTSC) AS SumRDTSC")
-                select.append("MAX(RDTSC) AS MaxRDTSC")
-            elif k == "CallCount":
-                select.append("SUM(CallCount) AS SumCallCount")
-            else:
-                select.append("SUM(\"{0}\") AS \"{0}\"".format(k))
-
+    select = map(quote, input_columns)
     select = ", ".join(select)
-    where = "TimerName != \"%s\"" % cpu_cycles_timer_name
-    group_by = ", ".join(group_by)
-    select_sql = "SELECT {0} FROM result WHERE {1} GROUP BY {2}".format(
-        select, where, group_by)
-
-    def is_event_column(c):
-        return re.match(r"[_A-Z0-9]+:[_A-Z0-9]+", c)
-
-    # create result sqlite database
+    order_by = map(quote, index_columns)
+    order_by = ", ".join(order_by)
+    select_sql = "SELECT {0} FROM result ORDER BY {1}".format(
+        select, order_by)
     c0 = conn0.cursor()
     r0 = c0.execute(select_sql)
     r0 = c0.fetchone()
-    if raw_events:
-        output_columns = list(r0.keys())
-        output_types = [type(r0[k]) for k in output_columns]
-    else:
-        output_keys = r0.keys()
-        output_columns = [c for c in output_keys if not is_event_column(c)]
-        output_types = [type(r0[c]) for c in output_columns]
-        for i in xrange(likwid.metric_count()):
-            output_columns.append(likwid.normal_metric_name(i))
-            output_types.append(float)
 
     conn1 = sqlite3.connect(output_db)
     conn1.execute("DROP TABLE IF EXISTS result")
@@ -302,23 +99,15 @@ def calc_likwid_metric(raw_db, output_db, aggregate="no", likwid_group=None,
     conn1.execute(sql)
 
     def compute_metrics(r0):
-        if raw_events:
-            return list(r0)
-        event_values = dict()
-        result = []
-        for k, v in zip(r0.keys(), r0):
-            if is_event_column(k):
-                counter_name = k.split(":")[-1]
-                event_values[counter_name] = v
-            else:
-                result.append(v)
-        if aggregate != "no":
-            event_values["time"] = r0["MaxRDTSC"]
-        else:
-            event_values["time"] = r0["RDTSC"]
-        event_values["inverseClock"] = 1.0 / cpu_cycles
-        for i in xrange(likwid.metric_count()):
-            result.append(likwid.calc_metric(i, event_values))
+        to_replace = dict(r0)
+        for k, v in formula["trans_names"]:
+            if k in r0:
+                to_replace[v] = to_replace[k]
+                del to_replace[k]
+        result = [r0[k] for k in index_columns]
+        for k, v in formula["metrics"].iteritems():
+            value = eval_metric(v, to_replace)
+            result.append(value)
         return result
 
     metrics = compute_metrics(r0)
@@ -344,15 +133,16 @@ def main():
                         help="Database containing raw event values")
     parser.add_argument("output_db",
                         help="Database to store calculated metrics")
-    parser.add_argument("--aggregate", default="thread",
-                        choices=["no", "thread", "proc_thread"],
-                        help="Data aggregation (default: thread)")
+    parser.add_argument("formula",
+                        help="Formula to use")
     group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--likwid-arch", default=None,
+                       help="Likwid architecture name")
     group.add_argument("--likwid-group", default=None,
                        help="Likwid perfgroup name")
     group.add_argument("--likwid-group-file", default=None,
                        help="Likwid perfgroup file")
-    group.add_argument("--raw-events", action="store_true",
+    group.add_argument("--user-defined-formula", default=None
                        help="Compute raw events instead of metrics")
 
     args = parser.parse_args()
