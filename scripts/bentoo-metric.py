@@ -170,7 +170,7 @@ def parse_likwid_metrics(group_file):
     match = re.search(r"EVENTSET\n(.*?)\n\nMETRICS\n(.*?)\n\n",
                       file(group_file).read(), re.S)
     assert match
-    data = []
+    data = ["time", "inverseClock"]
     for eventstr in match.group(1).split("\n"):
         counter, event = eventstr.split()
         data.append(["{}:{}".format(event, counter), counter])
