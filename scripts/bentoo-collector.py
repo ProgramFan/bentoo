@@ -558,16 +558,16 @@ class LikwidBlockParser(object):
         line1 = iterable.next()
         line2 = iterable.next()
         cpu_model = line1.split(":")[-1].strip()
-        cpu_cycles = line2.split(":")[-1].strip()
+        cpu_cycles = float(line2.split(":")[-1].strip())
         other = [x for x in iterable]
         other = cStringIO.StringIO("".join(other[1:-1]))
         likwid_data = csv.DictReader(other)
         # NOTE: likwid output use RegionTag as TimerName, as well as a
         # different order. We fix it here.
-        start_columns = "ThreadId,TimerName,time,CallCount".split(",")
+        start_columns = "ThreadId,TimerName,time,CallCount,inverseClock".split(
+            ",")
         self.column_names.extend(start_columns)
-        self.column_names.append("inverseClock")
-        self.column_types.extend([int, str, float, int])
+        self.column_types.extend([int, str, float, int, float])
         other_columns = list(likwid_data.fieldnames[4:])
         other_columns = filter(lambda x: x, other_columns)
         self.column_names.extend(other_columns)
@@ -604,8 +604,8 @@ class LikwidParser(object):
         # Search for real likwid data file, it shall be of regex
         # 'likwid_counters.\d+.dat'
         result_dir = os.path.dirname(fn)
-        likwid_data = glob.glob(os.path.join(result_dir,
-                                             "likwid_counters.*.dat"))
+        likwid_data = glob.glob(
+            os.path.join(result_dir, "likwid_counters.*.dat"))
         if not likwid_data:
             print("WARNING: No likwid data file found in '%s'" % result_dir)
             return
@@ -706,8 +706,8 @@ class UdcParser(object):
         # Search for real data file, it shall be of regex
         # 'user_defined_counters.\d+.dat'
         result_dir = os.path.dirname(fn)
-        udc_data = glob.glob(os.path.join(
-            result_dir, "user_defined_counters.*.dat"))
+        udc_data = glob.glob(
+            os.path.join(result_dir, "user_defined_counters.*.dat"))
         if not udc_data:
             print("WARNING: No data file found in '%s'" % result_dir)
             return
@@ -847,10 +847,11 @@ class SqliteSerializer(object):
 class PandasSerializer(object):
     @staticmethod
     def register_cmd_args(argparser):
-        argparser.add_argument("--pandas-format",
-                               default="xlsx",
-                               choices=("xls", "xlsx", "csv"),
-                               help="Output file format")
+        argparser.add_argument(
+            "--pandas-format",
+            default="xlsx",
+            choices=("xls", "xlsx", "csv"),
+            help="Output file format")
 
     @staticmethod
     def retrive_cmd_args(namespace):
@@ -977,59 +978,66 @@ def main():
 
     group = parser.add_argument_group("Scanner Arguments")
     grp = group.add_mutually_exclusive_group()
-    grp.add_argument("-i",
-                     "--include",
-                     default=None,
-                     nargs="+",
-                     metavar="CASE_PATH",
-                     help="Include only matched cases (shell wildcards)")
-    grp.add_argument("-e",
-                     "--exclude",
-                     default=None,
-                     nargs="+",
-                     metavar="CASE_PATH",
-                     help="Excluded matched cases (shell wildcards)")
-    group.add_argument("--use-result",
-                       default=[0],
-                       nargs="+",
-                       metavar="RESULT_ID",
-                       help="Choose result files to use (as index)")
+    grp.add_argument(
+        "-i",
+        "--include",
+        default=None,
+        nargs="+",
+        metavar="CASE_PATH",
+        help="Include only matched cases (shell wildcards)")
+    grp.add_argument(
+        "-e",
+        "--exclude",
+        default=None,
+        nargs="+",
+        metavar="CASE_PATH",
+        help="Excluded matched cases (shell wildcards)")
+    group.add_argument(
+        "--use-result",
+        default=[0],
+        nargs="+",
+        metavar="RESULT_ID",
+        help="Choose result files to use (as index)")
 
     group = parser.add_argument_group("Parser Arguments")
-    group.add_argument("-p",
-                       "--parser",
-                       default="jasmin",
-                       choices=["jasmin3", "jasmin4", "jasmin", "likwid",
-                                "udc"],
-                       help="Parser for raw result files (default: jasmin)")
-    group.add_argument("--use-table",
-                       default=[],
-                       nargs="+",
-                       metavar="TABLE_ID",
-                       help="Choose which data table to use (as index)")
+    group.add_argument(
+        "-p",
+        "--parser",
+        default="jasmin",
+        choices=["jasmin3", "jasmin4", "jasmin", "likwid", "udc"],
+        help="Parser for raw result files (default: jasmin)")
+    group.add_argument(
+        "--use-table",
+        default=[],
+        nargs="+",
+        metavar="TABLE_ID",
+        help="Choose which data table to use (as index)")
     ParserFactory.register_cmd_args(parser)
 
     group = parser.add_argument_group("Aggregator Arguments")
     grp = group.add_mutually_exclusive_group()
-    grp.add_argument("-d",
-                     "--drop-columns",
-                     default=None,
-                     nargs="+",
-                     metavar="COLUMN_NAME",
-                     help="Drop un-wanted table columns")
-    grp.add_argument("-k",
-                     "--keep-columns",
-                     default=None,
-                     nargs="+",
-                     metavar="COLUMN_NAME",
-                     help="Keep only speciied table columns")
+    grp.add_argument(
+        "-d",
+        "--drop-columns",
+        default=None,
+        nargs="+",
+        metavar="COLUMN_NAME",
+        help="Drop un-wanted table columns")
+    grp.add_argument(
+        "-k",
+        "--keep-columns",
+        default=None,
+        nargs="+",
+        metavar="COLUMN_NAME",
+        help="Keep only speciied table columns")
 
     group = parser.add_argument_group("Serializer Arguments")
-    group.add_argument("-s",
-                       "--serializer",
-                       choices=["sqlite3", "pandas"],
-                       default="sqlite3",
-                       help="Serializer to dump results (default: sqlite3)")
+    group.add_argument(
+        "-s",
+        "--serializer",
+        choices=["sqlite3", "pandas"],
+        default="sqlite3",
+        help="Serializer to dump results (default: sqlite3)")
     SerializerFactory.register_cmd_args(parser)
 
     args = parser.parse_args()

@@ -39,20 +39,10 @@ def find_first_of(contents, candidates):
     return (None, -1)
 
 
-def column_split(columns):
-    '''Split data column from index column in a data table'''
-    # This function uses the following huristics: a data table begins with
-    # conseqtive index columns, followed by consequtive data columns. Data
-    # collector and transformers shall gurantee this.
-    timer_index = find_first_of(columns, ["TimerName", "Name"])
-    if not timer_index[0]:
-        raise ValueError("Can not find timer column")
-    procid_index = find_first_of(columns, ["ProcId"])
-    threadid_index = find_first_of(columns, ["ThreadId"])
-    split_index = max(timer_index[1], procid_index[1], threadid_index[1])
-    assert(split_index >= 0)
-    split_index += 1
-    return (columns[0:split_index], columns[split_index:])
+def split_columns(columns):
+    '''split 'columns' into (index_columns, data_columns)'''
+    timer_column_index = columns.index("TimerName")
+    return (columns[:timer_column_index+1], columns[timer_column_index+1:])
 
 
 def extract_column_names(conn, table="result"):
@@ -78,7 +68,7 @@ def merge_db(main_db, ref_db, out_db,
     else:
         replace_cols = glob_strings(main_cols, replace)
     append_cols = glob_strings(ref_cols, append)
-    index_cols, _ = column_split(ref_cols)
+    index_cols, _ = split_columns(ref_cols)
 
     if replace_with:
         index_sql = ", ".join(map(quote, index_cols))

@@ -48,7 +48,6 @@ def aggregate(input_db, output_db, on="thread"):
     r0 = conn0.execute(sql).fetchone()
     input_columns = r0.keys()
     index_columns, data_columns = split_columns(input_columns)
-    print data_columns
     assert ("ProcId" in index_columns)
     assert ("ThreadId" in index_columns)
 
