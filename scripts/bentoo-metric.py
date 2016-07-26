@@ -113,14 +113,11 @@ def compute_metrics(input_db, output_db, spec):
     conn1.commit()
 
     def compute_one_row(row):
-        var_values = dict()
+        var_values = dict(row)
         for item in spec["data"]:
             if isinstance(item, list):
                 k, v = map(str, item)
                 var_values[v] = row[k]
-            else:
-                k = str(item)
-                var_values[k] = row[k]
         result = [row[k] for k in index_columns]
         for item in spec["metrics"]:
             value = eval_formula(item["formula"], var_values)
