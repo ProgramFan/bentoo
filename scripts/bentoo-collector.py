@@ -564,8 +564,9 @@ class LikwidBlockParser(object):
         likwid_data = csv.DictReader(other)
         # NOTE: likwid output use RegionTag as TimerName, as well as a
         # different order. We fix it here.
-        start_columns = "ThreadId,TimerName,RDTSC,CallCount".split(",")
+        start_columns = "ThreadId,TimerName,time,CallCount".split(",")
         self.column_names.extend(start_columns)
+        self.column_names.append("inverseClock")
         self.column_types.extend([int, str, float, int])
         other_columns = list(likwid_data.fieldnames[4:])
         other_columns = filter(lambda x: x, other_columns)
@@ -575,14 +576,9 @@ class LikwidBlockParser(object):
         for record in likwid_data:
             result = [record["ThreadId"], record["RegionTag"], record["RDTSC"],
                       record["CallCount"]]
+            result.append(1.0 / cpu_cycles)
             result.extend(record[f] for f in other_columns)
             self.data.append(result)
-        # Insert a special CPU_CYCLES record, so derived metrics such as
-        # Runtime_unhalted can be calculated. The record is special formatted
-        # so cpu_model can also be included.
-        cpu_cycles_data = [0, "CPU_CYCLES@%s" % cpu_model, cpu_cycles, 1]
-        cpu_cycles_data.extend(0 for f in other_columns)
-        self.data.append(cpu_cycles_data)
 
 
 class LikwidParser(object):
