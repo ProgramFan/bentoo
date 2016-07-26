@@ -75,7 +75,7 @@ def eval_formula(formula, values):
     try:
         result = eval(formula, values)
     except:
-        result = None
+        result = 0
     return result
 
 
