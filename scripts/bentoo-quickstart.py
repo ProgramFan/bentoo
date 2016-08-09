@@ -10,7 +10,6 @@ import re
 import string
 import textwrap
 
-
 TEXT_WIDTH = 78
 SEP_LINE = "-" * TEXT_WIDTH
 
@@ -20,8 +19,9 @@ def wrap_print(msg):
 
 
 def wrap_input(msg):
-    return raw_input(textwrap.fill(msg, width=TEXT_WIDTH,
-                                   drop_whitespace=False))
+    return raw_input(
+        textwrap.fill(
+            msg, width=TEXT_WIDTH, drop_whitespace=False))
 
 
 def get_choice(message, choices, default=0):
@@ -31,8 +31,8 @@ def get_choice(message, choices, default=0):
     min_choice = 0
     max_choice = len(choices) - 1
     while True:
-        choice = wrap_input("Please choose %d-%d (default: [%d]): "
-                            % (min_choice, max_choice, default))
+        choice = wrap_input("Please choose %d-%d (default: [%d]): " %
+                            (min_choice, max_choice, default))
         if not choice:
             print(SEP_LINE)
             return default
@@ -47,8 +47,8 @@ def get_choice(message, choices, default=0):
 
 def get_confirm(message, default=True):
     while True:
-        result = wrap_input("%s? (y/Y/n/N) (default: %s): "
-                            % (message, "y" if default else "n"))
+        result = wrap_input("%s? (y/Y/n/N) (default: %s): " %
+                            (message, "y" if default else "n"))
         if not result:
             print(SEP_LINE)
             return default
@@ -68,8 +68,8 @@ def show_message(message):
 
 def get_list(message, default="nnodes"):
     while True:
-        result = wrap_input("%s? (list) (default: '%s'): "
-                            % (message, default))
+        result = wrap_input("%s? (list) (default: '%s'): " %
+                            (message, default))
         print(SEP_LINE)
         if not result:
             result = default
@@ -126,6 +126,13 @@ def make_config(project_dir, project_desc, binary_name, test_factors,
         "test_vectors": [
         ]
     }'''
+    elif vector_gen == "custom":
+        vector_generator_config = '''"custom_vector_generator": {
+        "import": "make-case.py",
+        "func": "make_vectors",
+        "args": {
+        }
+    }'''
     else:
         raise NotImplementedError()
     if case_gen == "custom":
@@ -163,20 +170,32 @@ def make_config(project_dir, project_desc, binary_name, test_factors,
     else:
         raise NotImplementedError()
     tpl = string.Template(TEST_PROJECT_CONFIG_JSON_TPL)
-    out = tpl.safe_substitute(project_desc=project_desc,
-                              test_factors=test_factors_repr,
-                              vector_gen=vector_gen,
-                              case_gen=case_gen,
-                              vector_generator_config=vector_generator_config,
-                              case_generator_config=case_generator_config)
+    out = tpl.safe_substitute(
+        project_desc=project_desc,
+        test_factors=test_factors_repr,
+        vector_gen=vector_gen,
+        case_gen=case_gen,
+        vector_generator_config=vector_generator_config,
+        case_generator_config=case_generator_config)
     outfn = os.path.join(project_dir, "TestProjectConfig.json")
     file(outfn, "w").write(out)
 
 
-CUSTOM_PYTHON_SCRIPT_TPL = '''import os
+CUSTOM_PYTHON_SCRIPT_TPL_P1 = '''#!/usr/bin/env python
+#
+
+import os
 from collections import OrderedDict
 
+'''
 
+CUSTOM_PYTHON_SCRIPT_TPL_P2 = '''
+def make_vectors(conf_root, test_vectors, **kwargs):
+    return [TEST_CASES]
+
+'''
+
+CUSTOM_PYTHON_SCRIPT_TPL_P3 = '''
 def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
     # Expand test vector
     ${test_factors_repr} = test_vector.values()
@@ -202,7 +221,9 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
     results = ["STDOUT"]
     return OrderedDict(cmd=cmd, envs=envs, run=run, results=results)
 
+'''
 
+CUSTOM_PYTHON_SCRIPT_TPL_P4 = '''
 def main():
     pass
 
@@ -212,11 +233,11 @@ if __name__ == "__main__":
 '''
 
 
-def make_custom_script(project_dir, binary_name, test_factors):
+def make_custom_script(template, project_dir, binary_name, test_factors):
     test_factors_repr = ", ".join(test_factors)
-    tpl = string.Template(CUSTOM_PYTHON_SCRIPT_TPL)
-    out = tpl.safe_substitute(binary_name=binary_name,
-                              test_factors_repr=test_factors_repr)
+    tpl = string.Template(template)
+    out = tpl.safe_substitute(
+        binary_name=binary_name, test_factors_repr=test_factors_repr)
     outfn = os.path.join(project_dir, "make-case.py")
     file(outfn, "w").write(out)
     os.chmod(outfn, 0755)
@@ -232,23 +253,34 @@ def main():
     project_desc = get_input("Project description")
     binary_name = get_input("Execuation binary")
     test_factors = get_list("Test factor names")
-    all_vector_gen = ["cart_product", "simple"]
-    vector_gen = get_choice("Test vector generator", [
-        "Generate by Cartetian product of test factor values (cart_product)",
-        "List all cases (simple)"], default=0)
+    all_vector_gen = ["cart_product", "simple", "custom"]
+    vector_gen = get_choice(
+        "Test vector generator", [
+            "Cartetian product of test factor values (cart_product)",
+            "List all cases (simple)", "Custom generator (using python)"
+        ],
+        default=0)
     all_case_gen = ["custom", "template"]
-    case_gen = get_choice("Test case generator", [
-                          "Custom generator (using python)",
-                          "Tempalte generator (evaluable templates)"],
-                          default=0)
+    case_gen = get_choice(
+        "Test case generator", [
+            "Custom generator (using python)",
+            "Tempalte generator (evaluable templates)"
+        ],
+        default=0)
     vector_gen = all_vector_gen[vector_gen]
     case_gen = all_case_gen[case_gen]
     project_dir = get_input("Write project to directory")
     make_directories(project_dir)
-    make_config(project_dir, project_desc, binary_name,
-                test_factors, vector_gen, case_gen)
-    if case_gen == "custom":
-        make_custom_script(project_dir, binary_name, test_factors)
+    make_config(project_dir, project_desc, binary_name, test_factors,
+                vector_gen, case_gen)
+    if case_gen == "custom" or vector_gen == "custom":
+        template = CUSTOM_PYTHON_SCRIPT_TPL_P1
+        if vector_gen == "custom":
+            template = template + CUSTOM_PYTHON_SCRIPT_TPL_P2
+        if case_gen == "custom":
+            template = template + CUSTOM_PYTHON_SCRIPT_TPL_P3
+        template = template + CUSTOM_PYTHON_SCRIPT_TPL_P4
+        make_custom_script(template, project_dir, binary_name, test_factors)
 
 
 if __name__ == "__main__":
