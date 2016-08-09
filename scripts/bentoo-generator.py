@@ -172,6 +172,55 @@ class CartProductVectorGenerator:
             yield OrderedDict(zip(self.test_factors, v))
 
 
+class CustomVectorGenerator:
+    '''Custom test vector generator
+
+    Generate a collection of test vectors by calling a user defined function,
+    which returns a list of test vectors.
+
+    Args:
+        test_factors (list): test factor names.
+        spec (dict): generator definition.
+
+    '''
+
+    def __init__(self, test_factors, spec, project_root):
+        self.test_factors = test_factors
+
+        module = spec["import"]
+        func = spec["func"]
+        args = spec.get("args", {})
+        if not os.path.exists(module):
+            raise RuntimeError("Module '%s' does not exists" % module)
+
+        module_path = os.path.abspath(os.path.dirname(module))
+        if module_path not in sys.path:
+            sys.path.insert(0, module_path)
+        module_name = os.path.splitext(os.path.basename(module))[0]
+        mod = importlib.import_module(module_name)
+        if not hasattr(mod, func):
+            raise RuntimeError("Can not find function '%s' in '%s'" %
+                               (func, module))
+        fun = getattr(mod, func)
+        real_args = dict(args)
+        real_args["conf_root"] = os.path.abspath(project_root)
+        real_args["test_factors"] = self.test_factors
+        self.test_vectors = fun(**real_args)
+
+    def iteritems(self):
+        '''An iterator over the range of test vectors
+
+        Yields:
+            OrderedDict: a test vector.
+
+            OrderedDict.values() is the test factor values and
+            OrderedDict.keys() is the test factor names.
+
+        '''
+        for v in self.test_vectors:
+            yield OrderedDict(zip(self.test_factors, v))
+
+
 def replace_template(template, varvalues):
     return string.Template(str(template)).safe_substitute(varvalues)
 
@@ -330,13 +379,14 @@ class CustomCaseGenerator:
         if not os.path.exists(module):
             raise RuntimeError("Module '%s' does not exists" % module)
 
-        sys.path.insert(0, os.path.dirname(module))
+        sys.path.insert(0, os.path.abspath(os.path.dirname(module)))
         module_name = os.path.splitext(os.path.basename(module))[0]
         mod = importlib.import_module(module_name)
-        fun = getattr(mod, func)
         if not hasattr(mod, func):
             raise RuntimeError("Can not find function '%s' in '%s'" %
                                (func, module))
+        fun = getattr(mod, func)
+
         self.func = fun
         self.args = args
 
@@ -436,6 +486,10 @@ class TestProjectBuilder:
             test_vectors = args["test_vectors"]
             self.test_vector_generator = SimpleVectorGenerator(
                 self.test_factors, test_vectors)
+        elif test_vector_generator_name == "custom":
+            args = spec["custom_vector_generator"]
+            self.test_vector_generator = CustomVectorGenerator(
+                self.test_factors, args, conf_root)
         else:
             raise RuntimeError("Unknown test vector generator '%s'" %
                                test_vector_generator_name)
