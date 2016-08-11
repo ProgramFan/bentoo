@@ -188,12 +188,14 @@ class CustomVectorGenerator:
         self.test_factors = test_factors
 
         module = spec["import"]
+        if not os.path.isabs(module):
+            module = os.path.abspath(os.path.join(project_root, module))
         func = spec["func"]
         args = spec.get("args", {})
         if not os.path.exists(module):
             raise RuntimeError("Module '%s' does not exists" % module)
 
-        module_path = os.path.abspath(os.path.dirname(module))
+        module_path = os.path.dirname(module)
         if module_path not in sys.path:
             sys.path.insert(0, module_path)
         module_name = os.path.splitext(os.path.basename(module))[0]
