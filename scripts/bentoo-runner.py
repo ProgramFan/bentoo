@@ -675,10 +675,6 @@ def run_project(project,
 
     reporter.project_begin(project)
     for case in project.itercases():
-        if rerun_failed and validate_case(case):
-            continue
-        if skip_finished and case in stats["success"]:
-            continue
         case_path = os.path.relpath(case["path"], project.project_root)
         case_id = {"test_vector": case["test_vector"], "path": case_path}
         if exclude and has_match(case_path, exclude):
@@ -686,6 +682,10 @@ def run_project(project,
             continue
         elif include and not has_match(case_path, include):
             stats["skipped"].append(case_id)
+            continue
+        if rerun_failed and validate_case(case):
+            continue
+        if skip_finished and case in stats["success"]:
             continue
         reporter.case_begin(project, case)
         result = runner.run(case,
