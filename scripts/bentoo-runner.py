@@ -632,9 +632,9 @@ class SimpleProgressReporter:
 
 def validate_case(case):
     # No 'validate' method means always valid
-    if "validate" not in case["spec"]:
+    if "validator" not in case["spec"]:
         return True
-    validator = case["spec"]["validate"]
+    validator = case["spec"]["validator"]
     if "exists" in validator:
         for f in validator["exists"]:
             fullpath = os.path.join(case["path"], f)

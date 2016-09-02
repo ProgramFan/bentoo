@@ -347,24 +347,24 @@ class TemplateCaseGenerator(object):
             v = replace_template(v, test_vector)
             v = safe_eval(v)
             envs[k] = v
-        validate = OrderedDict()
-        validate_template = spec_template.get("validate", None)
-        if validate_template:
-            exists_tpl = validate_template.get("exists", [])
+        validator = OrderedDict()
+        validator_template = spec_template.get("validator", None)
+        if validator_template:
+            exists_tpl = validator_template.get("exists", [])
             if exists_tpl:
                 v = [replace_template(x, test_vector) for x in exists_tpl]
-                validate["exists"] = v
-            contains_tpl = validate_template.get("contains", {})
+                validator["exists"] = v
+            contains_tpl = validator_template.get("contains", {})
             if contains_tpl:
                 contains = OrderedDict()
                 for k, v in contains_tpl.iteritems():
                     k = replace_template(k, test_vector)
                     v = replace_template(v, test_vector)
                     contains[k] = v
-                validate["contains"] = contains
+                validator["contains"] = contains
         case_spec = OrderedDict(
-            zip(["cmd", "envs", "run", "results", "validate"],
-                [cmd, envs, run, results, validate]))
+            zip(["cmd", "envs", "run", "results", "validator"],
+                [cmd, envs, run, results, validator]))
 
         # create empty output file, so when output file is used for special
         # signal, it's ready and will not be ignored.
@@ -412,7 +412,7 @@ class CustomCaseGenerator:
                     "envs": {"K": "V", ...}   # Environment variables to set
                     "results": ["STDOUT"]     # The result files to preserve
                     "run": {"nprocs": 1, ...} # The runner specific information
-                    "validate": {"exists": [...], ..} # The result validator
+                    "validator": {"exists": [...], ..} # The result validator
                 }
 
         '''
