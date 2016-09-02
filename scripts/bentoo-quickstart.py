@@ -164,7 +164,10 @@ def make_config(project_dir, project_desc, binary_name, test_factors,
                 "tasks_per_proc": TASKS_PER_PROC,
                 "nprocs": NPROCS
             },
-            "results": [RESULTS]
+            "results": [RESULTS],
+            "validator": {
+                "contains": {}
+            }
         }
     }'''
     else:
@@ -207,6 +210,7 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
     #
     # Important: Please return 'cmd', 'run', 'results' and 'envs'
     bin_path = os.path.join(output_root, "bin", "${binary_name}")
+    bin_path = os.path.relpath(bin_path, case_path)
     cmd = [bin_path, ADD_OTHER_ARGS_HERE]
     envs = {
         "OMP_NUM_THREADS": ENVS_HERE,
@@ -219,7 +223,11 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
         "nprocs": NPROCS
     }
     results = ["STDOUT"]
-    return OrderedDict(cmd=cmd, envs=envs, run=run, results=results)
+    validator = {
+        "contains": {}
+    }
+    return OrderedDict(zip(["cmd", "envs", "run", "results", "validator"],
+                           [cmd, envs, run, results, validator]))
 
 '''
 
