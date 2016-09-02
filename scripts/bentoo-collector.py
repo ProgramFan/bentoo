@@ -958,6 +958,8 @@ class Collector(object):
             for data_file in scanner.iterfiles():
                 file_spec = data_file["spec"]
                 for tbl in parser.itertables(data_file["fullpath"]):
+                    if not tbl:
+                        continue
                     spec = OrderedDict(file_spec)
                     spec["table_id"] = tbl["table_id"]
                     yield {"id": spec, "content": tbl}
