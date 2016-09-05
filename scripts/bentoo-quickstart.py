@@ -194,7 +194,7 @@ from collections import OrderedDict
 '''
 
 CUSTOM_PYTHON_SCRIPT_TPL_P2 = '''
-def make_vectors(conf_root, test_vectors, **kwargs):
+def make_vectors(conf_root, test_factors, **kwargs):
     return [TEST_CASES]
 
 '''
