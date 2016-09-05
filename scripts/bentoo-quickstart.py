@@ -188,6 +188,7 @@ CUSTOM_PYTHON_SCRIPT_TPL_P1 = '''#!/usr/bin/env python
 #
 
 import os
+import string
 from collections import OrderedDict
 
 '''
