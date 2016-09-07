@@ -429,6 +429,31 @@ def print_tree_asciidoc(tree, max_level=None):
     print_tree_adoc_recursive(tree, 1, max_level)
 
 
+def count_nodes(tree, spec):
+    def match(node):
+        for ptn in spec:
+            if fnmatch.fnmatch(node.id, ptn):
+                return True
+        return False
+
+    counter = {}
+
+    def count_recursive(tree, base):
+        if not tree:
+            return
+        base = base * tree.cycle
+        if match(tree):
+            if tree.id not in counter:
+                counter[tree.id] = 0
+            counter[tree.id] += base
+        for c in tree.children:
+            count_recursive(c, base)
+
+    count_recursive(tree, 1)
+    for k, v in counter.iteritems():
+        print "{}: {}".format(k, v)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -467,6 +492,8 @@ def main():
     parser.add_argument("--save",
                         default=None,
                         help="Save processed tree to file")
+    parser.add_argument("--count", nargs="+", default=[],
+                        help="Count call occurances only")
     grp = parser.add_mutually_exclusive_group()
     grp.add_argument("--fold", action="store_true", help="Fold tree")
     grp.add_argument("--cascade", action="store_true", help="Cascade tree")
@@ -483,6 +510,10 @@ def main():
         raise ValueError("Unknown calltree file format: '%s'" % args.format)
     if tree.id == "ROOT":
         tree = tree.children[args.use_tree]
+
+    if args.count:
+        count_nodes(tree, args.count)
+        return
 
     if args.remove_nodes:
         tree = remove_tree_nodes(tree, args.remove_nodes)
