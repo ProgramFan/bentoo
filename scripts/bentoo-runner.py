@@ -290,16 +290,16 @@ class YhrunLauncher:
 
         if self.args["fix_glex"] == "v0":
             if int(nprocs) > 8192:
-                env["PDP_GLEX_USE_HC_MPQ"] = 1
-                env["PDP_GLEX_HC_MPQ_L1_CAPACITY"] = 16384
-                env["GLEX_BYPASS_RDMA_WRITE_CHANNEL"] = 1
-                env["GLEX_EP_MPQ_SLOTS"] = 131072
-                env["GLEX_USE_ZC_RNDV"] = 0
+                env["PDP_GLEX_USE_HC_MPQ"] = "1"
+                env["PDP_GLEX_HC_MPQ_L1_CAPACITY"] = "16384"
+                env["GLEX_BYPASS_RDMA_WRITE_CHANNEL"] = "1"
+                env["GLEX_EP_MPQ_SLOTS"] = "131072"
+                env["GLEX_USE_ZC_RNDV"] = "0"
         elif self.args["fix_glex"] == "v1":
             if int(nprocs) > 8192:
-                env["MPICH_NO_LOCAL"] = 1
-                env["GLEX_BYPASS_ER"] = 1
-                env["GLEX_USE_ZC_RNDV"] = 0
+                env["MPICH_NO_LOCAL"] = "1"
+                env["GLEX_BYPASS_ER"] = "1"
+                env["GLEX_USE_ZC_RNDV"] = "0"
 
         if self.args["use_batch"]:
             # build batch job script: we need to remove job control parameters
