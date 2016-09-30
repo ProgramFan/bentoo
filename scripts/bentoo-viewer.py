@@ -258,6 +258,7 @@ def draw_tree(axes, data, colors, indent=0.05, theme="dark"):
 def draw_percent(axes, data, colors, data_format=".1f"):
     data = data[::-1]
     axes.bars(data, along="y", color=colors[::-1])
+    axes.x.domain.min = 0
     for i, n in enumerate(data):
         format_spec = "{:%s}%%" % data_format
         axes.text(
@@ -396,19 +397,16 @@ def draw_body(table, spec, data, colormap):
                 tree_data = data[spec["data"]]
                 tree_data.columns = ["id", "level", "name"]
                 colors["value"] = compute_color(colormap, tree_data)
-                axes = table.body.column(col_start).merge().axes(
-                    cell_padding=2)
+                axes = table.body.column[col_start].cartesian()
                 theme = spec.get("theme", "light")
                 draw_tree(axes, tree_data, colors["value"], theme=theme)
             elif tp == "percent":
-                axes = table.body.column(col_start).merge().axes(
-                    cell_padding=2)
+                axes = table.body.column[col_start].cartesian()
                 column_data = data[spec["data"]]
                 data_format = spec.get("format", ".1f")
                 draw_percent(axes, column_data, colors["value"], data_format)
             elif tp == "bars":
-                axes = table.body.column(col_start).merge().axes(
-                    cell_padding=2)
+                axes = table.body.column[col_start].cartesian()
                 column_data = data[spec["data"]]
                 draw_bars(axes, column_data, colors["value"])
             else:
