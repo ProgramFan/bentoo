@@ -47,10 +47,8 @@ except ImportError:
     import json
 
     def loads(string, *args, **kwargs):
-        return json.loads(string,
-                          object_pairs_hook=collections.OrderedDict,
-                          *args,
-                          **kwargs)
+        return json.loads(
+            string, object_pairs_hook=collections.OrderedDict, *args, **kwargs)
 
 #
 # Auxiliary functions
@@ -168,13 +166,14 @@ def draw_stem(axes, layout, indent=0.1):
             end_points.append([p1, color])
     # draw graph elements
     for l in lines:
-        draw_line(axes,
-                  l[0],
-                  l[1],
-                  l[2],
-                  l[3],
-                  style={"stroke-width": 2},
-                  color=l[4])
+        draw_line(
+            axes,
+            l[0],
+            l[1],
+            l[2],
+            l[3],
+            style={"stroke-width": 2},
+            color=l[4])
     draw_points(axes, end_points, size=4, marker="o")
     draw_points(axes, corner_points, size=1, marker="o")
 
@@ -239,18 +238,18 @@ def draw_tree(axes, data, colors, indent=0.05, theme="dark"):
         data_1_color.append(color)
     if theme != "dark":
         data_2_color = data_1_color
-    axes.bars(series,
-              along="y",
-              color=numpy.array([data_1_color, data_2_color]).T)
+    axes.bars(
+        series, along="y", color=numpy.array([data_1_color, data_2_color]).T)
     axes.x.domain.max = 1
     text_color = "white" if theme == "dark" else "black"
     for i, n in enumerate(data["name"][::-1]):
-        axes.text(data_1[i],
-                  i,
-                  n,
-                  color=text_color,
-                  style={"text-anchor": "start",
-                         "-toyplot-anchor-shift": "5px"})
+        axes.text(
+            data_1[i],
+            i,
+            n,
+            color=text_color,
+            style={"text-anchor": "start",
+                   "-toyplot-anchor-shift": "5px"})
 
     layout = compute_layout(data, colors)
     draw_stem(axes, layout, indent)
@@ -261,24 +260,26 @@ def draw_percent(axes, data, colors, data_format=".1f"):
     axes.bars(data, along="y", color=colors[::-1])
     for i, n in enumerate(data):
         format_spec = "{:%s}%%" % data_format
-        axes.text(n,
-                  i,
-                  format_spec.format(n * 100),
-                  color="black",
-                  style={"text-anchor": "start",
-                         "-toyplot-anchor-shift": "5px"})
+        axes.text(
+            n,
+            i,
+            format_spec.format(n * 100),
+            color="black",
+            style={"text-anchor": "start",
+                   "-toyplot-anchor-shift": "5px"})
 
 
 def draw_bars(axes, data, colors):
     data = data[::-1]
     axes.bars(data, along="y", color=colors[::-1])
     for i, n in enumerate(data):
-        axes.text(n,
-                  i,
-                  "{:.1f}".format(n),
-                  color="black",
-                  style={"text-anchor": "start",
-                         "-toyplot-anchor-shift": "5px"})
+        axes.text(
+            n,
+            i,
+            "{:.1f}".format(n),
+            color="black",
+            style={"text-anchor": "start",
+                   "-toyplot-anchor-shift": "5px"})
 
 
 def compute_header_shape(spec, ignore_root=True):
@@ -325,7 +326,7 @@ def update_colspans(spec, ignore_root=True):
 
 def create_table(canvas, spec, data, ignore_root=True):
     hrows, hcols = compute_header_shape(spec, ignore_root)
-    table = canvas.table(rows=len(data), columns=hcols, hrows=hrows)
+    table = canvas.table(rows=len(data), columns=hcols, trows=hrows)
 
     colid = {"value": 0}
     colwidths = {}
@@ -360,16 +361,14 @@ def draw_header(table, spec, colormap, ignore_root=True):
         if not ignore_root or curr_level > 0:
             nrows = spec["rowspan"]
             ncols = spec["colspan"]
-            merged = table.header.cell(row_start,
-                                       col_start,
-                                       rowspan=nrows,
-                                       colspan=ncols).merge()
+            merged = table.header.cell(
+                row_start, col_start, rowspan=nrows, colspan=ncols).merge()
             merged.data = spec["label"]
             merged.align = "center"
             merged.valign = "center"
-            merged.style = {"font-size": "20px",
-                            "font-weight": "bold",
-                            "fill": "white"}
+            merged.lstyle = {"font-size": "20px",
+                             "font-weight": "bold",
+                             "fill": "white"}
             merged.bstyle = {"fill": "darkmagenta", "stroke": "none"}
             row_start += 1
         if "subgroups" in spec:
@@ -468,25 +467,22 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("ref_db", help="Database containing analyser results")
-    parser.add_argument("spec_file",
-                        help="Json file specifying the visualization")
-    parser.add_argument("--sql",
-                        default=None,
-                        help="Sql query to extract a subset of data")
-    parser.add_argument("--width",
-                        default=800,
-                        type=int,
-                        help="Canvas width, in px")
-    parser.add_argument("--height",
-                        default=600,
-                        type=int,
-                        help="Canvas height, in px")
-    parser.add_argument("--colormap",
-                        default="Set1",
-                        help="Color Brewer colormap to use (default: Set1)")
-    parser.add_argument("--no-ignore-root",
-                        action="store_true",
-                        help="Draw root label on the canvas")
+    parser.add_argument(
+        "spec_file", help="Json file specifying the visualization")
+    parser.add_argument(
+        "--sql", default=None, help="Sql query to extract a subset of data")
+    parser.add_argument(
+        "--width", default=800, type=int, help="Canvas width, in px")
+    parser.add_argument(
+        "--height", default=600, type=int, help="Canvas height, in px")
+    parser.add_argument(
+        "--colormap",
+        default="Set1",
+        help="Color Brewer colormap to use (default: Set1)")
+    parser.add_argument(
+        "--no-ignore-root",
+        action="store_true",
+        help="Draw root label on the canvas")
     parser.add_argument("--save", default=None, help="Save canvas to file")
 
     args = parser.parse_args()
