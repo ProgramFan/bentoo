@@ -255,7 +255,9 @@ def draw_tree(axes, data, colors, indent=0.05, theme="dark"):
     draw_stem(axes, layout, indent)
 
 
-def draw_percent(axes, data, colors, data_format=".1f"):
+def draw_percent(axes, data, masks, colors, data_format=".1f"):
+    if masks is not None:
+        data = data.where(masks)
     data = data[::-1]
     axes.bars(data, along="y", color=colors[::-1])
     axes.x.domain.min = 0
@@ -404,7 +406,12 @@ def draw_body(table, spec, data, colormap):
                 axes = table.body.column[col_start].cartesian()
                 column_data = data[spec["data"]]
                 data_format = spec.get("format", ".1f")
-                draw_percent(axes, column_data, colors["value"], data_format)
+                masks_expr = spec.get("mask", None)
+                masks = None
+                if masks_expr:
+                    masks = eval(masks_expr)
+                draw_percent(axes, column_data, masks, colors["value"],
+                             data_format)
             elif tp == "bars":
                 axes = table.body.column[col_start].cartesian()
                 column_data = data[spec["data"]]
