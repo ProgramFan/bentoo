@@ -416,6 +416,21 @@ def draw_body(table, spec, data, colormap):
                 axes = table.body.column[col_start].cartesian()
                 column_data = data[spec["data"]]
                 draw_bars(axes, column_data, colors["value"])
+            elif tp == "matrix":
+                raise "Matrix is not yet supported"
+            elif tp == "raw":
+                column_data = data[spec["data"]]
+                masks_expr = spec.get("mask", None)
+                if masks_expr:
+                    masks = eval(masks_expr)
+                    column_data = column_data.where(masks)
+                table.body.column[col_start].data = column_data
+                if "format" in spec:
+                    formatter = toyplot.format.FloatFormatter(spec["format"],
+                                                              nanshow=False)
+                else:
+                    formatter = toyplot.format.FloatFormatter(nanshow=False)
+                table.body.column[col_start].format = formatter
             else:
                 raise ValueError("Unknown drawing type: '%s'" % tp)
 
