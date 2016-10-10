@@ -295,7 +295,10 @@ def compute_header_shape(spec, ignore_root=True):
         else:
             assert "type" in spec
             assert "data" in spec
-            shape["hcols"] += 1
+            if "colspan" in spec:
+                shape["hcols"] += spec["colspan"]
+            else:
+                shape["hcols"] += 1
             shape["hrows"] = max(shape["hrows"], curr_level + 1)
 
     visit(spec)
@@ -339,9 +342,13 @@ def create_table(canvas, spec, data, ignore_root=True):
             for s in spec["subgroups"]:
                 compute_column_widths(s)
         else:
+            colspan = 1
+            if "colspan" in spec:
+                colspan = spec["colspan"]
             if "width" in spec:
-                colwidths[colid["value"]] = spec["width"]
-            colid["value"] += 1
+                for i in xrange(colspan):
+                    colwidths[colid["value"] + i] = spec["width"]
+            colid["value"] += colspan
 
     compute_column_widths(spec)
     for i in xrange(hcols):
@@ -417,7 +424,19 @@ def draw_body(table, spec, data, colormap):
                 column_data = data[spec["data"]]
                 draw_bars(axes, column_data, colors["value"])
             elif tp == "matrix":
-                raise "Matrix is not yet supported"
+                column_data = data[spec["data"]]
+                masks_expr = spec.get("mask", None)
+                if masks_expr:
+                    masks = eval(masks_expr)
+                    column_data = column_data.where(masks)
+                if "format" in spec:
+                    formatter = toyplot.format.FloatFormatter(spec["format"],
+                                                              nanshow=False)
+                else:
+                    formatter = toyplot.format.FloatFormatter(nanshow=False)
+                for i, n in enumerate(spec["data"]):
+                    table.body.column[col_start + i].data = column_data[n]
+                    table.body.column[col_start + i].format = formatter
             elif tp == "raw":
                 column_data = data[spec["data"]]
                 masks_expr = spec.get("mask", None)
