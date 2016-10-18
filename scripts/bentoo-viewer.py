@@ -272,14 +272,15 @@ def draw_percent(axes, data, masks, colors, data_format=".1f"):
                    "-toyplot-anchor-shift": "5px"})
 
 
-def draw_bars(axes, data, colors):
+def draw_bars(axes, data, colors, data_format=".1f"):
     data = data[::-1]
     axes.bars(data, along="y", color=colors[::-1])
     for i, n in enumerate(data):
+        format_spec = "{:%s}" % data_format
         axes.text(
             n,
             i,
-            "{:.1f}".format(n),
+            format_spec.format(n),
             color="black",
             style={"text-anchor": "start",
                    "-toyplot-anchor-shift": "5px"})
@@ -422,7 +423,8 @@ def draw_body(table, spec, data, colormap):
             elif tp == "bars":
                 axes = table.body.column[col_start].cartesian()
                 column_data = data[spec["data"]]
-                draw_bars(axes, column_data, colors["value"])
+                data_format = spec.get("format", ".1f")
+                draw_bars(axes, column_data, colors["value"], data_format)
             elif tp == "matrix":
                 column_data = data[spec["data"]]
                 masks_expr = spec.get("mask", None)
@@ -430,8 +432,8 @@ def draw_body(table, spec, data, colormap):
                     masks = eval(masks_expr)
                     column_data = column_data.where(masks)
                 if "format" in spec:
-                    formatter = toyplot.format.FloatFormatter(spec["format"],
-                                                              nanshow=False)
+                    formatter = toyplot.format.FloatFormatter(
+                        spec["format"], nanshow=False)
                 else:
                     formatter = toyplot.format.FloatFormatter(nanshow=False)
                 for i, n in enumerate(spec["data"]):
@@ -445,8 +447,8 @@ def draw_body(table, spec, data, colormap):
                     column_data = column_data.where(masks)
                 table.body.column[col_start].data = column_data
                 if "format" in spec:
-                    formatter = toyplot.format.FloatFormatter(spec["format"],
-                                                              nanshow=False)
+                    formatter = toyplot.format.FloatFormatter(
+                        spec["format"], nanshow=False)
                 else:
                     formatter = toyplot.format.FloatFormatter(nanshow=False)
                 table.body.column[col_start].format = formatter
