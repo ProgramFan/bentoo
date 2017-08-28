@@ -50,6 +50,7 @@ except ImportError:
         return json.loads(
             string, object_pairs_hook=collections.OrderedDict, *args, **kwargs)
 
+
 #
 # Auxiliary functions
 #
@@ -64,6 +65,7 @@ def draw_points(axes, data, *args, **kwargs):
     y = [c[0][1] for c in data]
     color = [c[1] for c in data]
     axes.scatterplot(x, y, color=color, *args, **kwargs)
+
 
 #
 # Layout algorithm for tree representation
@@ -89,8 +91,10 @@ def build_tree(data):
         nid, children = (nodes[0][1], [])
         for l, n in nodes[1:]:
             if l == min_level:
-                result.append({"id": nid,
-                               "children": flat_to_recursive(children)})
+                result.append({
+                    "id": nid,
+                    "children": flat_to_recursive(children)
+                })
                 nid, children = (n, [])
             else:
                 children.append((l, n))
@@ -377,9 +381,11 @@ def draw_header(table, spec, colormap, ignore_root=True):
             merged.data = spec["label"]
             merged.align = "center"
             merged.valign = "center"
-            merged.lstyle = {"font-size": "20px",
-                             "font-weight": "bold",
-                             "fill": "white"}
+            merged.lstyle = {
+                "font-size": "20px",
+                "font-weight": "bold",
+                "fill": "white"
+            }
             merged.bstyle = {"fill": "darkmagenta", "stroke": "none"}
             row_start += 1
         if "subgroups" in spec:

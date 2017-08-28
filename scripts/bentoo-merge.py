@@ -1,7 +1,6 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 #
-
 '''
 bentoo-merger.py - merge performance data from different sources
 
@@ -42,7 +41,7 @@ def find_first_of(contents, candidates):
 def split_columns(columns):
     '''split 'columns' into (index_columns, data_columns)'''
     timer_column_index = columns.index("TimerName")
-    return (columns[:timer_column_index+1], columns[timer_column_index+1:])
+    return (columns[:timer_column_index + 1], columns[timer_column_index + 1:])
 
 
 def extract_column_names(conn, table="result"):
@@ -54,8 +53,12 @@ def extract_column_names(conn, table="result"):
     return names
 
 
-def merge_db(main_db, ref_db, out_db,
-             replace=None, append=None, replace_with=None):
+def merge_db(main_db,
+             ref_db,
+             out_db,
+             replace=None,
+             append=None,
+             replace_with=None):
     conn0 = sqlite3.connect(main_db)
     conn1 = sqlite3.connect(ref_db)
 
@@ -72,8 +75,8 @@ def merge_db(main_db, ref_db, out_db,
 
     if replace_with:
         index_sql = ", ".join(map(quote, index_cols))
-        replace_sql = ", ".join("\"{0}\" AS \"{1}\"".format(
-            x, y) for x, y in zip(replace_refs, replace_cols))
+        replace_sql = ", ".join("\"{0}\" AS \"{1}\"".format(x, y)
+                                for x, y in zip(replace_refs, replace_cols))
         append_sql = ", ".join(map(quote, append_cols))
         sql = [index_sql, replace_sql, append_sql]
         sql = filter(lambda x: x, sql)
@@ -87,7 +90,7 @@ def merge_db(main_db, ref_db, out_db,
     main_data = pandas.read_sql_query("SELECT * FROM result", conn0)
     main_data = main_data.set_index(index_cols)
     for x in append_cols:
-        assert(x not in main_data)
+        assert (x not in main_data)
         main_data[x] = 0
     main_data.update(ref_data)
 
@@ -107,19 +110,28 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("main_db",
-                        help="Database to be updated")
-    parser.add_argument("ref_db",
-                        help="Database to get update data")
-    parser.add_argument("out_db",
-                        help="Database to store output")
-    parser.add_argument("-a", "--append", nargs="+", default=None,
-                        help="Columns to append, supports shell wildcards")
+    parser.add_argument("main_db", help="Database to be updated")
+    parser.add_argument("ref_db", help="Database to get update data")
+    parser.add_argument("out_db", help="Database to store output")
+    parser.add_argument(
+        "-a",
+        "--append",
+        nargs="+",
+        default=None,
+        help="Columns to append, supports shell wildcards")
     grp = parser.add_mutually_exclusive_group()
-    grp.add_argument("-r", "--replace", nargs="+", default=None,
-                     help="Columns to replace, supports shell wildcards ")
-    grp.add_argument("-w", "--replace-with", action="append", default=[],
-                     help="Replace column x with y (format: x=y)")
+    grp.add_argument(
+        "-r",
+        "--replace",
+        nargs="+",
+        default=None,
+        help="Columns to replace, supports shell wildcards ")
+    grp.add_argument(
+        "-w",
+        "--replace-with",
+        action="append",
+        default=[],
+        help="Replace column x with y (format: x=y)")
 
     args = parser.parse_args()
     merge_db(**vars(args))
