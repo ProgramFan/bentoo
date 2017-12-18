@@ -47,7 +47,7 @@ except ImportError:
 
     def loads(string, *args, **kwargs):
         return json.loads(
-            string, object_pairs_hook=collections.OrderedDict, *args, **kwargs)
+            string, object_pairs_hook=OrderedDict, *args, **kwargs)
 
     def dump(data, fileobj, *args, **kwargs):
         kwargs["indent"] = 2
