@@ -22,9 +22,8 @@ sphosticated analysis need to be done directly in python using pandas etc.
 import argparse
 import fnmatch
 import os
-import pandas
 import re
-import sys
+import pandas
 import sqlite3
 
 
@@ -33,30 +32,37 @@ def parse_list(repr):
 
 
 class PandasReader(object):
-
     @staticmethod
     def _make_equal_match_func(value):
         if isinstance(value, list):
+
             def match(x):
                 return str(x) in value
+
             return match
         else:
+
             def match(x):
                 return x == type(x)(value)
+
             return match
 
     @staticmethod
     def _make_glob_match_func(value):
         if isinstance(value, list):
+
             def match(x):
                 for v in value:
                     if fnmatch.fnmatch(str(x), v):
                         return True
                 return False
+
             return match
         else:
+
             def match(x):
                 return fnmatch.fnmatch(str(x), value)
+
             return match
 
     @classmethod
@@ -138,11 +144,7 @@ class SqliteReader(object):
         buffer: "BLOB"
     }
 
-    globops = {
-        "fnmatchcase": "GLOB",
-        "fnmatch": "GLOB",
-        "regex": "REGEXP"
-    }
+    globops = {"fnmatchcase": "GLOB", "fnmatch": "GLOB", "regex": "REGEXP"}
 
     @classmethod
     def _build_where_clause(cls, column_types, matches, glob_syntax):
@@ -185,8 +187,9 @@ class SqliteReader(object):
                 assert cls.types[column_types[name]] == "TEXT"
                 glob_op = cls.globops[glob_syntax]
                 if isinstance(value, list):
-                    quoted = ["{0} {1} '{2}'".format(name, glob_op, x)
-                              for x in value]
+                    quoted = [
+                        "{0} {1} '{2}'".format(name, glob_op, x) for x in value
+                    ]
                     sql_seg = "(" + " OR ".join(quoted) + ")"
                 else:
                     sql_seg = "{0} {1} '{2}'".format(name, glob_op, value)
@@ -242,8 +245,13 @@ def make_reader(reader, *args, **kwargs):
         raise RuntimeError("Unknown reader '%s'" % reader)
 
 
-def analyse_data(data_file, reader, matches, columns,
-                 pivot=None, save=None, **kwargs):
+def analyse_data(data_file,
+                 reader,
+                 matches,
+                 columns,
+                 pivot=None,
+                 save=None,
+                 **kwargs):
     reader = make_reader(reader, **kwargs)
     data = reader.read_frame(data_file, matches, columns, pivot)
     print(data.to_string())
@@ -253,38 +261,59 @@ def analyse_data(data_file, reader, matches, columns,
 
 def main():
     parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawTextHelpFormatter)
+        description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("data_file", help="Database file")
-    parser.add_argument("-r", "--reader",
-                        choices=["sqlite", "pandas"], default="pandas",
-                        help="Database reader (default: pandas)")
-    parser.add_argument("-m", "--matches", "--filter",
-                        action='append', default=[],
-                        help="Value filter, name[~=]value")
-    parser.add_argument("-c", "--columns",
-                        action='append', default=[],
-                        help="Columns to display, value or list of values")
-    parser.add_argument("-p", "--pivot", default=None,
-                        help="Pivoting fields, 2 or 3 element list")
-    parser.add_argument("-s", "--save",
-                        help="Save result to a CSV file")
+    parser.add_argument(
+        "-r",
+        "--reader",
+        choices=["sqlite", "pandas"],
+        default="pandas",
+        help="Database reader (default: pandas)")
+    parser.add_argument(
+        "-m",
+        "--matches",
+        "--filter",
+        action='append',
+        default=[],
+        help="Value filter, name[~=]value")
+    parser.add_argument(
+        "-c",
+        "--columns",
+        action='append',
+        default=[],
+        help="Columns to display, value or list of values")
+    parser.add_argument(
+        "-p",
+        "--pivot",
+        default=None,
+        help="Pivoting fields, 2 or 3 element list")
+    parser.add_argument("-s", "--save", help="Save result to a CSV file")
 
     ag = parser.add_argument_group("Sqlite Reader Options")
-    ag.add_argument("--sqlite-glob-syntax",
-                    choices=["fnmatch", "regex"], default="fnmatch",
-                    help="Globbing operator syntax (default: fnmatch)")
+    ag.add_argument(
+        "--sqlite-glob-syntax",
+        choices=["fnmatch", "regex"],
+        default="fnmatch",
+        help="Globbing operator syntax (default: fnmatch)")
 
     ag = parser.add_argument_group("Pandas Reader Options")
-    ag.add_argument("--pandas-backend",
-                    choices=["excel", "sqlite3", "auto"], default="auto",
-                    help="Pandas IO backend (default: auto)")
+    ag.add_argument(
+        "--pandas-backend",
+        choices=["excel", "sqlite3", "auto"],
+        default="auto",
+        help="Pandas IO backend (default: auto)")
 
     args = parser.parse_args()
-    analyse_data(args.data_file, args.reader,
-                 args.matches, args.columns, args.pivot, args.save,
-                 sqlite_glob_syntax=args.sqlite_glob_syntax,
-                 pandas_backend=args.pandas_backend)
+    analyse_data(
+        args.data_file,
+        args.reader,
+        args.matches,
+        args.columns,
+        args.pivot,
+        args.save,
+        sqlite_glob_syntax=args.sqlite_glob_syntax,
+        pandas_backend=args.pandas_backend)
+
 
 if __name__ == "__main__":
     main()
