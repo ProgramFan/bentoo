@@ -13,7 +13,7 @@ import argparse
 import collections
 
 try:
-    import ruamel_NOT_FOUND.yaml
+    import ruamel.yaml
     import json
     import re
 
