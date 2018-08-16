@@ -571,7 +571,7 @@ class BsubLauncher:
         if make_script:
             make_bash_script(cmd, spec["envs"], os.path.join(path, "run.sh"))
         if dryrun:
-            return "skipped"
+            return "dryrun"
 
         out_fn = os.path.join(path, "STDOUT")
         err_fn = os.path.join(path, "STDERR")
@@ -679,13 +679,21 @@ def run_project(project,
         case_id = {"test_vector": case["test_vector"], "path": case_path}
         if exclude and has_match(case_path, exclude):
             stats["skipped"].append(case_id)
+            reporter.case_begin(project, case)
+            reporter.case_end(project, case, "skipped since excluded")
             continue
         elif include and not has_match(case_path, include):
             stats["skipped"].append(case_id)
+            reporter.case_begin(project, case)
+            reporter.case_end(project, case, "skipped since not included")
             continue
         if rerun_failed and validate_case(case):
+            reporter.case_begin(project, case)
+            reporter.case_end(project, case, "skipped since done")
             continue
         if skip_finished and case in stats["success"]:
+            reporter.case_begin(project, case)
+            reporter.case_end(project, case, "skipped since in success")
             continue
         reporter.case_begin(project, case)
         result = runner.run(case,
