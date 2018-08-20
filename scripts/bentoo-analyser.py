@@ -7,12 +7,14 @@ data collected by Collector. It provided options to filter result, to choose
 display table fields and to pivot resultant table. It provides a simple and
 intuitive syntax.
 
-To use the analyser, one invokes analyser.py with -m for matcher/filter, -f for
-fields selection and -p for pivoting. For example, one can display how all
-timers of algorithms scales w.r.t. number of nodes when using 1 threads per
+To use the analyser, one invokes bentoo-analyser.py with -m for matcher/filter,
+-c for fields selection and -p for pivoting. For example, one can display how
+all timers of algorithms scales w.r.t. number of nodes when using 1 threads per
 process using the following command line:
-    ./analyser.py result.sqlite -m nthreads=1 -m timer_name~algs::Numerical*,
-    algs::Copy* -f timer_name,nnodes,max,summed -p timer_name,nnodes
+
+    bentoo-analyser.py result.sqlite -m nthreads=1 \
+        -m timer_name~algs::Numerical*,algs::Copy* \
+        -c timer_name,nnodes,max,summed -p timer_name,nnodes
 
 Analyser tries to provide a simple CLI interface of pandas for simple use
 cases, namely tasks need to be done quick and often in command line. More
@@ -23,7 +25,6 @@ import argparse
 import fnmatch
 import os
 import re
-import pandas
 import sqlite3
 
 
@@ -95,7 +96,7 @@ class PandasReader(object):
     def __init__(self, backend="sqlite"):
         self.backend = backend
 
-    def read_frame(self, data_file, matches, columns, pivot):
+    def read_frame(self, data_file, matches, columns, pivot, save):
         reader = self.backend
         if self.backend == "auto":
             ext = os.path.splitext(data_file)[1]
@@ -129,7 +130,9 @@ class PandasReader(object):
             assert len(pivot_fields) in (2, 3)
             data = data.pivot(*pivot_fields)
 
-        return data
+        print data.to_string()
+        if save:
+            data.to_csv(save, index=True)
 
 
 class SqliteReader(object):
@@ -210,7 +213,7 @@ class SqliteReader(object):
     def __init__(self, glob_syntax="fnmatch"):
         self.glob_syntax = glob_syntax
 
-    def read_frame(self, data_file, matches, columns, pivot):
+    def read_frame(self, data_file, matches, columns, pivot, save):
         conn = sqlite3.connect(data_file)
         if self.glob_syntax == "regex":
             conn.create_function("regexp", 2,
@@ -226,20 +229,25 @@ class SqliteReader(object):
         filters = self._build_where_clause(data_types, matches,
                                            self.glob_syntax)
         sql = "SELECT {0} FROM result {1}".format(selects, filters)
-        data = pandas.io.sql.read_sql(sql, conn)
 
+        # TODO: Rewrite these to use only standard python
+        import pandas
+        data = pandas.io.sql.read_sql(sql, conn)
         if pivot:
             pivot_fields = parse_list(pivot)
             assert len(pivot_fields) in (2, 3)
             data = data.pivot(*pivot_fields)
 
-        return data
+        print data.to_string()
+        if save:
+            data.to_csv(save, index=True)
 
 
 def make_reader(reader, *args, **kwargs):
     if reader == "sqlite":
         return SqliteReader(glob_syntax=kwargs.get("sqlite_glob_syntax"))
     elif reader == "pandas":
+        import pandas
         return PandasReader(backend=kwargs.get("pandas_backend"))
     else:
         raise RuntimeError("Unknown reader '%s'" % reader)
@@ -253,10 +261,7 @@ def analyse_data(data_file,
                  save=None,
                  **kwargs):
     reader = make_reader(reader, **kwargs)
-    data = reader.read_frame(data_file, matches, columns, pivot)
-    print(data.to_string())
-    if save:
-        data.to_csv(save, index=True)
+    reader.read_frame(data_file, matches, columns, pivot, save)
 
 
 def main():
