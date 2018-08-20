@@ -1,0 +1,23 @@
+{
+    "version": 1,
+    "project": {
+        "name": "Euler",
+        "description": "Euler strong scaling study w.r.t. proc-thread combination",
+        "test_factors": ["mode", "nnodes", "test_id"],
+        "test_vector_generator": "custom",
+        "test_case_generator": "custom",
+        "data_files": ["bin", "data"]
+    },
+    "custom_vector_generator": {
+        "import": "make-case.py",
+        "func": "make_vectors",
+        "args": {
+        }
+    },
+    "custom_case_generator": {
+        "import": "make-case.py",
+        "func": "make_case",
+        "args": {
+        }
+    }
+}
