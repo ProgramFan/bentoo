@@ -76,7 +76,7 @@ Euler
     "test_factors": ["mode", "nnodes", "test_id"],
     "test_vector_generator": "custom",
     "test_case_generator": "custom",
-    "data_files": ["bin", "database"]
+    "data_files": ["bin", "data"]
   },
   "custom_vector_generator": {
     "import": "make_case.py",
@@ -117,10 +117,10 @@ Euler
 测试向量生成器所执行的函数原型为：
 
 ```python
-def make_vector(conf_root, test_factors, **kwargs):
-  result = []
-  # fill result with vectors of the same size as `test_factors`
-  return result
+def make_vectors(conf_root, test_factors, **kwargs):
+  	result = []
+  	# fill result with vectors of the same size as `test_factors`
+  	return result
 ```
 
 `conf_root` 为用 **绝对路径** 表示的测试工程路径，`test_factors` 为 `project` 字段定义的 `test_factors` 列表，`kwargs` 为在 `custom_vector_generator` 中定义的额外参数。
@@ -130,12 +130,12 @@ def make_vector(conf_root, test_factors, **kwargs):
 ```python
 import itertools
 
-def make_vector(conf_root, test_factors, **kwargs):
-  assert test_factors == ["mode", "nnodes", "test_id"]
-  mode = ["mpi-core", "mpi-socket", "mpi-node"]
-  nnodes = [1, 2, 4, 8 ,16, 32, 64, 128]
-  test_id = range(5)
-  return list(itertools.product(mode, nnodes, test_id))
+def make_vectors(conf_root, test_factors, **kwargs):
+  	assert test_factors == ["mode", "nnodes", "test_id"]
+  	mode = ["mpi-core", "mpi-socket", "mpi-node"]
+  	nnodes = [1, 2, 4, 8 ,16, 32, 64, 128]
+  	test_id = range(5)
+  	return list(itertools.product(mode, nnodes, test_id))
 ```
 
 ### 自定义测试用例生成器
@@ -150,33 +150,138 @@ def make_vector(conf_root, test_factors, **kwargs):
 
 ```python
 def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
-  # expand test_vector
-  # prepare case asserts in `case_path`
-  # define test spec
-  cmd = []
-  envs = {}
-  run = {}
-  results = []
-  validator = {}
-  # calculate test spec and return
-  return collections.OrderedDict(zip(["cmd", "envs", "run", "results", "validator"],
-                                     [cmd, envs, run, results, validator]))
+  	# expand test_vector
+  	# prepare case asserts in `case_path`
+  	# define test spec
+  	cmd = []
+  	envs = {}
+  	run = {}
+  	results = []
+  	validator = {}
+  	# calculate test spec and return
+  	return collections.OrderedDict(zip(["cmd", "envs", "run", "results", "validator"],
+    	                                 [cmd, envs, run, results, validator]))
 ```
 
-`conf_root` 和 `output_root` 为用 **绝对路径** 表示的测试工程路径和工作目录路径，`case_path` 为相对于`output_root` 的测试用例目录路径，`test_vector` 为测试用例所对应的测试向量，用 `OrdredDict` 表示。`kwargs` 为在 `custom_case_generator` 中定义的额外参数。
+`conf_root` 和 `output_root` 为用 **绝对路径** 表示的测试工程路径和工作目录路径，`case_path` 为用 **绝对路径** 表示的测试用例工作目录，`test_vector` 为测试用例所对应的测试向量，用 `OrdredDict` 表示。`kwargs` 为在 `custom_case_generator` 中定义的额外参数。
 
-[TODO] 测试用例函数功能与返回值说明
+测试用例生成函数需要完成如下约定功能：
 
-[TODO] 上述 `Euler` 示例的测试向量生成器函数为：
+1. 在 `case_path` 中生成测试用例 `test_vector` 对应的辅助文件，包括输入文件、数据文件等
+2. 向 Bentoo 返回测试用例的 **执行描述** ，即执行方法的详细描述
+
+执行描述为一个 Python 字典，包括五个字段：
+
+1. `cmd`：字符串列表，表示串行执行用例所执行的命令，如 `["./main3d", "3d.input"]` 等
+2. `envs`: 字典（以字符串为键，任意类型为值），表示待设置的环境变量
+3. `run`: 由指定键构成的字典，表示执行测试用例的资源需求和分配方法。键值的类型和定义为：
+   1. `nnodes`: 整数，表示执行该测试用例所需计算结点数目
+   2. `procs_per_node`: 整数，表示执行该测试用例时每个结点的进程数目
+   3. `tasks_per_proc`: 整数，表示执行该测试用例时每个进程的线程数目
+   4. `nprocs`: 整数，表示执行该测试用例所需的总进程数目
+4. `results`: 字符串列表，表示测试用例输出结果文件，*必须为相对于 `case_path` 的相对路径*，标准输出和标准错误通过 `STDOUT` 和 `STDERR` 表示
+5. `validator`: *可选*，由指定键构成的字典，表示检测测试用例是否成功完成的方法。键值的类型和定义为：
+   1. `exists`: 字符串列表，表示检测指定的文件是否存在，*必须为相对于 `case_path` 的相对路径*。仅当所有文件均存在才返回真值
+   2. `contains`: 以字符串为键和值的字典，`key: value`  表示在文件 `key` 中存在匹配正则表达式 `value` 的字符串，*`key` 必须为相对于 `case_path` 的相对路径*。仅在所有文件都存在并且各个文件包含相应的字符串时返回真值
+
+上述 `Euler` 示例的测试用例生成器函数为：
 
 ```python
-import itertools
+from collections import OrderedDict
+import string
+import shutil
+import os
 
-def make_vector(conf_root, test_factors, **kwargs):
-  assert test_factors == ["mode", "nnodes", "test_id"]
-  mode = ["mpi-core", "mpi-socket", "mpi-node"]
-  nnodes = [1, 2, 4, 8 ,16, 32, 64, 128]
-  test_id = range(5)
-  return list(itertools.product(mode, nnodes, test_id))
+NX, NY, NZ = 600, 600, 600
+NTHREADS = {
+  	"mpi-core": 1,
+  	"mpi-socket": 12,
+  	"mpi-node": 24
+}
+CPN = 24
+
+def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
+    # Expand test vector
+    mode, nnodes, test_id = test_vector.values()
+
+    # Make input file by substitute templates
+    content = file(os.path.join(conf_root, "templates", "3d.input.template")).read()
+    output = os.path.join(case_path, "3d.input")
+    var_values = dict(zip(["nx", "ny", "nz"], [NX, NY, NZ]))
+    file(output, "w").write(string.Template(content).safe_substitute(var_values))
+    # Link data file to case dir since main3d requires it in current working dir
+    data_fn = os.path.join(conf_root, "data", "Model.stl")
+    link_dir = os.path.join(case_path, "data")
+    link_target = os.path.join(link_dir, "Model.stl")
+    if os.path.exists(link_dir):
+    	shutil.rmtree(link_dir)
+    os.makedirs(link_dir)
+    os.symlink(os.path.relpath(data_fn, case_path), link_target)
+
+    # Build case descriptions
+    bin_path = os.path.join(output_root, "bin", "main3d")
+    bin_path = os.path.relpath(bin_path, case_path)
+    cmd = [bin_path, "3d.input"]
+    envs = {
+        "OMP_NUM_THREADS": NTHREADS[mode],
+        "KMP_AFFINITY": "compact"
+    }
+    run = {
+        "nnodes": nnodes,
+        "procs_per_node": CPN / NTHREADS[mode],
+        "tasks_per_proc": NTHREADS[mode],
+        "nprocs": nnodes * CPN / NTHREADS[mode]
+    }
+    results = ["Euler.log"]
+    validator = {
+      "contains": {
+        "Euler.log": "TIME STATISTICS"
+      }
+    }
+    return OrderedDict(zip(["cmd", "envs", "run", "results", "validator"],
+                           [cmd, envs, run, results, validator]))
 ```
 
+### 其他测试向量生成器
+
+在 `project` 中设置 `test_vector_generator` 为 `simple` 或 `cart_product` 时，可在 `TestProjectConfig.json` 中直接设定测试向量，无需编写 python 函数。
+
+#### cart_product_vector_generator
+
+当设置 `test_vector_generator` 为 `cart_product` 时，需在 `TestProjectConfig.json` 中定义 `cart_product_vector_generator` 字典。该字典仅包含一个键 `test_factor_values`，表示各个影响因素的取值。`test_factor_values` 是一个字典，以 `test_factors` 定义的影响因素名称为键，以列表为值，表示按集合的笛卡尔积方式生成所有测试向量。例如，上述 Euler 示例的测试向量生成器可定义为：
+
+```json
+{
+  "cart_product_vector_generator": {
+    "test_factor_values": {
+      "mode": ["mpi-core", "mpi-socket", "mpi-node"],
+      "nnodes": [1, 2, 4, 8, 16, 32, 64, 128],
+      "test_id": [0, 1, 2, 3, 4]
+    }
+  }
+}
+```
+
+#### simple_vector_generator
+
+当设置 `test_vector_generator` 为 `simple` 时，需在 `TestProjectConfig.json` 中定义 `simple_vector_generator` 字典。该字典仅包含一个键 `test_vectors`，表示所有的测试向量。`test_vectors` 是一个有列表组成的列表，每个列表项表示一个或一组测试向量。规则为：当该列表项的元素都是基本类型时，表示一个测试向量；当某个元素为列表类型时，表示由各个元素笛卡尔积张成的一组测试向量。例如，上述 Euler 示例的测试向量生成器可定义为：
+
+```json
+{
+  "simple_vector_generator": {
+    "test_vectors": [
+      ["mpi-core", [1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4]],
+      ["mpi-socket", [1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4]],
+      ["mpi-node", [1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4]]
+    ]
+  }
+}
+```
+
+### 其他测试用例生成器
+
+在 `project` 中设置 `test_case_generator` 为 `template` 时，可在 `TestProjectConfig.json` 中直接设定测试用例，无需编写 python 函数。
+
+#### template_case_generator
+
+当设置 `test_case_generator` 为 `template` 时，需在 `TestProjectConfig.json` 中定义 `template_case_generator` 字典。
