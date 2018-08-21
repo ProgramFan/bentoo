@@ -103,10 +103,12 @@ def shell_quote(x):
         return x
 
 
-def make_bash_script(cmd, envs, outfile):
+def make_bash_script(cmd, envs, outfile, prolog=None):
     content = []
     content.append("#!/bin/bash")
     content.append("#")
+    if prolog:
+        content.extend("#{}".format(x))
     content.append("")
     if envs:
         for k, v in envs.iteritems():
@@ -334,6 +336,159 @@ class YhrunLauncher:
 
             subprocess.call(yhbatch_cmd, cwd=path)
             # yhbatch always success
+            return "success"
+
+        else:
+            if make_script:
+                make_bash_script(cmd, spec["envs"],
+                                 os.path.join(path, "run.sh"))
+            if dryrun:
+                return "skipped"
+
+            out_fn = os.path.join(path, "STDOUT")
+            err_fn = os.path.join(path, "STDERR")
+
+            if verbose:
+                proc1 = subprocess.Popen(
+                    cmd,
+                    env=env,
+                    cwd=path,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT)
+                proc2 = subprocess.Popen(
+                    ["tee", out_fn], cwd=path, stdin=proc1.stdout)
+                proc1.stdout.close()
+                ret = proc2.wait()
+            else:
+                ret = subprocess.call(
+                    cmd,
+                    env=env,
+                    cwd=path,
+                    stdout=file(out_fn, "w"),
+                    stderr=file(err_fn, "w"))
+
+            if ret == 0:
+                return "success"
+            # FIXME: find the correct return code for timeout
+            elif ret == 124:
+                return "timeout"
+            else:
+                return "failed"
+
+
+class SlurmLauncher:
+    @classmethod
+    def is_available(cls):
+        if has_program(["srun", "-h"]):
+            return True
+        else:
+            return False
+
+    @classmethod
+    def register_cmdline_args(cls, argparser):
+        argparser.add_argument(
+            "--slurm-partition",
+            metavar="PARTITION",
+            dest="partition",
+            help="Select job partition to use")
+        argparser.add_argument(
+            "--slurm-exclude",
+            metavar="NODELIST",
+            dest="excluded_nodes",
+            help="Exclude nodes from job allocation")
+        argparser.add_argument(
+            "--slurm-useonly",
+            metavar="NODELIST",
+            dest="only_nodes",
+            help="Use only selected nodes")
+        argparser.add_argument(
+            "--slurm-batch",
+            action="store_true",
+            help="Use sbatch instead of srun")
+
+    @classmethod
+    def parse_cmdline_args(cls, namespace):
+        return {"partition": namespace.partition,
+                "excluded_nodes": namespace.excluded_nodes,
+                "only_nodes": namespace.only_nodes,
+                "use_batch": namespace.batch}
+
+    def __init__(self, args):
+        self.args = args
+
+    def run(self,
+            case,
+            timeout=None,
+            make_script=False,
+            dryrun=False,
+            verbose=False,
+            **kwargs):
+        path = case["path"]
+        spec = case["spec"]
+        assert os.path.isabs(path)
+
+        run = spec["run"]
+        nprocs = str(run["nprocs"])
+        nnodes = run.get("nnodes", None)
+        tasks_per_proc = run.get("tasks_per_proc", None)
+        srun_cmd = ["srun"]
+        if nnodes:
+            srun_cmd.extend(["-N", nnodes])
+        srun_cmd.extend(["-n", nprocs])
+        if tasks_per_proc:
+            srun_cmd.extend(["-c", tasks_per_proc])
+        if timeout:
+            srun_cmd.extend(["-t", str(timeout)])
+        if self.args["partition"]:
+            srun_cmd.extend(["-p", self.args["partition"]])
+        if self.args["excluded_nodes"]:
+            srun_cmd.extend(["-x", self.args["excluded_nodes"]])
+        if self.args["only_nodes"]:
+            srun_cmd.extend(["-w", self.args["only_nodes"]])
+        exec_cmd = map(str, spec["cmd"])
+        cmd = srun_cmd + exec_cmd
+        cmd = map(str, cmd)
+
+        env = dict(os.environ)
+        for k, v in spec["envs"].iteritems():
+            env[k] = str(v)
+
+        if self.args["use_batch"]:
+            # build batch job script: we need to remove job control parameters
+            # from job command, since they colide with sbatch parameters.
+            real_cmd = list(cmd)
+            if "-x" in real_cmd:
+                idx = real_cmd.index("-x")
+                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
+            if "-w" in real_cmd:
+                idx = real_cmd.index("-w")
+                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
+            if "-p" in real_cmd:
+                idx = real_cmd.index("-p")
+                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
+            # build sbatch command line and job file spec
+            sbatch_prolog = ["SBATCH -N {}".format(nnodes)]
+            sbatch_cmd = ["sbatch", "-N", str(nnodes)]
+            if self.args["partition"]:
+                sbatch_cmd.extend(["-p", self.args["partition"]])
+                sbatch_prolog.append("SBATCH -p {}".format(self.args["partition"]))
+            if self.args["excluded_nodes"]:
+                sbatch_cmd.extend(["-x", self.args["excluded_nodes"]])
+            if self.args["only_nodes"]:
+                sbatch_cmd.extend(["-w", self.args["only_nodes"]])
+            sbatch_cmd.append("./batch_spec.sh")
+
+            make_bash_script(real_cmd, spec["envs"],
+                             os.path.join(path, "batch_spec.sh"))
+
+            if make_script:
+                make_bash_script(sbatch_cmd, None,
+                                 os.path.join(path, "run.sh"))
+            if dryrun:
+                return "skipped"
+
+            subprocess.call(sbatch_cmd, cwd=path)
+            # sbatch always success
             return "success"
 
         else:
@@ -743,7 +898,7 @@ def main():
     ag = parser.add_argument_group("Launcher options")
     ag.add_argument(
         "--launcher",
-        choices=["yhrun", "bsub", "mpirun", "pbs", "auto"],
+        choices=["yhrun", "bsub", "mpirun", "pbs", "slurm", "auto"],
         default="auto",
         help="Job launcher (default: auto)")
     ag.add_argument(
@@ -780,6 +935,9 @@ def main():
     ag = parser.add_argument_group("pbs options")
     PbsLauncher.register_cmdline_args(ag)
 
+    ag = parser.add_argument_group("slurm options")
+    SlurmLauncher.register_cmdline_args(ag)
+
     config = parser.parse_args()
 
     proj = TestProjectReader(config.project_root)
@@ -791,6 +949,8 @@ def main():
         runner = PbsLauncher(PbsLauncher.parse_cmdline_args(config))
     elif config.launcher == "bsub":
         runner = BsubLauncher(BsubLauncher.parse_cmdline_args(config))
+    elif config.launcher == "slurm":
+        runner = SlurmLauncher(SlurmLauncher.parse_cmdline_args(config))
     else:
         # automatically determine which is the best
         if YhrunLauncher.is_available():
@@ -799,6 +959,8 @@ def main():
             runner = PbsLauncher(PbsLauncher.parse_cmdline_args(config))
         elif BsubLauncher.is_available():
             runner = BsubLauncher(BsubLauncher.parse_cmdline_args(config))
+        elif SlurmLauncher.is_available():
+            runner = SlurmLauncher(SlurmLauncher.parse_cmdline_args(config))
         elif MpirunLauncher.is_available():
             runner = MpirunLauncher(MpirunLauncher.parse_cmdline_args(config))
         else:
