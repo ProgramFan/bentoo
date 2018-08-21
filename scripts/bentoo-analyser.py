@@ -135,6 +135,36 @@ class PandasReader(object):
             data.to_csv(save, index=True)
 
 
+def print_table(header, rows):
+    '''Print csv table into markdown table'''
+    for row in rows:
+        assert len(header) == len(row)
+    colalign = ['>'] * len(header)
+    colwidth = [0] * len(header)
+    for i, c in enumerate(header):
+        colwidth[i] = max(colwidth[i], len(str(c)))
+    for item in rows:
+        for i, c in enumerate(item):
+            colwidth[i] = max(colwidth[i], len(str(c)))
+    fmt = ["{:%s%d}" % (a, w) for a, w in zip(colalign, colwidth)]
+    fmt = " | ".join(fmt)
+    fmt = "| " + fmt + " |"
+    print fmt.format(*header)
+    sep = ["-" * c for c in colwidth]
+    for i, a in enumerate(colalign):
+        if a == '<':
+            sep[i] = ":" + sep[i] + '-'
+        elif a == '^':
+            sep[i] = ":" + sep[i] + ':'
+        elif a == '>':
+            sep[i] = "-" + sep[i] + ':'
+        else:
+            raise RuntimeError("Invalid align spec '%s'" % a)
+    print "|" + "|".join(sep) + "|"
+    for item in rows:
+        printfmt.format(*item)
+
+
 class SqliteReader(object):
 
     types = {
@@ -230,16 +260,20 @@ class SqliteReader(object):
                                            self.glob_syntax)
         sql = "SELECT {0} FROM result {1}".format(selects, filters)
 
-        # TODO: Rewrite these to use only standard python
-        import pandas
-        data = pandas.io.sql.read_sql(sql, conn)
-        if pivot:
+        cur = conn.cursor()
+        cur.execute(sql)
+        for item in cur:
+            data_rows.append(item)
+        # TODO: We do not support pivot at the moment
+        if False and pivot:
             pivot_fields = parse_list(pivot)
             assert len(pivot_fields) in (2, 3)
             data = data.pivot(*pivot_fields)
 
-        print data.to_string()
+        print_table(data_columns, data_rows)
         if save:
+            import csv
+            # FIXME: change here
             data.to_csv(save, index=True)
 
 
