@@ -26,6 +26,7 @@ import fnmatch
 import os
 import re
 import sqlite3
+from collections import OrderedDict
 
 
 def parse_list(repr):
@@ -162,7 +163,7 @@ def print_table(header, rows):
             raise RuntimeError("Invalid align spec '%s'" % a)
     print "|" + "|".join(sep) + "|"
     for item in rows:
-        printfmt.format(*item)
+        print fmt.format(*item)
 
 
 class SqliteReader(object):
@@ -230,14 +231,20 @@ class SqliteReader(object):
         return "WHERE %s" % " AND ".join(sql_segs)
 
     @classmethod
-    def _build_select_clause(cls, column_types, columns):
-        if not columns:
-            return "*"
+    def _build_select_clause(cls, column_types, columns, pivots):
         real_columns = []
-        for f in columns:
-            real_columns.extend(parse_list(f))
-        for f in real_columns:
-            assert f in column_types
+        if not columns:
+            real_columns = column_types.keys()
+        else:
+            for f in columns:
+                real_columns.extend(parse_list(f))
+            for f in real_columns:
+                assert f in column_types
+        if pivots:
+            for f in pivots:
+                assert f in real_columns
+                real_columns.remove(f)
+            real_columns = pivots + real_columns
         return ", ".join(real_columns)
 
     def __init__(self, glob_syntax="fnmatch"):
@@ -253,28 +260,37 @@ class SqliteReader(object):
         cur.execute("SELECT * FROM result ORDER BY ROWID ASC LIMIT 1")
         row = cur.fetchone()
         data_columns = [x[0] for x in cur.description]
-        data_types = dict(zip(data_columns, [type(x) for x in row]))
-
-        selects = self._build_select_clause(data_types, columns)
-        filters = self._build_where_clause(data_types, matches,
-                                           self.glob_syntax)
-        sql = "SELECT {0} FROM result {1}".format(selects, filters)
-
-        cur = conn.cursor()
-        cur.execute(sql)
-        for item in cur:
-            data_rows.append(item)
-        # TODO: We do not support pivot at the moment
-        if False and pivot:
+        data_types = OrderedDict(zip(data_columns, [type(x) for x in row]))
+        orderby = None
+        pivot_fields = []
+        if pivot:
+            # convert pivot into order by clause to emulate pandas pivoting
             pivot_fields = parse_list(pivot)
             assert len(pivot_fields) in (2, 3)
-            data = data.pivot(*pivot_fields)
+            orderby = ["{} ASC".format(f) for f in pivot_fields]
+            orderby = ", ".join(orderby)
+        selects = self._build_select_clause(data_types, columns, pivot_fields)
+        filters = self._build_where_clause(data_types, matches,
+                                           self.glob_syntax)
+
+        sql = "SELECT {0} FROM result {1}".format(selects, filters)
+        if orderby:
+            sql = sql + " ORDER BY " + orderby
+
+        data = cur.execute(sql)
+        data_rows = []
+        data_columns = [x[0] for x in cur.description]
+        for row in data:
+            data_rows.append([x for x in row])
 
         print_table(data_columns, data_rows)
         if save:
             import csv
-            # FIXME: change here
-            data.to_csv(save, index=True)
+            with open(save, 'wb') as csvfile:
+                writer = csv.writer(csvfile, quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(data_columns)
+                for row in data_rows:
+                    writer.writerow(row)
 
 
 def make_reader(reader, *args, **kwargs):
@@ -306,8 +322,8 @@ def main():
         "-r",
         "--reader",
         choices=["sqlite", "pandas"],
-        default="pandas",
-        help="Database reader (default: pandas)")
+        default="sqlite",
+        help="Database reader (default: sqlite)")
     parser.add_argument(
         "-m",
         "--matches",
