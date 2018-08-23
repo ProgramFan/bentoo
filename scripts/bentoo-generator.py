@@ -201,8 +201,8 @@ class CustomVectorGenerator:
         module_name = os.path.splitext(os.path.basename(module))[0]
         mod = importlib.import_module(module_name)
         if not hasattr(mod, func):
-            raise RuntimeError("Can not find function '%s' in '%s'" %
-                               (func, module))
+            raise RuntimeError("Can not find function '%s' in '%s'" % (func,
+                                                                       module))
         fun = getattr(mod, func)
         real_args = dict(args)
         real_args["conf_root"] = os.path.abspath(project_root)
@@ -329,8 +329,11 @@ class TemplateCaseGenerator(object):
         binfile = replace_template(cmd[0], {"output_root": output_root})
         if os.path.isabs(binfile) and binfile.startswith(output_root):
             binfile = os.path.relpath(binfile, case_path)
-        if not os.path.exists(os.path.join(case_path, binfile)):
-            raise ValueError("Command binary '%s' does not exists" % binfile)
+        check_path = binfile if os.path.isabs(binfile) else os.path.join(
+            case_path, binfile)
+        if not os.path.exists(check_path):
+            raise ValueError(
+                "Command binary '%s' does not exists" % check_path)
         cmd[0] = binfile
 
         run_template = spec_template["run"]
@@ -385,8 +388,8 @@ class CustomCaseGenerator:
         module_name = os.path.splitext(os.path.basename(module))[0]
         mod = importlib.import_module(module_name)
         if not hasattr(mod, func):
-            raise RuntimeError("Can not find function '%s' in '%s'" %
-                               (func, module))
+            raise RuntimeError("Can not find function '%s' in '%s'" % (func,
+                                                                       module))
         fun = getattr(mod, func)
 
         self.func = fun
@@ -510,8 +513,8 @@ class TestProjectBuilder:
             template = spec["template_case_generator"]
             self.test_case_generator = TemplateCaseGenerator(template)
         else:
-            raise RuntimeError("Unknown test case generator '%s'" %
-                               test_case_generator_name)
+            raise RuntimeError(
+                "Unknown test case generator '%s'" % test_case_generator_name)
 
         # Build output organizer
         self.output_organizer = OutputOrganizer(version=1)
@@ -531,8 +534,8 @@ class TestProjectBuilder:
             srcpath = os.path.join(self.conf_root, path)
             dstpath = os.path.join(output_root, path)
             if not os.path.exists(srcpath):
-                raise RuntimeError("Data file specified but not found: '%s'" %
-                                   path)
+                raise RuntimeError(
+                    "Data file specified but not found: '%s'" % path)
             if os.path.isdir(srcpath):
                 dstdir = os.path.dirname(dstpath)
                 if not os.path.exists(dstdir):
@@ -581,8 +584,8 @@ class TestProjectBuilder:
                 if not os.path.isabs(path):
                     srcpath = os.path.join(self.conf_root, path)
                 if not os.path.isfile(srcpath):
-                    raise ValueError("Common case file '%s' is not a file." %
-                                     path)
+                    raise ValueError(
+                        "Common case file '%s' is not a file." % path)
                 if not os.path.exists(srcpath):
                     raise ValueError("Common case file '%s' not found" % path)
                 dstpath = os.path.join(case_fullpath, os.path.basename(path))
@@ -603,8 +606,8 @@ class TestProjectBuilder:
             json.dump(case_spec, file(case_spec_fullpath, "w"), indent=2)
 
         # Write project config
-        info = [("version", 1), ("name", self.name),
-                ("test_factors", self.test_factors)]
+        info = [("version", 1), ("name", self.name), ("test_factors",
+                                                      self.test_factors)]
         info = OrderedDict(info)
         info["data_files"] = self.data_files
         test_defs = []
