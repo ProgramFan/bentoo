@@ -97,7 +97,7 @@ def has_program(cmd):
 
 def shell_quote(x):
     x = str(x)
-    if any(i in x for i in set("*?[]${}(); >&")):
+    if any(i in x for i in set("*?[]${}(); ")):
         return "\"%s\"" % x
     else:
         return x
@@ -108,13 +108,18 @@ def make_bash_script(cmd, envs, outfile, prolog=None):
     content.append("#!/bin/bash")
     content.append("#")
     if prolog:
-        content.extend("#{}".format(x))
+        content.extend("#{}".format(x) for x in prolog)
     content.append("")
     if envs:
         for k, v in envs.iteritems():
             content.append("export {0}={1}".format(k, shell_quote(v)))
         content.append("")
-    content.append(" ".join(map(shell_quote, cmd)))
+    assert isinstance(cmd, list)
+    if isinstance(cmd[0], list):
+        for item in cmd:
+            content.append(" ".join(map(shell_quote, item)))
+    else:
+        content.append(" ".join(map(shell_quote, cmd)))
     file(outfile, "w").write("\n".join(content))
     os.chmod(outfile, 0755)
 
@@ -345,7 +350,7 @@ class YhrunLauncher:
                 make_bash_script(cmd, spec["envs"],
                                  os.path.join(path, "run.sh"))
             if dryrun:
-                return "skipped"
+                return "dryrun"
 
             out_fn = os.path.join(path, "STDOUT")
             err_fn = os.path.join(path, "STDERR")
@@ -396,13 +401,14 @@ class SlurmLauncher:
         argparser.add_argument(
             "--slurm-batch",
             action="store_true",
+            dest="use_batch",
             help="Use sbatch instead of srun")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {
-            "partition": namespace.slurm_partition,
-            "use_batch": namespace.slurm_batch
+            "partition": namespace.partition,
+            "use_batch": namespace.use_batch
         }
 
     def __init__(self, args):
@@ -447,7 +453,7 @@ class SlurmLauncher:
             prolog.append("SBATCH -J {}".format(os.path.basename(exec_cmd[0])))
             if nnodes:
                 prolog.append("SBATCH -N {}".format(nnodes))
-            prolog.append("SBATCH -j {}".format(nprocs))
+            prolog.append("SBATCH -n {}".format(nprocs))
             if tasks_per_proc:
                 prolog.append("SBATCH -c {}".format(tasks_per_proc))
             if timeout:
@@ -458,21 +464,21 @@ class SlurmLauncher:
             prolog.append("SBATCH -e STDERR")
             jobcmd = []
             jobcmd.append(
-                ["srun -n {} hostname > /tmp/hostfile-$$".format(nprocs)])
-            jobcmd.append([
-                "mpirun -n {} --hostfile /tmp/hostfile-$$".format(nprocs)
-            ] + exec_cmd)
-            jobcmd.append(["rm -f /tmp/hostfile-$$"])
+                "srun -n {} hostname > /tmp/hostfile-$$".format(nprocs).split())
+            jobcmd.append(
+                "mpirun -n {} --hostfile /tmp/hostfile-$$".format(nprocs).split()
+                + exec_cmd)
+            jobcmd.append("rm -f /tmp/hostfile-$$".split())
 
             make_bash_script(jobcmd, spec["envs"],
-                             os.path.join(path, "job_spec.sh"))
+                             os.path.join(path, "job_spec.sh"), prolog)
 
             sbatch_cmd = ["sbatch", "job_spec.sh"]
             if make_script:
                 make_bash_script(sbatch_cmd, None, os.path.join(
                     path, "run.sh"))
             if dryrun:
-                return "skipped"
+                return "dryrun"
 
             subprocess.call(sbatch_cmd, cwd=path)
             # sbatch always success
@@ -847,6 +853,8 @@ def run_project(project,
             make_script=make_script,
             dryrun=dryrun)
         reporter.case_end(project, case, result)
+        if result == "dryrun":
+            result = "skipped"
         stats[result].append(case_id)
         if sleep:
             time.sleep(sleep)

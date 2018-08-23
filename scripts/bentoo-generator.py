@@ -327,10 +327,10 @@ class TemplateCaseGenerator(object):
         cmd = [replace_template(x, test_vector) for x in cmd_template]
         # support output_root in command binary
         binfile = replace_template(cmd[0], {"output_root": output_root})
-        if os.path.isabs(binfile):
+        if os.path.isabs(binfile) and binfile.startswith(output_root):
             binfile = os.path.relpath(binfile, case_path)
         if not os.path.exists(os.path.join(case_path, binfile)):
-            raise ValueError("Command binary '%s' does not exists" % cmd[0])
+            raise ValueError("Command binary '%s' does not exists" % binfile)
         cmd[0] = binfile
 
         run_template = spec_template["run"]
