@@ -33,8 +33,8 @@ class TestProjectReader:
         conf = json.load(file(conf_fn))
         version = conf.get("version", 1)
         if version != 1:
-            raise RuntimeError("Unsupported project version '%s': Only 1 " %
-                               version)
+            raise RuntimeError(
+                "Unsupported project version '%s': Only 1 " % version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
         self.data_files = conf["data_files"]
@@ -243,11 +243,13 @@ class YhrunLauncher:
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {"partition": namespace.partition,
-                "excluded_nodes": namespace.excluded_nodes,
-                "only_nodes": namespace.only_nodes,
-                "use_batch": namespace.batch,
-                "fix_glex": namespace.fix_glex}
+        return {
+            "partition": namespace.partition,
+            "excluded_nodes": namespace.excluded_nodes,
+            "only_nodes": namespace.only_nodes,
+            "use_batch": namespace.batch,
+            "fix_glex": namespace.fix_glex
+        }
 
     def __init__(self, args):
         self.args = args
@@ -379,7 +381,7 @@ class YhrunLauncher:
 class SlurmLauncher:
     @classmethod
     def is_available(cls):
-        if has_program(["srun", "-h"]):
+        if has_program(["sbatch", "-h"]):
             return True
         else:
             return False
@@ -392,26 +394,16 @@ class SlurmLauncher:
             dest="partition",
             help="Select job partition to use")
         argparser.add_argument(
-            "--slurm-exclude",
-            metavar="NODELIST",
-            dest="excluded_nodes",
-            help="Exclude nodes from job allocation")
-        argparser.add_argument(
-            "--slurm-useonly",
-            metavar="NODELIST",
-            dest="only_nodes",
-            help="Use only selected nodes")
-        argparser.add_argument(
             "--slurm-batch",
             action="store_true",
             help="Use sbatch instead of srun")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {"partition": namespace.partition,
-                "excluded_nodes": namespace.excluded_nodes,
-                "only_nodes": namespace.only_nodes,
-                "use_batch": namespace.batch}
+        return {
+            "partition": namespace.slurm_partition,
+            "use_batch": namespace.slurm_batch
+        }
 
     def __init__(self, args):
         self.args = args
@@ -441,10 +433,6 @@ class SlurmLauncher:
             srun_cmd.extend(["-t", str(timeout)])
         if self.args["partition"]:
             srun_cmd.extend(["-p", self.args["partition"]])
-        if self.args["excluded_nodes"]:
-            srun_cmd.extend(["-x", self.args["excluded_nodes"]])
-        if self.args["only_nodes"]:
-            srun_cmd.extend(["-w", self.args["only_nodes"]])
         exec_cmd = map(str, spec["cmd"])
         cmd = srun_cmd + exec_cmd
         cmd = map(str, cmd)
@@ -454,36 +442,35 @@ class SlurmLauncher:
             env[k] = str(v)
 
         if self.args["use_batch"]:
-            # build batch job script: we need to remove job control parameters
-            # from job command, since they colide with sbatch parameters.
-            real_cmd = list(cmd)
-            if "-x" in real_cmd:
-                idx = real_cmd.index("-x")
-                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
-            if "-w" in real_cmd:
-                idx = real_cmd.index("-w")
-                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
-            if "-p" in real_cmd:
-                idx = real_cmd.index("-p")
-                real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
-            # build sbatch command line and job file spec
-            sbatch_prolog = ["SBATCH -N {}".format(nnodes)]
-            sbatch_cmd = ["sbatch", "-N", str(nnodes)]
+            # build sbatch job spec file
+            prolog = []
+            prolog.append("SBATCH -J {}".format(os.path.basename(exec_cmd[0])))
+            if nnodes:
+                prolog.append("SBATCH -N {}".format(nnodes))
+            prolog.append("SBATCH -j {}".format(nprocs))
+            if tasks_per_proc:
+                prolog.append("SBATCH -c {}".format(tasks_per_proc))
+            if timeout:
+                prolog.append("SBATCH -t {}".format(timeout))
             if self.args["partition"]:
-                sbatch_cmd.extend(["-p", self.args["partition"]])
-                sbatch_prolog.append("SBATCH -p {}".format(self.args["partition"]))
-            if self.args["excluded_nodes"]:
-                sbatch_cmd.extend(["-x", self.args["excluded_nodes"]])
-            if self.args["only_nodes"]:
-                sbatch_cmd.extend(["-w", self.args["only_nodes"]])
-            sbatch_cmd.append("./batch_spec.sh")
+                prolog.append("SBATCH -p {}".format(self.args["partition"]))
+            prolog.append("SBATCH -o STDOUT")
+            prolog.append("SBATCH -e STDERR")
+            jobcmd = []
+            jobcmd.append(
+                ["srun -n {} hostname > /tmp/hostfile-$$".format(nprocs)])
+            jobcmd.append([
+                "mpirun -n {} --hostfile /tmp/hostfile-$$".format(nprocs)
+            ] + exec_cmd)
+            jobcmd.append(["rm -f /tmp/hostfile-$$"])
 
-            make_bash_script(real_cmd, spec["envs"],
-                             os.path.join(path, "batch_spec.sh"))
+            make_bash_script(jobcmd, spec["envs"],
+                             os.path.join(path, "job_spec.sh"))
 
+            sbatch_cmd = ["sbatch", "job_spec.sh"]
             if make_script:
-                make_bash_script(sbatch_cmd, None,
-                                 os.path.join(path, "run.sh"))
+                make_bash_script(sbatch_cmd, None, os.path.join(
+                    path, "run.sh"))
             if dryrun:
                 return "skipped"
 
@@ -674,11 +661,13 @@ class BsubLauncher:
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {"queue": namespace.queue,
-                "cgsp": namespace.cgsp,
-                "large_seg": namespace.large_seg,
-                "share_size": namespace.share_size,
-                "host_stack": namespace.host_stack}
+        return {
+            "queue": namespace.queue,
+            "cgsp": namespace.cgsp,
+            "large_seg": namespace.large_seg,
+            "share_size": namespace.share_size,
+            "host_stack": namespace.host_stack
+        }
 
     def __init__(self, args):
         self.args = args
@@ -851,11 +840,12 @@ def run_project(project,
             reporter.case_end(project, case, "skipped since in success")
             continue
         reporter.case_begin(project, case)
-        result = runner.run(case,
-                            verbose=verbose,
-                            timeout=timeout,
-                            make_script=make_script,
-                            dryrun=dryrun)
+        result = runner.run(
+            case,
+            verbose=verbose,
+            timeout=timeout,
+            make_script=make_script,
+            dryrun=dryrun)
         reporter.case_end(project, case, result)
         stats[result].append(case_id)
         if sleep:
