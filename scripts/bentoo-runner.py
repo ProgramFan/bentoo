@@ -943,7 +943,7 @@ def run_project(project,
             timeout=timeout,
             make_script=make_script,
             dryrun=dryrun)
-        reporter.case_end(project, case, result)
+        reporter.case_end(project, case, "dryrun" if dryrun else result)
         if result:
             stats[result].append(case_id)
         if sleep:
