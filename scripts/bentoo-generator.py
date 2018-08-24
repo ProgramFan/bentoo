@@ -325,16 +325,22 @@ class TemplateCaseGenerator(object):
         spec_template = self.template["case_spec"]
         cmd_template = spec_template["cmd"]
         cmd = [replace_template(x, test_vector) for x in cmd_template]
+
+        def transform_path(x):
+            x = replace_template(x, {"output_root": output_root})
+            if os.path.isabs(x) and x.startswith(output_root):
+                x = os.path.relpath(x, case_path)
+            p = x if os.path.isabs(x) else os.path.join(x, case_path)
+            return x if os.path.exists(p) else None
+
         # support output_root in command binary
-        binfile = replace_template(cmd[0], {"output_root": output_root})
-        if os.path.isabs(binfile) and binfile.startswith(output_root):
-            binfile = os.path.relpath(binfile, case_path)
-        check_path = binfile if os.path.isabs(binfile) else os.path.join(
-            case_path, binfile)
-        if not os.path.exists(check_path):
-            raise ValueError(
-                "Command binary '%s' does not exists" % check_path)
-        cmd[0] = binfile
+        for i, item in enumerate(cmd):
+            v = transform_path(item)
+            if v is not None:
+                cmd[i] = v
+            elif i == 0:
+                raise ValueError(
+                    "Command binary '%s' does not exists" % cmd[0])
 
         run_template = spec_template["run"]
         run = OrderedDict()
