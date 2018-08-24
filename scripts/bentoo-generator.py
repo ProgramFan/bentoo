@@ -348,9 +348,9 @@ class TemplateCaseGenerator(object):
             v = replace_template(run_template[k], test_vector)
             v = safe_eval(v)
             run[k] = v
-        rlt_template = spec_template["results"]
+        rlt_template = spec_template.get("results", [])
         results = [replace_template(x, test_vector) for x in rlt_template]
-        envs_template = spec_template["envs"]
+        envs_template = spec_template.get("envs", {})
         envs = OrderedDict()
         for k, v in envs_template.iteritems():
             v = replace_template(v, test_vector)
