@@ -833,7 +833,177 @@ class YamlParser(object):
                 yield t
 
 
+def guess_type(data):
+    '''Guess the best column types for a string table'''
+    type_hierarchy = [int, float, str]  # start from int, str for all
+
+    def promote_type(val, type_index):
+        for i in xrange(type_index, len(type_hierarchy) + 1):
+            t = type_hierarchy[i]
+            try:
+                v = t(val)
+                return i
+            except ValueError:
+                continue
+
+    # for each colum of each row, we promote the type to be able to represent
+    # all values accurately.
+    curr_types = [0] * len(data[0])
+    for row in data:
+        for i, val in enumerate(row):
+            curr_types[i] = promote_type(val, curr_types[i])
+    return [type_hierarchy[i] for i in curr_types]
+
+
+class PipetableParser(object):
+    '''Pipetable table parser.
+
+    This parser parses markdown's pipe tables in a file and convert them to a
+    list of data tables.
+
+        The performance results: (time in usecs):
+
+        | time | float_ops | mem_reads | mem_writes |
+        |------|-----------|-----------|------------|
+        | 13.3 | 334e5     | 3334456555| 334343434  |
+    '''
+
+    @staticmethod
+    def register_cmd_args(argparser):
+        pass
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {}
+
+    def __init__(self, use_table, args):
+        self.args = args
+        self.use_table = use_table
+
+    def itertables(self, fn):
+        all_tables = []
+
+        # We use a loose regex for pipe table: each table row shall begin with
+        # `|` and end with `|` and seperate with other contents by new lines.
+        # Note we match `\n` explicitly since we restrict each table row to one
+        # line.
+        table_regex = re.compile(
+            r"(?:^|\n)" + r"(\s*\|.+\|\s*\n)" + r"\s*\|[-:| ]+\|\s*\n" +
+            r"((?:\s*\|.+\|\s*\n)+)" + r"(?:\n|$)")
+        for i, match in enumerate(table_regex.finditer(file(fn).read())):
+            parse_row = lambda x: map(lambda y: y.strip(),
+                                      x.strip().strip('|').split('|'))
+            header = match.group(1)
+            content = match.group(2)
+            header = parse_row(header)
+            data = []
+            for line in content.split('\n'):
+                if line.strip():
+                    row = parse_row(line.strip())
+                    data.append(row)
+            column_types = guess_type(data)
+            real_data = []
+            for row in data:
+                real_data.append(
+                    [column_types[i](v) for i, v in enumerate(row)])
+            all_tables.append({
+                "table_id": i,
+                "column_names": header,
+                "column_types": column_types,
+                "data": real_data
+            })
+
+        if not all_tables:
+            yield
+            return
+        if self.use_table:
+            for i in self.use_table:
+                yield all_tables[i]
+        else:
+            for t in all_tables:
+                yield t
+
+
+class CsvParser(object):
+    '''CSV table parser.
+
+    This parser parses csv tables in a file and convert them to a list of data
+    tables. The table is seperated from surrounding texts by line of `|={3,}`.
+
+        The performance results: (time in usecs):
+
+        |===
+        time, float_ops, mem_reads, mem_writes
+        13.3, 334e5, 3334456555, 334343434
+        |===
+    '''
+
+    @staticmethod
+    def register_cmd_args(argparser):
+        argparser.add_argument(
+            "--csv-seperator",
+            metavar="CHAR",
+            dest="csv_sep",
+            default=",",
+            help="regex seperator for csv fields (default: ',')")
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {"sep": namespace.csv_sep}
+
+    def __init__(self, use_table=[], args={'sep': ','}):
+        self.args = args
+        self.use_table = use_table
+
+    def itertables(self, fn):
+        all_tables = []
+
+        table_regex = re.compile(
+            r"\s*\|={3,}\s*\n" + r"((?:[^|]+\n){2,})" + r"\s*\|={3,}\n")
+        for i, match in enumerate(table_regex.finditer(file(fn).read())):
+            parse_row = lambda x: map(lambda y: y.strip(),
+                                      re.split(self.args['sep'], x.strip()))
+            content = match.group(1).split('\n')
+            header = content[0]
+            header = parse_row(header)
+            data = []
+            for line in content[1:]:
+                if line.strip():
+                    row = parse_row(line.strip())
+                    data.append(row)
+            column_types = guess_type(data)
+            real_data = []
+            for row in data:
+                real_data.append(
+                    [column_types[i](v) for i, v in enumerate(row)])
+            all_tables.append({
+                "table_id": i,
+                "column_names": header,
+                "column_types": column_types,
+                "data": real_data
+            })
+
+        if not all_tables:
+            yield
+            return
+        if self.use_table:
+            for i in self.use_table:
+                yield all_tables[i]
+        else:
+            for t in all_tables:
+                yield t
+
+
 class ParserFactory(object):
+    @staticmethod
+    def default_parser():
+        return "jasmin"
+
+    @staticmethod
+    def available_parsers():
+        return ("yaml", "pipetable", "jasmin", "jasmin3", "jasmin4", "likwid",
+                "udc", "csv")
+
     @staticmethod
     def create(name, namespace):
         use_table = map(int, namespace.use_table)
@@ -855,21 +1025,33 @@ class ParserFactory(object):
         elif name == "yaml":
             args = YamlParser.retrive_cmd_args(namespace)
             return YamlParser(use_table, args)
+        elif name == "pipetable":
+            args = PipetableParser.retrive_cmd_args(namespace)
+            return PipetableParser(use_table, args)
+        elif name == "csv":
+            args = CsvParser.retrive_cmd_args(namespace)
+            return CsvParser(use_table, args)
         else:
             raise ValueError("Unsupported parser: %s" % name)
 
     @staticmethod
     def register_cmd_args(argparser):
-        group = argparser.add_argument_group("Jasmin Parser Arguments")
+        group = argparser.add_argument_group("Jasmin3 Parser Arguments")
         JasminParser.register_cmd_args(group)
         group = argparser.add_argument_group("Jasmin4 Parser Arguments")
         Jasmin4Parser.register_cmd_args(group)
-        group = argparser.add_argument_group("Unified Jasmin Parser Arguments")
+        group = argparser.add_argument_group("Jasmin Parser Arguments")
         UnifiedJasminParser.register_cmd_args(group)
         group = argparser.add_argument_group("Likwid Parser Arguments")
         LikwidParser.register_cmd_args(group)
-        group = argparser.add_argument_group("Yaml Parser Arguments")
+        group = argparser.add_argument_group("Udc Parser Arguments")
+        UdcParser.register_cmd_args(group)
+        group = argparser.add_argument_group("YAML Parser Arguments")
         YamlParser.register_cmd_args(group)
+        group = argparser.add_argument_group("Pipetable Parser Arguments")
+        PipetableParser.register_cmd_args(group)
+        group = argparser.add_argument_group("CSV Parser Arguments")
+        CsvParser.register_cmd_args(group)
 
 
 #
@@ -963,6 +1145,14 @@ class PandasSerializer(object):
 
 
 class SerializerFactory(object):
+    @staticmethod
+    def default_serializer():
+        return "sqlite3"
+
+    @staticmethod
+    def available_serializers():
+        return ("sqlite3", "pandas")
+
     @staticmethod
     def create(name, namespace):
         if name == "sqlite3":
@@ -1091,8 +1281,8 @@ def main():
     group.add_argument(
         "-p",
         "--parser",
-        default="jasmin",
-        choices=["jasmin3", "jasmin4", "jasmin", "likwid", "udc", "yaml"],
+        default=ParserFactory.default_parser(),
+        choices=ParserFactory.available_parsers(),
         help="Parser for raw result files (default: jasmin)")
     group.add_argument(
         "--use-table",
@@ -1123,8 +1313,8 @@ def main():
     group.add_argument(
         "-s",
         "--serializer",
-        choices=["sqlite3", "pandas"],
-        default="sqlite3",
+        choices=SerializerFactory.available_serializers(),
+        default=SerializerFactory.default_serializer(),
         help="Serializer to dump results (default: sqlite3)")
     SerializerFactory.register_cmd_args(parser)
 
