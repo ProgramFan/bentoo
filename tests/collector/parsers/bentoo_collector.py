@@ -1,0 +1,1 @@
+../../../scripts/bentoo-collector.py

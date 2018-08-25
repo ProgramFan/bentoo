@@ -1,0 +1,36 @@
+This is my test results:
+---
+duration: 133.0
+flops: 134485334.3
+mem_rd: 113434234.3
+mem_wr: 1e8
+...
+
+This is another strange result:
+---
+-
+  duration: 133.0
+  flops: 134485334.3
+  mem_rd: 113434234.3
+  mem_wr: 1e8
+-
+  duration: 133.0
+  flops: 134485334.3
+  mem_rd: 113434234.3
+  mem_wr: 1e8
+...
+
+This is a third strange result:
+---
+-
+  duration: 133.0
+  flops: 134485334.3
+  mem_rd: 113434234.3
+  mem_wr: 1e8
+-
+  duration: 133.0
+  flops: 134485334.3
+  mem_rd: 113434234.3
+  mem_wr: 1e8
+---
+

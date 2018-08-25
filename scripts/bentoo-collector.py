@@ -27,7 +27,6 @@ import cStringIO
 import fnmatch
 from collections import OrderedDict
 from functools import reduce
-import ruamel.yaml as yaml
 
 #
 # Design Of Collector
@@ -790,6 +789,7 @@ class YamlParser(object):
         self.use_table = use_table
 
     def itertables(self, fn):
+        import ruamel.yaml as yaml
         all_tables = []
 
         yamldoc_regex = re.compile(
@@ -924,11 +924,12 @@ class PipetableParser(object):
                 yield t
 
 
-class CsvParser(object):
-    '''CSV table parser.
+class DsvParser(object):
+    '''Delimiter seperated values table parser.
 
-    This parser parses csv tables in a file and convert them to a list of data
-    tables. The table is seperated from surrounding texts by line of `|={3,}`.
+    This parser parses dsv tables in a file and convert them to a list of data
+    tables. The table is seperated from surrounding texts by line of `|={3,}`
+    and the default delimiter is `,` for csv.
 
         The performance results: (time in usecs):
 
@@ -941,11 +942,11 @@ class CsvParser(object):
     @staticmethod
     def register_cmd_args(argparser):
         argparser.add_argument(
-            "--csv-seperator",
+            "--dsv-seperator",
             metavar="CHAR",
-            dest="csv_sep",
+            dest="dsv_sep",
             default=",",
-            help="regex seperator for csv fields (default: ',')")
+            help="regex seperator for dsv values (default: ',')")
 
     @staticmethod
     def retrive_cmd_args(namespace):
@@ -1002,7 +1003,7 @@ class ParserFactory(object):
     @staticmethod
     def available_parsers():
         return ("yaml", "pipetable", "jasmin", "jasmin3", "jasmin4", "likwid",
-                "udc", "csv")
+                "udc", "dsv")
 
     @staticmethod
     def create(name, namespace):
@@ -1028,30 +1029,30 @@ class ParserFactory(object):
         elif name == "pipetable":
             args = PipetableParser.retrive_cmd_args(namespace)
             return PipetableParser(use_table, args)
-        elif name == "csv":
-            args = CsvParser.retrive_cmd_args(namespace)
-            return CsvParser(use_table, args)
+        elif name == "dsv":
+            args = DsvParser.retrive_cmd_args(namespace)
+            return DsvParser(use_table, args)
         else:
             raise ValueError("Unsupported parser: %s" % name)
 
     @staticmethod
     def register_cmd_args(argparser):
-        group = argparser.add_argument_group("Jasmin3 Parser Arguments")
+        group = argparser.add_argument_group("jasmin3 parser arguments")
         JasminParser.register_cmd_args(group)
-        group = argparser.add_argument_group("Jasmin4 Parser Arguments")
+        group = argparser.add_argument_group("jasmin4 parser arguments")
         Jasmin4Parser.register_cmd_args(group)
-        group = argparser.add_argument_group("Jasmin Parser Arguments")
+        group = argparser.add_argument_group("jasmin parser arguments")
         UnifiedJasminParser.register_cmd_args(group)
-        group = argparser.add_argument_group("Likwid Parser Arguments")
+        group = argparser.add_argument_group("likwid parser arguments")
         LikwidParser.register_cmd_args(group)
-        group = argparser.add_argument_group("Udc Parser Arguments")
+        group = argparser.add_argument_group("udc parser arguments")
         UdcParser.register_cmd_args(group)
-        group = argparser.add_argument_group("YAML Parser Arguments")
+        group = argparser.add_argument_group("yaml parser arguments")
         YamlParser.register_cmd_args(group)
-        group = argparser.add_argument_group("Pipetable Parser Arguments")
+        group = argparser.add_argument_group("pipetable parser arguments")
         PipetableParser.register_cmd_args(group)
-        group = argparser.add_argument_group("CSV Parser Arguments")
-        CsvParser.register_cmd_args(group)
+        group = argparser.add_argument_group("dsv parser arguments")
+        DsvParser.register_cmd_args(group)
 
 
 #
@@ -1166,9 +1167,9 @@ class SerializerFactory(object):
 
     @staticmethod
     def register_cmd_args(argparser):
-        group = argparser.add_argument_group("Sqlite3 Serializer Arguments")
+        group = argparser.add_argument_group("sqlite3 serializer arguments")
         SqliteSerializer.register_cmd_args(group)
-        group = argparser.add_argument_group("Pandas Serializer Arguments")
+        group = argparser.add_argument_group("pandas serializer arguments")
         PandasSerializer.register_cmd_args(group)
 
 
