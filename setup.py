@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 setup(
     name="bentoo",
     description="Benchmarking tools",
-    version="0.19.0",
+    version="0.20.0_dev",
     packages=find_packages(),
     scripts=["scripts/bentoo-generator.py", "scripts/bentoo-runner.py",
              "scripts/bentoo-collector.py", "scripts/bentoo-analyser.py",
