@@ -27,6 +27,7 @@ import cStringIO
 import fnmatch
 from collections import OrderedDict
 from functools import reduce
+import ruamel.yaml as yaml
 
 #
 # Design Of Collector
@@ -61,8 +62,8 @@ class TestProjectReader(object):
         conf = json.load(file(conf_fn))
         version = conf.get("version", 1)
         if version != 1:
-            raise RuntimeError("Unsupported project version '%s': Only 1 " %
-                               version)
+            raise RuntimeError(
+                "Unsupported project version '%s': Only 1 " % version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
         self.test_cases = conf["test_cases"]
@@ -153,6 +154,7 @@ class ResultScanner(object):
                            case["test_vector"] + [result_id])
                 spec = OrderedDict(spec)
                 yield {"spec": spec, "fullpath": fn}
+
 
 #
 # DataParser
@@ -335,8 +337,9 @@ def parse_jasmin4log(fn, use_table=None):
     table_id = 0
     content = file(fn, "r").read()
     logtbl_ptn = re.compile(
-        r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" + r"^(?P<header>^.*?$)\n-{10,}\n"
-        + r"(?P<content>.*?)^-{10,}\n", re.M + re.S)
+        r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" +
+        r"^(?P<header>^.*?$)\n-{10,}\n" + r"(?P<content>.*?)^-{10,}\n",
+        re.M + re.S)
     for match in logtbl_ptn.finditer(content):
         # skipping tables not wanted, but null use_table means use all tables
         if use_table and table_id not in use_table:
@@ -479,6 +482,7 @@ class UnifiedJasminParser(object):
             for t in tables:
                 yield t
 
+
 #
 # Likwid Parser
 #
@@ -574,8 +578,10 @@ class LikwidBlockParser(object):
         self.column_types.extend([float] * len(other_columns))
         self.data = []
         for record in likwid_data:
-            result = [record["ThreadId"], record["RegionTag"], record["RDTSC"],
-                      record["CallCount"]]
+            result = [
+                record["ThreadId"], record["RegionTag"], record["RDTSC"],
+                record["CallCount"]
+            ]
             result.append(1.0 / cpu_cycles)
             result.extend(record[f] for f in other_columns)
             self.data.append(result)
@@ -617,8 +623,8 @@ class LikwidParser(object):
         # Count blocks to ease table_id generating
         nblocks = len(list(likwid_block.iterblocks(files[0])))
         if nblocks == 0:
-            print("WARNING: No likwid data table found in '%s'" %
-                  likwid_data[0])
+            print(
+                "WARNING: No likwid data table found in '%s'" % likwid_data[0])
             return
         # Reset files[0] as iterblocks have already arrive eof.
         files[0] = file(likwid_data[0])
@@ -754,6 +760,79 @@ class UdcParser(object):
                 yield t
 
 
+class YamlParser(object):
+    '''Yaml table parser.
+
+    This parser parses yaml document blocks in a file and convert them to a list
+    of data tables. Each yaml block starts with a line `---` and ends with
+    another line of either `---` or `...`, and the contents shall be a dict or a
+    list of dicts. For example:
+
+        The performance results: (time in usecs):
+        ---
+        time: 13.3
+        float_ops: 112343449
+        men_reads: 11334349399
+        mem_writes: 33449934
+        ---
+    '''
+
+    @staticmethod
+    def register_cmd_args(argparser):
+        pass
+
+    @staticmethod
+    def retrive_cmd_args(namespace):
+        return {}
+
+    def __init__(self, use_table, args):
+        self.args = args
+        self.use_table = use_table
+
+    def itertables(self, fn):
+        all_tables = []
+
+        yamldoc_regex = re.compile(
+            r"(?:^|\n)\s*---\s*\n(.+?)\n\s*(---|...)\s*\n", re.M + re.S)
+        for i, match in enumerate(yamldoc_regex.finditer(file(fn).read())):
+            content = yaml.safe_load(match.group(1))
+            if isinstance(content, dict):
+                # a single dict
+                cn = list(content.keys())
+                vals = list(content.values())
+                ct = [type(x) for x in vals]
+                data = [vals]
+            elif isinstance(content, list):
+                # a list of dicts
+                assert content
+                cn = list(content[0].keys())
+                ct = [type(x) for x in content[0].itervalues()]
+                data = []
+                for item in content:
+                    assert set(cn) == set(item.iterkeys())
+                    val = [item[x] for x in cn]
+                    data.append(val)
+            else:
+                raise RuntimeError(
+                    "Unsupported yaml table: {}".format(content))
+            all_tables.append({
+                "table_id": i,
+                "column_names": cn,
+                "column_types": ct,
+                "data": data
+            })
+
+        if not all_tables:
+            yield
+            return
+        if self.use_table:
+            for i in self.use_table:
+                yield all_tables[i]
+        else:
+            for t in all_tables:
+                yield t
+
+
 class ParserFactory(object):
     @staticmethod
     def create(name, namespace):
@@ -773,6 +852,9 @@ class ParserFactory(object):
         elif name == "udc":
             args = UdcParser.retrive_cmd_args(namespace)
             return UdcParser(use_table, args)
+        elif name == "yaml":
+            args = YamlParser.retrive_cmd_args(namespace)
+            return YamlParser(use_table, args)
         else:
             raise ValueError("Unsupported parser: %s" % name)
 
@@ -786,6 +868,9 @@ class ParserFactory(object):
         UnifiedJasminParser.register_cmd_args(group)
         group = argparser.add_argument_group("Likwid Parser Arguments")
         LikwidParser.register_cmd_args(group)
+        group = argparser.add_argument_group("Yaml Parser Arguments")
+        YamlParser.register_cmd_args(group)
+
 
 #
 # StorageBackend
@@ -873,8 +958,8 @@ class PandasSerializer(object):
         elif self.file_format == "csv":
             frame.to_csv(self.data_file, index=False)
         else:
-            raise RuntimeError("Unsupported output format '%s'" %
-                               self.file_format)
+            raise RuntimeError(
+                "Unsupported output format '%s'" % self.file_format)
 
 
 class SerializerFactory(object):
@@ -895,6 +980,7 @@ class SerializerFactory(object):
         SqliteSerializer.register_cmd_args(group)
         group = argparser.add_argument_group("Pandas Serializer Arguments")
         PandasSerializer.register_cmd_args(group)
+
 
 #
 # DataAggragator
@@ -1006,7 +1092,7 @@ def main():
         "-p",
         "--parser",
         default="jasmin",
-        choices=["jasmin3", "jasmin4", "jasmin", "likwid", "udc"],
+        choices=["jasmin3", "jasmin4", "jasmin", "likwid", "udc", "yaml"],
         help="Parser for raw result files (default: jasmin)")
     group.add_argument(
         "--use-table",
