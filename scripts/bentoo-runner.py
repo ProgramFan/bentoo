@@ -488,8 +488,7 @@ class MpiHandler(object):
             return {
                 "cmd": [
                     "mpirun", "-n",
-                    str(nprocs), "-npernode",
-                    str(procs_per_node), "-hostfile",
+                    str(nprocs), "--map-by", "slot", "-hostfile",
                     str(hostfile)
                 ],
                 "envs": {
@@ -578,11 +577,14 @@ class SlurmLauncher(object):
         run = spec["run"]
         nprocs = str(run["nprocs"])
         nnodes = run.get("nnodes", None)
+        procs_per_node = run.get("procs_per_node", None)
         tasks_per_proc = run.get("tasks_per_proc", None)
         srun_cmd = ["srun"]
         if nnodes:
             srun_cmd.extend(["-N", nnodes])
         srun_cmd.extend(["-n", nprocs])
+        if procs_per_node:
+            srun_cmd.extend(["--ntasks-per-node", procs_per_node])
         if tasks_per_proc:
             srun_cmd.extend(["-c", tasks_per_proc])
         if timeout:
@@ -604,6 +606,9 @@ class SlurmLauncher(object):
             if nnodes:
                 prolog.append("SBATCH -N {}".format(nnodes))
             prolog.append("SBATCH -n {}".format(nprocs))
+            if procs_per_node:
+                prolog.append(
+                    "SBATCH --ntasks-per-node {}".format(procs_per_node))
             if tasks_per_proc:
                 prolog.append("SBATCH -c {}".format(tasks_per_proc))
             if timeout:
@@ -613,8 +618,8 @@ class SlurmLauncher(object):
             prolog.append("SBATCH -o STDOUT")
             prolog.append("SBATCH -e STDERR")
             jobcmds = []
-            jobcmds.append("srun -n {} -c {} hostname".format(
-                nprocs, tasks_per_proc).split() + "> /tmp/hostfile-$$".split())
+            jobcmds.append(
+                srun_cmd + ["hostname"] + "> /tmp/hostfile-$$".split())
             mpi_handler = MpiHandler(
                 self.args['mpi']).build_job_argument_handler(
                     nprocs, 1, "/tmp/hostfile-$$", None)
