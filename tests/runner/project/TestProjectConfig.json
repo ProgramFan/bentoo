@@ -1,0 +1,32 @@
+{
+    "version": 1,
+    "project": {
+        "name": "test",
+        "test_factors": ["nnodes"],
+        "test_vector_generator": "cart_product",
+        "test_case_generator": "template",
+        "data_files": ["bin"]
+    },
+    "cart_product_vector_generator": {
+        "test_factor_values": {
+            "nnodes": [1, 2, 4]
+        }
+    },
+    "template_case_generator": {
+        "case_spec": {
+            "cmd": ["/bin/ls", "."],
+            "run": {
+                "nnodes": "$nnodes",
+                "procs_per_node": 2,
+                "tasks_per_proc": 2,
+                "nprocs": "$nnodes * 2"
+            },
+            "results": ["STDOUT"],
+            "validator": {
+                "contains": {
+                    "STDOUT": "\\."
+                }
+            }
+        }
+    }
+}
