@@ -450,6 +450,14 @@ class YhrunLauncher(object):
             return "failed"
 
 
+MPI_PPN = {
+    "mpich": "-ppn {}",
+    "openmpi": "--map-by ppr:{}:node",
+    "mvapich": "-ppn {}",
+    "intelmpi": "-ppn {}"
+}
+
+
 class SlurmLauncher(object):
     '''Job launcher for general slurm'''
 
@@ -471,12 +479,20 @@ class SlurmLauncher(object):
             action="store_true",
             dest="use_batch",
             help="Use sbatch instead of srun")
+        argparser.add_argument(
+            "--slurm-mpi",
+            metavar="MPI",
+            dest="slurm_mpi",
+            choices=("openmpi", "mpich", "mvapich", "intelmpi"),
+            default="openmpi",
+            help="Select the MPI to use (default: openmpi)")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {
             "partition": namespace.partition,
-            "use_batch": namespace.use_batch
+            "use_batch": namespace.use_batch,
+            "mpi": namespace.slurm_mpi,
         }
 
     def __init__(self, args):
@@ -531,10 +547,9 @@ class SlurmLauncher(object):
             prolog.append("SBATCH -o STDOUT")
             prolog.append("SBATCH -e STDERR")
             jobcmds = []
-            jobcmds.append("srun -n {} hostname".format(nprocs).split() +
-                           "| sort | uniq > /tmp/hostfile-$$".split())
-            jobcmds.append("mpirun -n {} -ppn {}".format(
-                spec["run"]["procs_per_node"], nprocs).split() +
+            jobcmds.append("srun -n {} -c {} hostname".format(
+                nprocs, tasks_per_proc).split() + "> /tmp/hostfile-$$".split())
+            jobcmds.append("mpirun -n {}".format(nprocs).split() +
                            "--hostfile /tmp/hostfile-$$".split() + exec_cmd)
             jobcmds.append("rm -f /tmp/hostfile-$$".split())
 
@@ -836,6 +851,7 @@ class BsubLauncher(object):
 
 class SimpleProgressReporter(object):
     '''A simple progress reporter'''
+
     def __init__(self):
         self.total_cases = 0
         self.finished_cases = 0
