@@ -759,6 +759,11 @@ class UdcParser(object):
                 yield t
 
 
+def identifierize(val):
+    '''Convert a string to a valid c identifier'''
+    return re.sub(r"\W", "_", str(val).lower())
+
+
 class YamlParser(object):
     '''Yaml table parser.
 
@@ -798,14 +803,14 @@ class YamlParser(object):
             content = yaml.safe_load(match.group(1))
             if isinstance(content, dict):
                 # a single dict
-                cn = list(content.keys())
+                cn = map(identifierize, content.keys())
                 vals = list(content.values())
                 ct = [type(x) for x in vals]
                 data = [vals]
             elif isinstance(content, list):
                 # a list of dicts
                 assert content
-                cn = list(content[0].keys())
+                cn = map(identifierize, content[0].keys())
                 ct = [type(x) for x in content[0].itervalues()]
                 data = []
                 for item in content:
