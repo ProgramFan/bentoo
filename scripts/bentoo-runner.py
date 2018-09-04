@@ -357,6 +357,7 @@ class YhrunLauncher(object):
             yhrun_cmd.extend(["-x", self.args["excluded_nodes"]])
         if self.args["only_nodes"]:
             yhrun_cmd.extend(["-w", self.args["only_nodes"]])
+        yhrun_cmd.extend(["-o", "STDOUT", "-e", "STDERR"])
         exec_cmd = map(str, spec["cmd"])
         cmd = yhrun_cmd + exec_cmd
         cmd = map(str, cmd)
@@ -401,6 +402,7 @@ class YhrunLauncher(object):
                 yhbatch_cmd.extend(["-x", self.args["excluded_nodes"]])
             if self.args["only_nodes"]:
                 yhbatch_cmd.extend(["-w", self.args["only_nodes"]])
+            yhbatch_cmd.extend(["-J", os.path.basename(exec_cmd[0])])
             yhbatch_cmd.append("./batch_spec.sh")
 
             if make_script:
