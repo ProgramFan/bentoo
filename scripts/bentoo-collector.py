@@ -541,10 +541,6 @@ class BlockReader(object):
         return block
 
 
-def stringify(content):
-    return re.sub(r"\W", "_", content)
-
-
 class LikwidBlockParser(object):
     def __init__(self):
         self.column_names = []
@@ -759,9 +755,10 @@ class UdcParser(object):
                 yield t
 
 
-def identifierize(val):
+def identifier(val):
     '''Convert a string to a valid c identifier'''
-    return re.sub(r"\W", "_", str(val).lower())
+    a = re.sub(r"\W", "_", str(val).strip().lower())
+    return re.sub(r"_+", "_", a.strip("_"))
 
 
 class YamlParser(object):
@@ -803,14 +800,14 @@ class YamlParser(object):
             content = yaml.safe_load(match.group(1))
             if isinstance(content, dict):
                 # a single dict
-                cn = map(identifierize, content.keys())
+                cn = map(identifier, content.keys())
                 vals = list(content.values())
                 ct = [type(x) for x in vals]
                 data = [vals]
             elif isinstance(content, list):
                 # a list of dicts
                 assert content
-                cn = map(identifierize, content[0].keys())
+                cn = map(identifier, content[0].keys())
                 ct = [type(x) for x in content[0].itervalues()]
                 data = []
                 for item in content:
