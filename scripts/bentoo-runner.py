@@ -196,18 +196,18 @@ class MpirunLauncher(object):
             "--mpirun-hosts",
             default=None,
             metavar="HOSTS",
-            dest="hosts",
+            dest="mpirun_hosts",
             help="Comma seperated host list")
         argparser.add_argument(
             "--mpirun-ppn",
             default=None,
             metavar="PPN",
-            dest="ppn",
+            dest="mpirun_ppn",
             help="Processes per node")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {"hosts": namespace.hosts, "ppn": namespace.ppn}
+        return {"hosts": namespace.mpirun_hosts, "ppn": namespace.mpirun_ppn}
 
     def __init__(self, args):
         self.args = args
@@ -290,38 +290,38 @@ class YhrunLauncher(object):
             "--yhrun-p",
             "--yhrun-partition",
             metavar="PARTITION",
-            dest="partition",
+            dest="yhrun_partition",
             help="Select job partition to use")
         argparser.add_argument(
             "--yhrun-x",
             metavar="NODELIST",
-            dest="excluded_nodes",
+            dest="yhrun_excluded_nodes",
             help="Exclude nodes from job allocation")
         argparser.add_argument(
             "--yhrun-w",
             metavar="NODELIST",
-            dest="only_nodes",
+            dest="yhrun_only_nodes",
             help="Use only selected nodes")
         argparser.add_argument(
             "--yhrun-yhbatch",
             action="store_true",
-            dest="yhbatch",
+            dest="yhrun_yhbatch",
             help="Use yhbatch instead of yhrun")
         argparser.add_argument(
             "--yhrun-fix-glex",
             choices=("none", "v0", "v1"),
             default="none",
-            dest="fix_glex",
+            dest="yhrun_fix_glex",
             help="Fix GLEX settings (default: none)")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {
-            "partition": namespace.partition,
-            "excluded_nodes": namespace.excluded_nodes,
-            "only_nodes": namespace.only_nodes,
-            "use_batch": namespace.yhbatch,
-            "fix_glex": namespace.fix_glex
+            "partition": namespace.yhrun_partition,
+            "excluded_nodes": namespace.yhrun_excluded_nodes,
+            "only_nodes": namespace.yhrun_only_nodes,
+            "use_batch": namespace.yhrun_yhbatch,
+            "fix_glex": namespace.yhrun_fix_glex
         }
 
     def __init__(self, args):
@@ -539,12 +539,12 @@ class SlurmLauncher(object):
         argparser.add_argument(
             "--slurm-partition",
             metavar="PARTITION",
-            dest="partition",
+            dest="slurm_partition",
             help="Select job partition to use")
         argparser.add_argument(
             "--slurm-sbatch",
             action="store_true",
-            dest="use_batch",
+            dest="slrum_use_batch",
             help="Use sbatch instead of srun")
         argparser.add_argument(
             "--slurm-mpi",
@@ -557,8 +557,8 @@ class SlurmLauncher(object):
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {
-            "partition": namespace.partition,
-            "use_batch": namespace.use_batch,
+            "partition": namespace.slurm_partition,
+            "use_batch": namespace.slurm_use_batch,
             "mpi": namespace.slurm_mpi,
         }
 
@@ -714,17 +714,17 @@ class PbsLauncher(object):
         argparser.add_argument(
             "--pbs-queue",
             metavar="QUEUE",
-            dest="queue",
+            dest="pbs_queue",
             help="Select job queue to use")
         argparser.add_argument(
             "--pbs-iface",
             metavar="IFACE",
-            dest="iface",
+            dest="pbs_iface",
             help="Network interface to use")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
-        return {"queue": namespace.queue, "iface": namespace.iface}
+        return {"queue": namespace.pbs_queue, "iface": namespace.pbs_iface}
 
     def __init__(self, args):
         self.args = args
@@ -814,37 +814,37 @@ class BsubLauncher(object):
         argparser.add_argument(
             "--bsub-queue",
             metavar="QUEUE",
-            dest="queue",
+            dest="bsub_queue",
             help="Select job queue to use")
         argparser.add_argument(
             "--bsub-b",
             action="store_true",
-            dest="large_seg",
+            dest="bsub_large_seg",
             help="Use large segment support")
         argparser.add_argument(
             "--bsub-cgsp",
             metavar="CGSP",
-            dest="cgsp",
+            dest="bsub_cgsp",
             help="Number of slave cores per core group")
         argparser.add_argument(
             "--bsub-share_size",
             metavar="SIZE",
-            dest="share_size",
+            dest="bsub_share_size",
             help="Share region size")
         argparser.add_argument(
             "--bsub-host_stack",
             metavar="SIZE",
-            dest="host_stack",
+            dest="bsub_host_stack",
             help="Host stack size")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
         return {
-            "queue": namespace.queue,
-            "cgsp": namespace.cgsp,
-            "large_seg": namespace.large_seg,
-            "share_size": namespace.share_size,
-            "host_stack": namespace.host_stack
+            "queue": namespace.bsub_queue,
+            "cgsp": namespace.bsub_cgsp,
+            "large_seg": namespace.bsub_large_seg,
+            "share_size": namespace.bsub_share_size,
+            "host_stack": namespace.bsub_host_stack
         }
 
     def __init__(self, args):
