@@ -442,6 +442,12 @@ class CustomCaseGenerator:
         return case_spec
 
 
+def identifier(value):
+    '''Create a valid identifier out of a value'''
+    a = re.sub(r"\W", "_", str(value).strip().lower())
+    return re.sub(r"_+", "_", a)
+
+
 class OutputOrganizer:
     def __init__(self, version=1):
         if version != 1:
@@ -450,7 +456,10 @@ class OutputOrganizer:
         self.version = version
 
     def get_case_path(self, test_vector):
-        segs = ["{0}-{1}".format(k, v) for k, v in test_vector.iteritems()]
+        segs = [
+            "{0}-{1}".format(identifier(k), identifier(v))
+            for k, v in test_vector.iteritems()
+        ]
         return os.path.join(*segs)
 
     def get_project_info_path(self):
