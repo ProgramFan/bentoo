@@ -1256,7 +1256,8 @@ class Collector(object):
                 for full_fn, short_fn in fns:
                     if not os.path.exists(full_fn):
                         continue
-                    tar.add(full_fn, arcname=short_fn)
+                    arcname = os.path.join("result-files", short_fn)
+                    tar.add(full_fn, arcname=arcname)
 
 
 def main():
