@@ -487,7 +487,7 @@ usage: bentoo-collector.py [-h] [-i CASE_PATH [CASE_PATH ...] | -e CASE_PATH
                            [--dsv-seperator CHAR]
                            [-d COLUMN_NAME [COLUMN_NAME ...] | -k COLUMN_NAME
                            [COLUMN_NAME ...]] [-s {sqlite3,pandas}]
-                           [--pandas-format {xls,xlsx,csv}]
+                           [--pandas-format {xls,xlsx,csv}] [-a FILE]
                            project_root data_file
 
 Collector - Test results collector
@@ -540,6 +540,10 @@ Serializer Arguments:
 pandas serializer arguments:
   --pandas-format {xls,xlsx,csv}
                         Output file format
+
+Archiver Arguments:
+  -a FILE, --archive FILE
+                        Archive output to a zip file
 ```
 
 `bentoo-collector` 将解析定义于 `results` 字段中的文件中的性能数据表格，并将所有的测试用例的性能数据合并为一张大表，存放于指定的数据库中。目前，默认的数据库后端 为 `sqlite`，不依赖于第三方 python 包。
@@ -547,10 +551,10 @@ pandas serializer arguments:
 `bentoo-collector` 的使用范例如下：
 
 ```
-bentoo-collector -p jasmin4 --use-table -1 --use-result 0 <OUTPUT_ROOT> data.sqlite
+bentoo-collector -p jasmin4 --use-table -1 --use-result 0 <OUTPUT_ROOT> --archive results.tar.gz data.sqlite
 ```
 
-这里 `--use-result` 选项选择在 `results` 字段中定义的结果文件，为 python 语法接受的列表索引类型。`--use-table` 选项选择结果文件中的性能表格（一些测试输出多个性能表格）。`-p` 选项选择性能表格解析器。
+这里 `--use-result` 选项选择在 `results` 字段中定义的结果文件，为 python 语法接受的列表索引类型。`--use-table` 选项选择结果文件中的性能表格（一些测试输出多个性能表格）。`-p` 选项选择性能表格解析器。`--archive` 选项设置将原始数据文件打包为指定压缩包。
 
 ### 过滤测试用例
 
