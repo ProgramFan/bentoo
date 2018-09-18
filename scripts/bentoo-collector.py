@@ -25,6 +25,7 @@ import glob
 import csv
 import cStringIO
 import fnmatch
+import tarfile
 from collections import OrderedDict
 from functools import reduce
 
@@ -152,7 +153,7 @@ class ResultScanner(object):
                 spec = zip(self.project.test_factors + ["result_id"],
                            case["test_vector"] + [result_id])
                 spec = OrderedDict(spec)
-                yield {"spec": spec, "fullpath": fn}
+                yield {"spec": spec, "fullpath": fn, "short_fn": short_fn}
 
 
 #
@@ -1232,7 +1233,7 @@ class Collector(object):
     def __init__(self):
         pass
 
-    def collect(self, scanner, parser, aggregator, serializer):
+    def collect(self, scanner, parser, aggregator, serializer, archive):
         def table_geneartor():
             for data_file in scanner.iterfiles():
                 file_spec = data_file["spec"]
@@ -1248,6 +1249,14 @@ class Collector(object):
             return
         serializer.serialize(final_table["data"], final_table["column_names"],
                              final_table["column_types"])
+
+        if archive:
+            fns = [(x["fullpath"], x["short_fn"]) for x in scanner.iterfiles()]
+            with tarfile.open(archive, "w:gz") as tar:
+                for full_fn, short_fn in fns:
+                    if not os.path.exists(full_fn):
+                        continue
+                    tar.add(full_fn, arcname=short_fn)
 
 
 def main():
@@ -1321,6 +1330,15 @@ def main():
         help="Serializer to dump results (default: sqlite3)")
     SerializerFactory.register_cmd_args(parser)
 
+    group = parser.add_argument_group("Archiver Arguments")
+    group.add_argument(
+        "-a",
+        "--archive",
+        metavar="FILE",
+        dest="archive",
+        default=None,
+        help="Archive output to a zip file")
+
     args = parser.parse_args()
 
     # make scanner
@@ -1353,7 +1371,7 @@ def main():
     serializer = SerializerFactory.create(args.serializer, args)
     # assemble collector and do acutal collecting
     collector = Collector()
-    collector.collect(scanner, parser, aggregator, serializer)
+    collector.collect(scanner, parser, aggregator, serializer, args.archive)
 
 
 if __name__ == "__main__":
