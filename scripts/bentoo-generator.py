@@ -27,10 +27,10 @@ try:
                          dict_constructor)
 
     def load(fileobj, *args, **kwargs):
-        return yaml.load(fileobj, *args, **kwargs)
+        return yaml.load(fileobj, Loader=yaml.FullLoader, *args, **kwargs)
 
     def loads(string, *args, **kwargs):
-        return yaml.load(string, *args, **kwargs)
+        return yaml.load(string, Loader=yaml.FullLoader, *args, **kwargs)
 
     def dump(data, fileobj, *args, **kwargs):
         fileobj.write(yaml.dump(data), *args, **kwargs)
@@ -90,7 +90,7 @@ def parse_json(fn):
             result = obj
         return result
 
-    content = file(fn).read()
+    content = open(fn).read()
     content = re.sub(r"//.*", "", content)
     return ununicodify(loads(content))
 
@@ -243,7 +243,6 @@ class TemplateCaseGenerator(object):
         self.template = template.copy()
         if "copy_files" not in self.template:
             self.template["copy_files"] = OrderedDict()
-        assert (isinstance(self.template["copy_files"], OrderedDict))
         if "link_files" not in self.template:
             self.template["link_files"] = OrderedDict()
         if "inst_templates" not in self.template:
@@ -251,15 +250,19 @@ class TemplateCaseGenerator(object):
 
     def make_case(self, conf_root, output_root, case_path, test_vector):
         '''Generate a test case according to the specified test vector'''
+        template_vars = dict(test_vector)
+        template_vars["conf_root"] = conf_root
+        template_vars["output_root"] = output_root
+        template_vars["case_path"] = case_path
         # copy case files: each file is defiend as (src, dst), where src is
         # relative to conf_root and dst is relative to case_path.
         for src, dst in self.template["copy_files"].iteritems():
-            srcpath = replace_template(src, test_vector)
-            dstpath = replace_template(dst, test_vector)
-            assert (not os.path.isabs(srcpath))
-            assert (not os.path.isabs(dstpath))
-            srcpath = os.path.join(conf_root, srcpath)
-            dstpath = os.path.join(case_path, dstpath)
+            srcpath = replace_template(src, template_vars)
+            dstpath = replace_template(dst, template_vars)
+            if not os.path.isabs(srcpath):
+                srcpath = os.path.join(conf_root, srcpath)
+            if not os.path.isabs(dstpath):
+                dstpath = os.path.join(case_path, dstpath)
             if os.path.exists(dstpath):
                 if os.path.isdir(dstpath):
                     shutil.rmtree(dstpath)
@@ -275,12 +278,12 @@ class TemplateCaseGenerator(object):
         # link case files: each file is defiend as (src, dst), where src is
         # relative to output_root and dst is relative to case_path.
         for src, dst in self.template["link_files"].iteritems():
-            srcpath = replace_template(src, test_vector)
-            dstpath = replace_template(dst, test_vector)
-            assert (not os.path.isabs(srcpath))
-            assert (not os.path.isabs(dstpath))
-            srcpath = os.path.join(output_root, srcpath)
-            dstpath = os.path.join(case_path, dstpath)
+            srcpath = replace_template(src, template_vars)
+            dstpath = replace_template(dst, template_vars)
+            if not os.path.isabs(srcpath):
+                srcpath = os.path.join(output_root, srcpath)
+            if not os.path.isabs(dstpath):
+                dstpath = os.path.join(case_path, dstpath)
             if os.path.exists(dstpath):
                 if os.path.isdir(dstpath):
                     shutil.rmtree(dstpath)
@@ -300,16 +303,16 @@ class TemplateCaseGenerator(object):
         if inst_tpls:
             var_values = {}
             for k, v in inst_tpls["variables"].iteritems():
-                v = replace_template(v, test_vector)
+                v = replace_template(v, template_vars)
                 v = safe_eval(v)
                 var_values[k] = v
             for src, dst in inst_tpls["templates"].iteritems():
-                srcpath = replace_template(src, test_vector)
-                dstpath = replace_template(dst, test_vector)
-                assert (not os.path.isabs(srcpath))
-                assert (not os.path.isabs(dstpath))
-                srcpath = os.path.join(conf_root, srcpath)
-                dstpath = os.path.join(case_path, dstpath)
+                srcpath = replace_template(src, template_vars)
+                dstpath = replace_template(dst, template_vars)
+                if not os.path.isabs(srcpath):
+                    srcpath = os.path.join(conf_root, srcpath)
+                if not os.path.isabs(dstpath):
+                    dstpath = os.path.join(case_path, dstpath)
                 if not os.path.exists(srcpath):
                     raise ValueError("Template '%s' does not exist" % srcpath)
                 if not os.path.isfile(srcpath):
@@ -318,13 +321,13 @@ class TemplateCaseGenerator(object):
                     os.remove(dstpath)
                 if not os.path.exists(os.path.dirname(dstpath)):
                     os.makedirs(os.path.dirname(dstpath))
-                content = replace_template(file(srcpath).read(), var_values)
-                file(dstpath, "w").write(content)
+                content = replace_template(open(srcpath).read(), var_values)
+                open(dstpath, "w").write(content)
 
         # generate case spec
         spec_template = self.template["case_spec"]
         cmd_template = spec_template["cmd"]
-        cmd = [replace_template(x, test_vector) for x in cmd_template]
+        cmd = [replace_template(x, template_vars) for x in cmd_template]
 
         def transform_path(x):
             x = replace_template(x, {"output_root": output_root})
@@ -345,15 +348,15 @@ class TemplateCaseGenerator(object):
         run_template = spec_template["run"]
         run = OrderedDict()
         for k in ["nnodes", "procs_per_node", "tasks_per_proc", "nprocs"]:
-            v = replace_template(run_template[k], test_vector)
+            v = replace_template(run_template[k], template_vars)
             v = safe_eval(v)
             run[k] = v
         rlt_template = spec_template.get("results", [])
-        results = [replace_template(x, test_vector) for x in rlt_template]
+        results = [replace_template(x, template_vars) for x in rlt_template]
         envs_template = spec_template.get("envs", {})
         envs = OrderedDict()
         for k, v in envs_template.iteritems():
-            v = replace_template(v, test_vector)
+            v = replace_template(v, template_vars)
             v = safe_eval(v)
             envs[k] = v
         validator = OrderedDict()
@@ -361,14 +364,14 @@ class TemplateCaseGenerator(object):
         if validator_template:
             exists_tpl = validator_template.get("exists", [])
             if exists_tpl:
-                v = [replace_template(x, test_vector) for x in exists_tpl]
+                v = [replace_template(x, template_vars) for x in exists_tpl]
                 validator["exists"] = v
             contains_tpl = validator_template.get("contains", {})
             if contains_tpl:
                 contains = OrderedDict()
                 for k, v in contains_tpl.iteritems():
-                    k = replace_template(k, test_vector)
-                    v = replace_template(v, test_vector)
+                    k = replace_template(k, template_vars)
+                    v = replace_template(v, template_vars)
                     contains[k] = v
                 validator["contains"] = contains
         case_spec = OrderedDict(
@@ -380,7 +383,7 @@ class TemplateCaseGenerator(object):
         for f in case_spec["results"]:
             filepath = os.path.join(case_path, f)
             if not os.path.exists(filepath):
-                file(filepath, "w").write("")
+                open(filepath, "w").write("")
 
         return case_spec
 
@@ -437,7 +440,7 @@ class CustomCaseGenerator:
         for f in case_spec["results"]:
             filepath = os.path.join(case_path, f)
             if not os.path.exists(filepath):
-                file(filepath, "w").write("")
+                open(filepath, "w").write("")
 
         return case_spec
 
@@ -618,7 +621,7 @@ class TestProjectBuilder:
 
             case_spec_path = self.output_organizer.get_case_spec_path(case)
             case_spec_fullpath = os.path.join(output_root, case_spec_path)
-            json.dump(case_spec, file(case_spec_fullpath, "w"), indent=2)
+            json.dump(case_spec, open(case_spec_fullpath, "w"), indent=2)
 
         # Write project config
         info = [("version", 1), ("name", self.name), ("test_factors",
@@ -634,7 +637,7 @@ class TestProjectBuilder:
         info["test_cases"] = test_defs
         project_info_path = self.output_organizer.get_project_info_path()
         project_info_fullpath = os.path.join(output_root, project_info_path)
-        json.dump(info, file(project_info_fullpath, "w"), indent=2)
+        json.dump(info, open(project_info_fullpath, "w"), indent=2)
 
 
 def main():
