@@ -11,66 +11,7 @@ import shutil
 import string
 import sys
 from collections import OrderedDict
-
-import bentoo.yaml
-
-
-def load(fileobj, *args, **kwargs):
-    return bentoo.yaml.load(fileobj,
-                            Loader=bentoo.yaml.RoundTripLoader,
-                            *args,
-                            **kwargs)
-
-
-def loads(string, *args, **kwargs):
-    return bentoo.yaml.load(string,
-                            Loader=bentoo.yaml.RoundTripLoader,
-                            *args,
-                            **kwargs)
-
-
-def dump(data, fileobj, *args, **kwargs):
-    fileobj.write(bentoo.yaml.dump(data), *args, **kwargs)
-
-
-def dumps(data, *args, **kwargs):
-    return bentoo.yaml.dump(data, *args, **kwargs)
-
-
-def parse_json(fn):
-    '''Parse json object
-
-    This function parses a JSON file. Unlike the builtin `json` module, it
-    supports "//" like comments, uses 'str' for string representation and
-    preserves the key orders.
-
-    Args:
-        fn (str): Name of the file to parse.
-
-    Returns:
-        OrderedDict: A dict representing the file content.
-
-    '''
-    def ununicodify(obj):
-        result = None
-        if isinstance(obj, OrderedDict):
-            result = OrderedDict()
-            for k, v in obj.iteritems():
-                k1 = str(k) if isinstance(k, unicode) else k
-                result[k1] = ununicodify(v)
-        elif isinstance(obj, list):
-            result = []
-            for v in obj:
-                result.append(ununicodify(v))
-        elif isinstance(obj, unicode):
-            result = str(obj)
-        else:
-            result = obj
-        return result
-
-    content = open(fn).read()
-    content = re.sub(r"//.*", "", content)
-    return ununicodify(loads(content))
+from bentoo.common.conf import load_conf
 
 
 class SimpleVectorGenerator:
@@ -198,18 +139,7 @@ class CustomVectorGenerator:
             yield OrderedDict(zip(self.test_factors, v))
 
 
-def replace_template(template, varvalues):
-    return string.Template(str(template)).safe_substitute(varvalues)
-
-
-def safe_eval(expr):
-    try:
-        result = eval(str(expr))
-    except ZeroDivisionError:
-        result = 0
-    except Exception:
-        result = str(expr)
-    return result
+from bentoo.common.utils import safe_eval, replace_template
 
 
 class TemplateCaseGenerator(object):
@@ -454,7 +384,7 @@ class TestProjectBuilder:
         self.conf_root = conf_root
 
         spec_file = os.path.join(self.conf_root, "TestProjectConfig.json")
-        spec = parse_json(spec_file)
+        spec = load_conf(spec_file)
 
         # Do minimal sanity check
         project_version = spec.get("version", 1)
