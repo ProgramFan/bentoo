@@ -11,19 +11,19 @@ import sys
 import types
 import warnings
 
-from ruamel.yaml.error import (MarkedYAMLError, MarkedYAMLFutureWarning)
-from ruamel.yaml.nodes import *                               # NOQA
-from ruamel.yaml.nodes import (SequenceNode, MappingNode, ScalarNode)
-from ruamel.yaml.compat import (utf8, builtins_module, to_str, PY2, PY3,  # NOQA
+from bentoo.yaml.error import (MarkedYAMLError, MarkedYAMLFutureWarning)
+from bentoo.yaml.nodes import *                               # NOQA
+from bentoo.yaml.nodes import (SequenceNode, MappingNode, ScalarNode)
+from bentoo.yaml.compat import (utf8, builtins_module, to_str, PY2, PY3,  # NOQA
                                 ordereddict, text_type, nprint, version_tnf)
-from ruamel.yaml.comments import *                               # NOQA
-from ruamel.yaml.comments import (CommentedMap, CommentedOrderedMap, CommentedSet,
+from bentoo.yaml.comments import *                               # NOQA
+from bentoo.yaml.comments import (CommentedMap, CommentedOrderedMap, CommentedSet,
                                   CommentedKeySeq, CommentedSeq)
-from ruamel.yaml.scalarstring import *                           # NOQA
-from ruamel.yaml.scalarstring import (PreservedScalarString, SingleQuotedScalarString,
+from bentoo.yaml.scalarstring import *                           # NOQA
+from bentoo.yaml.scalarstring import (PreservedScalarString, SingleQuotedScalarString,
                                       DoubleQuotedScalarString, ScalarString)
-from ruamel.yaml.scalarint import ScalarInt, BinaryInt, OctalInt, HexInt, HexCapsInt
-from ruamel.yaml.timestamp import TimeStamp
+from bentoo.yaml.scalarint import ScalarInt, BinaryInt, OctalInt, HexInt, HexCapsInt
+from bentoo.yaml.timestamp import TimeStamp
 
 if False:  # MYPY
     from typing import Any, Dict, List, Set, Generator  # NOQA
@@ -1060,7 +1060,7 @@ class RoundTripConstructor(SafeConstructor):
             if len(node.comment) > 2:
                 seqtyp.yaml_end_comment_extend(node.comment[2], clear=True)
         if node.anchor:
-            from ruamel.yaml.serializer import templated_id
+            from bentoo.yaml.serializer import templated_id
             if not templated_id(node.anchor):
                 seqtyp.yaml_set_anchor(node.anchor)
         for idx, child in enumerate(node.value):
@@ -1152,7 +1152,7 @@ class RoundTripConstructor(SafeConstructor):
             if len(node.comment) > 2:
                 maptyp.yaml_end_comment_extend(node.comment[2], clear=True)  # type: ignore
         if node.anchor:
-            from ruamel.yaml.serializer import templated_id
+            from bentoo.yaml.serializer import templated_id
             if not templated_id(node.anchor):
                 maptyp.yaml_set_anchor(node.anchor)
         last_key, last_value = None, self._sentinel
@@ -1220,7 +1220,7 @@ class RoundTripConstructor(SafeConstructor):
             if len(node.comment) > 2:
                 typ.yaml_end_comment_extend(node.comment[2], clear=True)
         if node.anchor:
-            from ruamel.yaml.serializer import templated_id
+            from bentoo.yaml.serializer import templated_id
             if not templated_id(node.anchor):
                 typ.yaml_set_anchor(node.anchor)
         for key_node, value_node in node.value:

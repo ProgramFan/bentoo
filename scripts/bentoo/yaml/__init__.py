@@ -6,20 +6,20 @@ if False:  # MYPY
     from typing import Dict, Any  # NOQA
 
 _package_data = dict(
-    full_package_name='ruamel.yaml',
+    full_package_name='bentoo.yaml',
     version_info=(0, 15, 15),
     __version__='0.15.15',
     author='Anthon van der Neut',
-    author_email='a.van.der.neut@ruamel.eu',
-    description='ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order',  # NOQA
+    author_email='a.van.der.neut@bentoo.eu',
+    description='bentoo.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order',  # NOQA
     entry_points=None,
     since=2014,
     extras_require={':platform_python_implementation=="CPython" and python_version<="2.7"': [
-        'ruamel.ordereddict',
-        ], 'jinja2': ['ruamel.yaml.jinja2>=0.2']},
+        'bentoo.ordereddict',
+        ], 'jinja2': ['bentoo.yaml.jinja2>=0.2']},
     ext_modules=[dict(
-            name='_ruamel_yaml',
-            src=['ext/_ruamel_yaml.c', 'ext/api.c', 'ext/writer.c', 'ext/dumper.c',
+            name='_bentoo_yaml',
+            src=['ext/_bentoo_yaml.c', 'ext/api.c', 'ext/writer.c', 'ext/dumper.c',
                 'ext/loader.c',
                 'ext/reader.c',
                 'ext/scanner.c',
@@ -48,7 +48,7 @@ _package_data = dict(
     supported=[(2, 7), (3, 3)],  # minimum
     tox=dict(
         env='*p',
-        deps='ruamel.std.pathlib',
+        deps='bentoo.std.pathlib',
         fl8excl='_test/lib',
     ),
 )  # type: Dict[Any, Any]
@@ -63,4 +63,4 @@ try:
 except (ImportError, ValueError):  # for Jython
     __with_libyaml__ = False
 
-from ruamel.yaml.main import *  # NOQA
+from bentoo.yaml.main import *  # NOQA

@@ -23,12 +23,12 @@ from __future__ import absolute_import
 import codecs
 import re
 
-from ruamel.yaml.error import YAMLError, FileMark, StringMark, YAMLStreamError
-from ruamel.yaml.compat import text_type, binary_type, PY3
+from bentoo.yaml.error import YAMLError, FileMark, StringMark, YAMLStreamError
+from bentoo.yaml.compat import text_type, binary_type, PY3
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Union, Text  # NOQA
-    from ruamel.yaml.compat import StreamTextType  # NOQA
+    from bentoo.yaml.compat import StreamTextType  # NOQA
 
 __all__ = ['Reader', 'ReaderError']
 

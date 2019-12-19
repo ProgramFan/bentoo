@@ -3,17 +3,17 @@
 from __future__ import absolute_import
 
 
-from ruamel.yaml.reader import Reader
-from ruamel.yaml.scanner import Scanner, RoundTripScanner
-from ruamel.yaml.parser import Parser, RoundTripParser
-from ruamel.yaml.composer import Composer
-from ruamel.yaml.constructor import BaseConstructor, SafeConstructor, Constructor, \
+from bentoo.yaml.reader import Reader
+from bentoo.yaml.scanner import Scanner, RoundTripScanner
+from bentoo.yaml.parser import Parser, RoundTripParser
+from bentoo.yaml.composer import Composer
+from bentoo.yaml.constructor import BaseConstructor, SafeConstructor, Constructor, \
     RoundTripConstructor
-from ruamel.yaml.resolver import VersionedResolver
+from bentoo.yaml.resolver import VersionedResolver
 
 if False:  # MYPY
     from typing import Any, Dict, List                          # NOQA
-    from ruamel.yaml.compat import StreamTextType, VersionType  # NOQA
+    from bentoo.yaml.compat import StreamTextType, VersionType  # NOQA
 
 __all__ = ['BaseLoader', 'SafeLoader', 'Loader', 'RoundTripLoader']
 

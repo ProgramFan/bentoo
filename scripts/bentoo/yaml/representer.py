@@ -3,13 +3,13 @@
 from __future__ import print_function, absolute_import, division
 
 
-from ruamel.yaml.error import *                       # NOQA
-from ruamel.yaml.nodes import *                       # NOQA
-from ruamel.yaml.compat import text_type, binary_type, to_unicode, PY2, PY3, ordereddict
-from ruamel.yaml.scalarstring import (PreservedScalarString, SingleQuotedScalarString,
+from bentoo.yaml.error import *                       # NOQA
+from bentoo.yaml.nodes import *                       # NOQA
+from bentoo.yaml.compat import text_type, binary_type, to_unicode, PY2, PY3, ordereddict
+from bentoo.yaml.scalarstring import (PreservedScalarString, SingleQuotedScalarString,
                                       DoubleQuotedScalarString)
-from ruamel.yaml.scalarint import ScalarInt, BinaryInt, OctalInt, HexInt, HexCapsInt
-from ruamel.yaml.timestamp import TimeStamp
+from bentoo.yaml.scalarint import ScalarInt, BinaryInt, OctalInt, HexInt, HexCapsInt
+from bentoo.yaml.timestamp import TimeStamp
 
 import datetime
 import sys
@@ -634,7 +634,7 @@ Representer.add_multi_representer(object,
                                   Representer.represent_object)
 
 
-from ruamel.yaml.comments import CommentedMap, CommentedOrderedMap, CommentedSeq, \
+from bentoo.yaml.comments import CommentedMap, CommentedOrderedMap, CommentedSeq, \
     CommentedKeySeq, CommentedSet, comment_attrib, merge_attrib    # NOQA
 
 

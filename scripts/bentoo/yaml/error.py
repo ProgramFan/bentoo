@@ -5,7 +5,7 @@ from __future__ import absolute_import
 import warnings
 import textwrap
 
-from ruamel.yaml.compat import utf8
+from bentoo.yaml.compat import utf8
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Text  # NOQA
@@ -180,11 +180,11 @@ class ReusedAnchorWarning(YAMLWarning):
 class UnsafeLoaderWarning(YAMLWarning):
     text = """
 The default 'Loader' for 'load(stream)' without further arguments can be unsafe.
-Use 'load(stream, Loader=ruamel.yaml.Loader)' explicitly if that is OK.
+Use 'load(stream, Loader=bentoo.yaml.Loader)' explicitly if that is OK.
 Alternatively include the following in your code:
 
   import warnings
-  warnings.simplefilter('ignore', ruamel.yaml.error.UnsafeLoaderWarning)
+  warnings.simplefilter('ignore', bentoo.yaml.error.UnsafeLoaderWarning)
 
 In most other cases you should consider using 'safe_load(stream)'"""
     pass

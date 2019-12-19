@@ -10,14 +10,14 @@ from __future__ import print_function
 # sequence ::= SEQUENCE-START node* SEQUENCE-END
 # mapping ::= MAPPING-START (node node)* MAPPING-END
 
-from ruamel.yaml.error import YAMLError, YAMLStreamError
-from ruamel.yaml.events import *                                     # NOQA
-from ruamel.yaml.compat import utf8, text_type, PY2, nprint, dbg, DBG_EVENT, \
+from bentoo.yaml.error import YAMLError, YAMLStreamError
+from bentoo.yaml.events import *                                     # NOQA
+from bentoo.yaml.compat import utf8, text_type, PY2, nprint, dbg, DBG_EVENT, \
     check_anchorname_char
 
 if False:  # MYPY
     from typing import Any, Dict, List, Union, Text  # NOQA
-    from ruamel.yaml.compat import StreamType  # NOQA
+    from bentoo.yaml.compat import StreamType  # NOQA
 
 __all__ = ['Emitter', 'EmitterError']
 

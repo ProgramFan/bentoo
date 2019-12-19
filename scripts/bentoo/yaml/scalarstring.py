@@ -2,7 +2,7 @@
 
 from __future__ import print_function, absolute_import, division, unicode_literals
 
-from ruamel.yaml.compat import text_type
+from bentoo.yaml.compat import text_type
 
 if False:  # MYPY
     from typing import Text, Any, Dict, List  # NOQA
@@ -65,7 +65,7 @@ def walk_tree(base):
     dict values and list items) and converts strings that
     have multiple lines to literal scalars
     """
-    from ruamel.yaml.compat import string_types
+    from bentoo.yaml.compat import string_types
 
     if isinstance(base, dict):
         for k in base:

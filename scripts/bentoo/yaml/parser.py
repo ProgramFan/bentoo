@@ -76,11 +76,11 @@ from __future__ import absolute_import
 # and for Jython too
 
 
-from ruamel.yaml.error import MarkedYAMLError
-from ruamel.yaml.tokens import *                               # NOQA
-from ruamel.yaml.events import *                               # NOQA
-from ruamel.yaml.scanner import Scanner, RoundTripScanner, ScannerError      # NOQA
-from ruamel.yaml.compat import utf8                            # NOQA
+from bentoo.yaml.error import MarkedYAMLError
+from bentoo.yaml.tokens import *                               # NOQA
+from bentoo.yaml.events import *                               # NOQA
+from bentoo.yaml.scanner import Scanner, RoundTripScanner, ScannerError      # NOQA
+from bentoo.yaml.compat import utf8                            # NOQA
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List  # NOQA

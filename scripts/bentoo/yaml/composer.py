@@ -5,14 +5,14 @@ from __future__ import print_function
 
 import warnings
 
-from ruamel.yaml.error import MarkedYAMLError, ReusedAnchorWarning
-from ruamel.yaml.compat import utf8
+from bentoo.yaml.error import MarkedYAMLError, ReusedAnchorWarning
+from bentoo.yaml.compat import utf8
 
-from ruamel.yaml.events import (
+from bentoo.yaml.events import (
     StreamStartEvent, StreamEndEvent, MappingStartEvent, MappingEndEvent,
     SequenceStartEvent, SequenceEndEvent, AliasEvent, ScalarEvent,
 )
-from ruamel.yaml.nodes import (
+from bentoo.yaml.nodes import (
     MappingNode, ScalarNode, SequenceNode,
 )
 

@@ -9,29 +9,29 @@ import glob
 from importlib import import_module
 
 
-import ruamel.yaml
-from ruamel.yaml.error import *                                # NOQA
+import bentoo.yaml
+from bentoo.yaml.error import *                                # NOQA
 
-from ruamel.yaml.tokens import *                               # NOQA
-from ruamel.yaml.events import *                               # NOQA
-from ruamel.yaml.nodes import *                                # NOQA
+from bentoo.yaml.tokens import *                               # NOQA
+from bentoo.yaml.events import *                               # NOQA
+from bentoo.yaml.nodes import *                                # NOQA
 
-from ruamel.yaml.loader import BaseLoader, SafeLoader, Loader, RoundTripLoader  # NOQA
-from ruamel.yaml.dumper import BaseDumper, SafeDumper, Dumper, RoundTripDumper  # NOQA
-from ruamel.yaml.compat import StringIO, BytesIO, with_metaclass, PY3
-from ruamel.yaml.resolver import VersionedResolver, Resolver  # NOQA
-from ruamel.yaml.representer import (BaseRepresenter, SafeRepresenter, Representer,
+from bentoo.yaml.loader import BaseLoader, SafeLoader, Loader, RoundTripLoader  # NOQA
+from bentoo.yaml.dumper import BaseDumper, SafeDumper, Dumper, RoundTripDumper  # NOQA
+from bentoo.yaml.compat import StringIO, BytesIO, with_metaclass, PY3
+from bentoo.yaml.resolver import VersionedResolver, Resolver  # NOQA
+from bentoo.yaml.representer import (BaseRepresenter, SafeRepresenter, Representer,
                                      RoundTripRepresenter)
-from ruamel.yaml.constructor import (BaseConstructor, SafeConstructor, Constructor,
+from bentoo.yaml.constructor import (BaseConstructor, SafeConstructor, Constructor,
                                      RoundTripConstructor)
-from ruamel.yaml.loader import Loader as UnsafeLoader
+from bentoo.yaml.loader import Loader as UnsafeLoader
 
 if False:  # MYPY
     from typing import List, Set, Dict, Union, Any                          # NOQA
-    from ruamel.yaml.compat import StreamType, StreamTextType, VersionType  # NOQA
+    from bentoo.yaml.compat import StreamType, StreamTextType, VersionType  # NOQA
 
 try:
-    from _ruamel_yaml import CParser, CEmitter   # type: ignore
+    from _bentoo_yaml import CParser, CEmitter   # type: ignore
 except:
     CParser = CEmitter = None
 
@@ -64,40 +64,40 @@ class YAML(object):
         for pu in ([] if plug_ins is None else plug_ins) + self.official_plug_ins():
             file_name = pu.replace('/', '.')
             self.plug_ins.append(import_module(file_name))
-        self.Resolver = ruamel.yaml.resolver.VersionedResolver               # type: Any
+        self.Resolver = bentoo.yaml.resolver.VersionedResolver               # type: Any
         self.allow_unicode = True
         self.Reader = None       # type: Any
         self.Scanner = None      # type: Any
         self.Serializer = None   # type: Any
         if self.typ == 'rt':
             # no optimized rt-dumper yet
-            self.Emitter = ruamel.yaml.emitter.Emitter                       # type: Any
-            self.Serializer = ruamel.yaml.serializer.Serializer              # type: Any
-            self.Representer = ruamel.yaml.representer.RoundTripRepresenter  # type: Any
-            self.Scanner = ruamel.yaml.scanner.RoundTripScanner              # type: Any
+            self.Emitter = bentoo.yaml.emitter.Emitter                       # type: Any
+            self.Serializer = bentoo.yaml.serializer.Serializer              # type: Any
+            self.Representer = bentoo.yaml.representer.RoundTripRepresenter  # type: Any
+            self.Scanner = bentoo.yaml.scanner.RoundTripScanner              # type: Any
             # no optimized rt-parser yet
-            self.Parser = ruamel.yaml.parser.RoundTripParser                 # type: Any
-            self.Composer = ruamel.yaml.composer.Composer                    # type: Any
-            self.Constructor = ruamel.yaml.constructor.RoundTripConstructor  # type: Any
+            self.Parser = bentoo.yaml.parser.RoundTripParser                 # type: Any
+            self.Composer = bentoo.yaml.composer.Composer                    # type: Any
+            self.Constructor = bentoo.yaml.constructor.RoundTripConstructor  # type: Any
         elif self.typ == 'safe':
-            self.Emitter = ruamel.yaml.emitter.Emitter if pure or CEmitter is None \
+            self.Emitter = bentoo.yaml.emitter.Emitter if pure or CEmitter is None \
                 else CEmitter
-            self.Representer = ruamel.yaml.representer.SafeRepresenter
-            self.Parser = ruamel.yaml.parser.Parser if pure or CParser is None else CParser
-            self.Composer = ruamel.yaml.composer.Composer
-            self.Constructor = ruamel.yaml.constructor.SafeConstructor
+            self.Representer = bentoo.yaml.representer.SafeRepresenter
+            self.Parser = bentoo.yaml.parser.Parser if pure or CParser is None else CParser
+            self.Composer = bentoo.yaml.composer.Composer
+            self.Constructor = bentoo.yaml.constructor.SafeConstructor
         elif self.typ == 'base':
-            self.Emitter = ruamel.yaml.emitter.Emitter
-            self.Representer = ruamel.yaml.representer.BaseRepresenter
-            self.Parser = ruamel.yaml.parser.Parser if pure or CParser is None else CParser
-            self.Composer = ruamel.yaml.composer.Composer
-            self.Constructor = ruamel.yaml.constructor.BaseConstructor
+            self.Emitter = bentoo.yaml.emitter.Emitter
+            self.Representer = bentoo.yaml.representer.BaseRepresenter
+            self.Parser = bentoo.yaml.parser.Parser if pure or CParser is None else CParser
+            self.Composer = bentoo.yaml.composer.Composer
+            self.Constructor = bentoo.yaml.constructor.BaseConstructor
         elif self.typ == 'unsafe':
-            self.Emitter = ruamel.yaml.emitter.Emitter
-            self.Representer = ruamel.yaml.representer.Representer
-            self.Parser = ruamel.yaml.parser.Parser if pure or CParser is None else CParser
-            self.Composer = ruamel.yaml.composer.Composer
-            self.Constructor = ruamel.yaml.constructor.Constructor
+            self.Emitter = bentoo.yaml.emitter.Emitter
+            self.Representer = bentoo.yaml.representer.Representer
+            self.Parser = bentoo.yaml.parser.Parser if pure or CParser is None else CParser
+            self.Composer = bentoo.yaml.composer.Composer
+            self.Constructor = bentoo.yaml.constructor.Constructor
         else:
             for module in self.plug_ins:
                 if getattr(module, 'typ', None) == self.typ:
@@ -295,20 +295,20 @@ class YAML(object):
         """
         if self.Parser is not CParser:
             if self.Reader is None:
-                self.Reader = ruamel.yaml.reader.Reader
+                self.Reader = bentoo.yaml.reader.Reader
             if self.Scanner is None:
-                self.Scanner = ruamel.yaml.scanner.Scanner
+                self.Scanner = bentoo.yaml.scanner.Scanner
             self.reader.stream = stream
         else:
             if self.Reader is not None:
                 if self.Scanner is None:
-                    self.Scanner = ruamel.yaml.scanner.Scanner
-                self.Parser = ruamel.yaml.parser.Parser
+                    self.Scanner = bentoo.yaml.scanner.Scanner
+                self.Parser = bentoo.yaml.parser.Parser
                 self.reader.stream = stream
             elif self.Scanner is not None:
                 if self.Reader is None:
-                    self.Reader = ruamel.yaml.reader.Reader
-                self.Parser = ruamel.yaml.parser.Parser
+                    self.Reader = bentoo.yaml.reader.Reader
+                self.Parser = bentoo.yaml.parser.Parser
                 self.reader.stream = stream
             else:
                 # combined C level reader>scanner>parser
@@ -316,8 +316,8 @@ class YAML(object):
                 # if you just initialise the CParser, to much of resolver.py
                 # is actually used
                 rslvr = self.Resolver
-                if rslvr is ruamel.yaml.resolver.VersionedResolver:
-                    rslvr = ruamel.yaml.resolver.Resolver
+                if rslvr is bentoo.yaml.resolver.VersionedResolver:
+                    rslvr = bentoo.yaml.resolver.Resolver
 
                 class XLoader(self.Parser, self.Constructor, rslvr):  # type: ignore
                     def __init__(selfx, stream, version=None, preserve_quotes=None):
@@ -388,20 +388,20 @@ class YAML(object):
         # we have only .Serializer to deal with (vs .Reader & .Scanner), much simpler
         if self.Emitter is not CEmitter:
             if self.Serializer is None:
-                self.Serializer = ruamel.yaml.serializer.Serializer
+                self.Serializer = bentoo.yaml.serializer.Serializer
             self.emitter.stream = stream
             self.emitter.top_level_colon_align = tlca
             return self.serializer, self.representer, self.emitter
         if self.Serializer is not None:
             # cannot set serializer with CEmitter
-            self.Emitter = ruamel.yaml.emitter.Emitter
+            self.Emitter = bentoo.yaml.emitter.Emitter
             self.emitter.stream = stream
             self.emitter.top_level_colon_align = tlca
             return self.serializer, self.representer, self.emitter
         # C routines
 
-        rslvr = ruamel.yaml.resolver.BaseResolver if self.typ == 'base' \
-            else ruamel.yaml.resolver.Resolver
+        rslvr = bentoo.yaml.resolver.BaseResolver if self.typ == 'base' \
+            else bentoo.yaml.resolver.Resolver
 
         class XDumper(CEmitter, self.Representer, rslvr):  # type: ignore
             def __init__(selfx, stream,
@@ -432,7 +432,7 @@ class YAML(object):
     def map(self, **kw):
         # type: (Any) -> Any
         if self.typ == 'rt':
-            from ruamel.yaml.comments import CommentedMap
+            from bentoo.yaml.comments import CommentedMap
             return CommentedMap(**kw)
         else:
             return dict(**kw)
@@ -440,7 +440,7 @@ class YAML(object):
     def seq(self, *args):
         # type: (Any) -> Any
         if self.typ == 'rt':
-            from ruamel.yaml.comments import CommentedSeq
+            from bentoo.yaml.comments import CommentedSeq
             return CommentedSeq(*args)
         else:
             return list(*args)
@@ -792,7 +792,7 @@ def add_implicit_resolver(tag, regexp, first=None, Loader=None, Dumper=None,
     if Loader:
         if hasattr(Loader, 'add_implicit_resolver'):
             Loader.add_implicit_resolver(tag, regexp, first)
-        elif issubclass(Loader, (BaseLoader, SafeLoader, ruamel.yaml.loader.Loader,
+        elif issubclass(Loader, (BaseLoader, SafeLoader, bentoo.yaml.loader.Loader,
                                  RoundTripLoader)):
             Resolver.add_implicit_resolver(tag, regexp, first)
         else:
@@ -800,7 +800,7 @@ def add_implicit_resolver(tag, regexp, first=None, Loader=None, Dumper=None,
     if Dumper:
         if hasattr(Dumper, 'add_implicit_resolver'):
             Dumper.add_implicit_resolver(tag, regexp, first)
-        elif issubclass(Dumper, (BaseDumper, SafeDumper, ruamel.yaml.dumper.Dumper,
+        elif issubclass(Dumper, (BaseDumper, SafeDumper, bentoo.yaml.dumper.Dumper,
                                  RoundTripDumper)):
             Resolver.add_implicit_resolver(tag, regexp, first)
         else:
@@ -823,7 +823,7 @@ def add_path_resolver(tag, path, kind=None, Loader=None, Dumper=None,
     if Loader:
         if hasattr(Loader, 'add_path_resolver'):
             Loader.add_path_resolver(tag, path, kind)
-        elif issubclass(Loader, (BaseLoader, SafeLoader, ruamel.yaml.loader.Loader,
+        elif issubclass(Loader, (BaseLoader, SafeLoader, bentoo.yaml.loader.Loader,
                                  RoundTripLoader)):
             Resolver.add_path_resolver(tag, path, kind)
         else:
@@ -831,7 +831,7 @@ def add_path_resolver(tag, path, kind=None, Loader=None, Dumper=None,
     if Dumper:
         if hasattr(Dumper, 'add_path_resolver'):
             Dumper.add_path_resolver(tag, path, kind)
-        elif issubclass(Dumper, (BaseDumper, SafeDumper, ruamel.yaml.dumper.Dumper,
+        elif issubclass(Dumper, (BaseDumper, SafeDumper, bentoo.yaml.dumper.Dumper,
                                  RoundTripDumper)):
             Resolver.add_path_resolver(tag, path, kind)
         else:
@@ -882,7 +882,7 @@ def add_multi_constructor(tag_prefix, multi_constructor, Loader=None,
             BaseConstructor.add_multi_constructor(tag_prefix, multi_constructor)
         elif issubclass(Loader, SafeLoader):
             SafeConstructor.add_multi_constructor(tag_prefix, multi_constructor)
-        elif issubclass(Loader, ruamel.yaml.loader.Loader):
+        elif issubclass(Loader, bentoo.yaml.loader.Loader):
             Constructor.add_multi_constructor(tag_prefix, multi_constructor)
         elif issubclass(Loader, RoundTripLoader):
             RoundTripConstructor.add_multi_constructor(tag_prefix, multi_constructor)

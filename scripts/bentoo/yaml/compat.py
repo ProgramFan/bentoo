@@ -14,7 +14,7 @@ if False:  # MYPY
 _DEFAULT_YAML_VERSION = (1, 2)
 
 try:
-    from ruamel.ordereddict import ordereddict
+    from bentoo.ordereddict import ordereddict
 except:
     try:
         from collections import OrderedDict
@@ -185,7 +185,7 @@ def check_anchorname_char(ch):
 
 def version_tnf(t1, t2=None):
     # type: (Any, Any) -> Any
-    from ruamel.yaml import version_info  # NOQA
+    from bentoo.yaml import version_info  # NOQA
     if version_info < t1:
         return True
     if t2 is not None and version_info < t2:

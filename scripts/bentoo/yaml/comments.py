@@ -12,8 +12,8 @@ import copy
 
 from collections import MutableSet, Sized, Set
 
-from ruamel.yaml.compat import ordereddict, PY2, string_types
-from ruamel.yaml.scalarstring import ScalarString
+from bentoo.yaml.compat import ordereddict, PY2, string_types
+from bentoo.yaml.scalarstring import ScalarString
 
 if False:  # MYPY
     from typing import Any, Dict, Optional, List, Union  # NOQA
@@ -235,8 +235,8 @@ class CommentedBase(object):
         """
         expects comment (before/after) to be without `#` and possible have multiple lines
         """
-        from ruamel.yaml.error import CommentMark
-        from ruamel.yaml.tokens import CommentToken
+        from bentoo.yaml.error import CommentMark
+        from bentoo.yaml.tokens import CommentToken
 
         def comment_token(s, mark):
             # type: (Any) -> Any

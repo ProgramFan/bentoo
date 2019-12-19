@@ -2,15 +2,15 @@
 
 from __future__ import absolute_import
 
-from ruamel.yaml.emitter import Emitter
-from ruamel.yaml.serializer import Serializer
-from ruamel.yaml.representer import Representer, SafeRepresenter, BaseRepresenter, \
+from bentoo.yaml.emitter import Emitter
+from bentoo.yaml.serializer import Serializer
+from bentoo.yaml.representer import Representer, SafeRepresenter, BaseRepresenter, \
     RoundTripRepresenter
-from ruamel.yaml.resolver import Resolver, BaseResolver, VersionedResolver
+from bentoo.yaml.resolver import Resolver, BaseResolver, VersionedResolver
 
 if False:  # MYPY
     from typing import Any, Dict, List, Union               # NOQA
-    from ruamel.yaml.compat import StreamType, VersionType  # NOQA
+    from bentoo.yaml.compat import StreamType, VersionType  # NOQA
 
 __all__ = ['BaseDumper', 'SafeDumper', 'Dumper', 'RoundTripDumper']
 
