@@ -792,7 +792,7 @@ class YamlParser(object):
         self.use_table = use_table
 
     def itertables(self, fn):
-        import ruamel.yaml as yaml
+        import bentoo.yaml as yaml
         all_tables = []
 
         yamldoc_regex = re.compile(

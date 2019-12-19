@@ -13,7 +13,7 @@ import argparse
 import collections
 
 try:
-    import ruamel.yaml
+    import bentoo.yaml
     import json
     import re
 
@@ -37,13 +37,13 @@ try:
                               *args,
                               **kwargs)
         else:
-            return ruamel.yaml.load(string, ruamel.yaml.RoundTripLoader)
+            return bentoo.yaml.load(string, bentoo.yaml.RoundTripLoader)
 
     def dump(data, fileobj, *args, **kwargs):
-        ruamel.yaml.dump(data, fileobj, Dumper=ruamel.yaml.RoundTripDumper)
+        bentoo.yaml.dump(data, fileobj, Dumper=bentoo.yaml.RoundTripDumper)
 
     def dumps(data, *args, **kwargs):
-        return ruamel.yaml.dump(data, Dumper=ruamel.yaml.RoundTripDumper)
+        return bentoo.yaml.dump(data, Dumper=bentoo.yaml.RoundTripDumper)
 
 except ImportError:
     try:
