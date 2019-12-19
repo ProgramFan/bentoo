@@ -1,6 +1,9 @@
 #!/usr/bin/env python2.7
 # coding: utf-8
 
+from builtins import str
+from builtins import zip
+from builtins import object
 import argparse
 import importlib
 import itertools
@@ -14,7 +17,7 @@ from collections import OrderedDict
 from bentoo.common.conf import load_conf
 
 
-class SimpleVectorGenerator:
+class SimpleVectorGenerator(object):
     '''Simple test vector generator
 
     Generates a collection of test vectors by iterating over provided test
@@ -55,10 +58,10 @@ class SimpleVectorGenerator:
         for item in self.raw_vectors:
             iters = [x if isinstance(x, list) else [x] for x in item]
             for v in itertools.product(*iters):
-                yield OrderedDict(zip(self.test_factors, v))
+                yield OrderedDict(list(zip(self.test_factors, v)))
 
 
-class CartProductVectorGenerator:
+class CartProductVectorGenerator(object):
     '''Cartetian product test vector generator
 
     Generate a collection of test vectors by iterating a Cartetian product
@@ -86,10 +89,10 @@ class CartProductVectorGenerator:
         '''
         factor_values = [self.factor_values[k] for k in self.test_factors]
         for v in itertools.product(*factor_values):
-            yield OrderedDict(zip(self.test_factors, v))
+            yield OrderedDict(list(zip(self.test_factors, v)))
 
 
-class CustomVectorGenerator:
+class CustomVectorGenerator(object):
     '''Custom test vector generator
 
     Generate a collection of test vectors by calling a user defined function,
@@ -136,7 +139,7 @@ class CustomVectorGenerator:
 
         '''
         for v in self.test_vectors:
-            yield OrderedDict(zip(self.test_factors, v))
+            yield OrderedDict(list(zip(self.test_factors, v)))
 
 
 from bentoo.common.utils import safe_eval, replace_template
@@ -161,7 +164,7 @@ class TemplateCaseGenerator(object):
         template_vars["case_path"] = case_path
         # copy case files: each file is defiend as (src, dst), where src is
         # relative to conf_root and dst is relative to case_path.
-        for src, dst in self.template["copy_files"].iteritems():
+        for src, dst in self.template["copy_files"].items():
             srcpath = replace_template(src, template_vars)
             dstpath = replace_template(dst, template_vars)
             if not os.path.isabs(srcpath):
@@ -182,7 +185,7 @@ class TemplateCaseGenerator(object):
 
         # link case files: each file is defiend as (src, dst), where src is
         # relative to output_root and dst is relative to case_path.
-        for src, dst in self.template["link_files"].iteritems():
+        for src, dst in self.template["link_files"].items():
             srcpath = replace_template(src, template_vars)
             dstpath = replace_template(dst, template_vars)
             if not os.path.isabs(srcpath):
@@ -207,11 +210,11 @@ class TemplateCaseGenerator(object):
         inst_tpls = self.template["inst_templates"]
         if inst_tpls:
             var_values = {}
-            for k, v in inst_tpls["variables"].iteritems():
+            for k, v in inst_tpls["variables"].items():
                 v = replace_template(v, template_vars)
                 v = safe_eval(v)
                 var_values[k] = v
-            for src, dst in inst_tpls["templates"].iteritems():
+            for src, dst in inst_tpls["templates"].items():
                 srcpath = replace_template(src, template_vars)
                 dstpath = replace_template(dst, template_vars)
                 if not os.path.isabs(srcpath):
@@ -260,7 +263,7 @@ class TemplateCaseGenerator(object):
         results = [replace_template(x, template_vars) for x in rlt_template]
         envs_template = spec_template.get("envs", {})
         envs = OrderedDict()
-        for k, v in envs_template.iteritems():
+        for k, v in envs_template.items():
             v = replace_template(v, template_vars)
             v = safe_eval(v)
             envs[k] = v
@@ -274,14 +277,14 @@ class TemplateCaseGenerator(object):
             contains_tpl = validator_template.get("contains", {})
             if contains_tpl:
                 contains = OrderedDict()
-                for k, v in contains_tpl.iteritems():
+                for k, v in contains_tpl.items():
                     k = replace_template(k, template_vars)
                     v = replace_template(v, template_vars)
                     contains[k] = v
                 validator["contains"] = contains
         case_spec = OrderedDict(
-            zip(["cmd", "envs", "run", "results", "validator"],
-                [cmd, envs, run, results, validator]))
+            list(zip(["cmd", "envs", "run", "results", "validator"],
+                [cmd, envs, run, results, validator])))
 
         # create empty output file, so when output file is used for special
         # signal, it's ready and will not be ignored.
@@ -293,7 +296,7 @@ class TemplateCaseGenerator(object):
         return case_spec
 
 
-class CustomCaseGenerator:
+class CustomCaseGenerator(object):
     def __init__(self, module, func, args):
         if not os.path.exists(module):
             raise RuntimeError("Module '%s' does not exists" % module)
@@ -356,7 +359,7 @@ def identifier(value):
     return re.sub(r"_+", "_", a)
 
 
-class OutputOrganizer:
+class OutputOrganizer(object):
     def __init__(self, version=1):
         if version != 1:
             raise RuntimeError(
@@ -366,7 +369,7 @@ class OutputOrganizer:
     def get_case_path(self, test_vector):
         segs = [
             "{0}-{1}".format(identifier(k), identifier(v))
-            for k, v in test_vector.iteritems()
+            for k, v in test_vector.items()
         ]
         return os.path.join(*segs)
 
@@ -377,7 +380,7 @@ class OutputOrganizer:
         return os.path.join(self.get_case_path(test_vector), "TestCase.json")
 
 
-class TestProjectBuilder:
+class TestProjectBuilder(object):
     def __init__(self, conf_root):
         if not os.path.isabs(conf_root):
             conf_root = os.path.abspath(conf_root)
@@ -494,7 +497,7 @@ class TestProjectBuilder:
                 raise RuntimeError("File type not supported: '%s'" % path)
 
         # Generate test cases and write test case config
-        for case in self.test_vector_generator.iteritems():
+        for case in self.test_vector_generator.items():
             case_path = self.output_organizer.get_case_path(case)
             case_fullpath = os.path.join(output_root, case_path)
             if not os.path.exists(case_fullpath):
@@ -534,11 +537,11 @@ class TestProjectBuilder:
         info = OrderedDict(info)
         info["data_files"] = self.data_files
         test_defs = []
-        for case in self.test_vector_generator.iteritems():
-            vector = case.values()
+        for case in self.test_vector_generator.items():
+            vector = list(case.values())
             path = self.output_organizer.get_case_path(case)
             test_defs.append(
-                OrderedDict(zip(["test_vector", "path"], [vector, path])))
+                OrderedDict(list(zip(["test_vector", "path"], [vector, path]))))
         info["test_cases"] = test_defs
         project_info_path = self.output_organizer.get_project_info_path()
         project_info_fullpath = os.path.join(output_root, project_info_path)

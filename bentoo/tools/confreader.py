@@ -50,7 +50,7 @@ except ImportError:
         import yaml
 
         def dict_representer(dumper, data):
-            return dumper.represent_dict(data.iteritems())
+            return dumper.represent_dict(iter(data.items()))
 
         def dict_constructor(loader, node):
             return collections.OrderedDict(loader.construct_pairs(node))

@@ -12,6 +12,8 @@ values. Some columns such as time are specially treated to maintain capability
 with existing metric calculation tools.
 '''
 
+from builtins import zip
+from builtins import map
 import os
 import re
 import argparse
@@ -21,10 +23,10 @@ import sqlite3
 SQLITE_TYPE = {
     type(None): "NULL",
     int: "INTEGER",
-    long: "INTEGER",
+    int: "INTEGER",
     float: "REAL",
     str: "TEXT",
-    unicode: "TEXT",
+    str: "TEXT",
     buffer: "BLOB"
 }
 
@@ -46,7 +48,7 @@ def aggregate(input_db, output_db, on="thread"):
     # Discover the structure of input database
     sql = "select * from result limit 1"
     r0 = conn0.execute(sql).fetchone()
-    input_columns = r0.keys()
+    input_columns = list(r0.keys())
     index_columns, data_columns = split_columns(input_columns)
     assert ("ProcId" in index_columns)
     assert ("ThreadId" in index_columns)
@@ -56,7 +58,7 @@ def aggregate(input_db, output_db, on="thread"):
     if on == "thread":
         new_index_columns = list(index_columns)
         new_index_columns.remove("ThreadId")
-        group_by = map(quote, new_index_columns)
+        group_by = list(map(quote, new_index_columns))
         select.extend(group_by)
         select.append("COUNT(ThreadId) AS ThreadCount")
         for k in data_columns:
@@ -76,7 +78,7 @@ def aggregate(input_db, output_db, on="thread"):
         new_index_columns = list(index_columns)
         new_index_columns.remove("ThreadId")
         new_index_columns.remove("ProcId")
-        group_by = map(quote, new_index_columns)
+        group_by = list(map(quote, new_index_columns))
         select.extend(group_by)
         select.append("COUNT(ProcId) AS ProcCount")
         select.append("COUNT(ThreadId) AS ThreadCount")
@@ -105,7 +107,7 @@ def aggregate(input_db, output_db, on="thread"):
     output_types = [type(r0[k]) for k in output_columns]
     conn1 = sqlite3.connect(output_db)
     conn1.execute("DROP TABLE IF EXISTS result")
-    type_pairs = zip(output_columns, output_types)
+    type_pairs = list(zip(output_columns, output_types))
     sql = ["\"{0}\" {1}".format(k, SQLITE_TYPE[v]) for k, v in type_pairs]
     sql = "CREATE TABLE result (%s)" % ", ".join(sql)
     conn1.execute(sql)

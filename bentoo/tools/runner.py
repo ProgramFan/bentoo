@@ -8,7 +8,13 @@ high performance computing platforms.  It features test case filters, results
 validator, timeout etc. It supports slurm, pbs, yhrun (tianhe), bsub (sunway),
 and plain mpirun at the moment. More backends will be added overtime.
 '''
+from __future__ import division
 
+from builtins import zip
+from builtins import map
+from builtins import str
+from past.utils import old_div
+from builtins import object
 import os
 import sys
 import argparse
@@ -58,7 +64,7 @@ class TestProjectReader(object):
             This shall be refined in the future.
 
         '''
-        for k, v in self.test_cases.iteritems():
+        for k, v in self.test_cases.items():
             case_fullpath = os.path.join(self.project_root, v)
             if not os.path.exists(case_fullpath):
                 raise RuntimeError("Test case '%s' not found in '%s'" %
@@ -140,14 +146,14 @@ def make_bash_script(prolog, envs, cmds, outfile):
         content.append("#")
     content.append("")
     if envs:
-        for key, value in envs.iteritems():
+        for key, value in envs.items():
             content.append("export {0}={1}".format(key, shell_quote(value)))
         content.append("")
     assert isinstance(cmds, list)
     for cmd in cmds:
         content.append(" ".join(map(shell_quote, cmd)))
     file(outfile, "w").write("\n".join(content))
-    os.chmod(outfile, 0755)
+    os.chmod(outfile, 0o755)
 
 
 #
@@ -230,13 +236,13 @@ class MpirunLauncher(object):
             mpirun_cmd.extend(["-hosts", self.args["hosts"]])
         if self.args["ppn"]:
             mpirun_cmd.extend(["-ppn", self.args["ppn"]])
-        exec_cmd = map(str, spec["cmd"])
+        exec_cmd = list(map(str, spec["cmd"]))
         cmd = mpirun_cmd + exec_cmd
         if timeout:
             cmd = ["timeout", "{0}m".format(timeout)] + cmd
 
         env = dict(os.environ)
-        for k, v in spec["envs"].iteritems():
+        for k, v in spec["envs"].items():
             env[k] = str(v)
 
         if make_script:
@@ -358,12 +364,12 @@ class YhrunLauncher(object):
         if self.args["only_nodes"]:
             yhrun_cmd.extend(["-w", self.args["only_nodes"]])
         yhrun_cmd.extend(["-o", "STDOUT", "-e", "STDERR"])
-        exec_cmd = map(str, spec["cmd"])
+        exec_cmd = list(map(str, spec["cmd"]))
         cmd = yhrun_cmd + exec_cmd
-        cmd = map(str, cmd)
+        cmd = list(map(str, cmd))
 
         env = dict(os.environ)
-        for k, v in spec["envs"].iteritems():
+        for k, v in spec["envs"].items():
             env[k] = str(v)
 
         if self.args["fix_glex"] == "v0":
@@ -593,12 +599,12 @@ class SlurmLauncher(object):
             srun_cmd.extend(["-t", str(timeout)])
         if self.args["partition"]:
             srun_cmd.extend(["-p", self.args["partition"]])
-        exec_cmd = map(str, spec["cmd"])
+        exec_cmd = list(map(str, spec["cmd"]))
         cmd = srun_cmd + exec_cmd
-        cmd = map(str, cmd)
+        cmd = list(map(str, cmd))
 
         env = dict(os.environ)
-        for k, v in spec["envs"].iteritems():
+        for k, v in spec["envs"].items():
             env[k] = str(v)
 
         if self.args["use_batch"]:
@@ -745,7 +751,7 @@ class PbsLauncher(object):
         nnodes = str(run["nnodes"])
         procs_per_node = str(run["procs_per_node"])
         nprocs = str(run["nprocs"])
-        exec_cmd = " ".join(map(lambda x: "\"{0}\"".format(x), spec["cmd"]))
+        exec_cmd = " ".join(["\"{0}\"".format(x) for x in spec["cmd"]])
 
         tplvars = {
             "nprocs": nprocs,
@@ -766,10 +772,10 @@ class PbsLauncher(object):
         if timeout:
             timeout = int(timeout)
             tplvars["timeout"] = "#PBS -l walltime={0:02d}:{1:02d}:00".format(
-                timeout / 60, timeout % 60)
+                old_div(timeout, 60), timeout % 60)
 
         envs_str = []
-        for k, v in spec["envs"].iteritems():
+        for k, v in spec["envs"].items():
             envs_str.append("export {0}={1}".format(k, shell_quote(v)))
         envs_str = "\n".join(envs_str)
         tplvars["envs"] = envs_str
@@ -787,7 +793,7 @@ class PbsLauncher(object):
             return None
 
         env = dict(os.environ)
-        for k, v in spec["envs"].iteritems():
+        for k, v in spec["envs"].items():
             env[k] = str(v)
         cmd = ["qsub", "./job_spec.pbs"]
         ret = subprocess.call(cmd, env=env, cwd=path, shell=False)
@@ -882,12 +888,12 @@ class BsubLauncher(object):
             bsub_cmd.extend(["-share_size", self.args["share_size"]])
         if self.args["host_stack"]:
             bsub_cmd.extend(["-host_stack", self.args["host_stack"]])
-        exec_cmd = map(str, spec["cmd"])
+        exec_cmd = list(map(str, spec["cmd"]))
         cmd = bsub_cmd + exec_cmd
-        cmd = map(str, cmd)
+        cmd = list(map(str, cmd))
 
         env = dict(os.environ)
-        for k, v in spec["envs"].iteritems():
+        for k, v in spec["envs"].items():
             env[k] = str(v)
 
         if make_script:
@@ -944,7 +950,7 @@ class SimpleProgressReporter(object):
         '''Notify the end of the test project'''
         sys.stdout.write("Done.\n")
         stats_str = ", ".join("%d %s" % (len(v), k)
-                              for k, v in stats.iteritems()) + "\n"
+                              for k, v in stats.items()) + "\n"
         sys.stdout.write(stats_str)
         sys.stdout.flush()
 
@@ -974,7 +980,7 @@ def validate_case(case):
             if not os.path.exists(fullpath):
                 return False
     if "contains" in validator:
-        for k, v in validator["contains"].iteritems():
+        for k, v in validator["contains"].items():
             fullpath = os.path.join(case["path"], k)
             if not os.path.exists(fullpath):
                 return False
@@ -997,7 +1003,7 @@ def run_project(project,
                 rerun_failed=False):
     '''Run a test project'''
     stats = OrderedDict(
-        zip(["success", "timeout", "failed", "skipped"], [[], [], [], []]))
+        list(zip(["success", "timeout", "failed", "skipped"], [[], [], [], []])))
     if skip_finished and project.last_stats:
         stats["success"] = project.last_stats["success"]
 

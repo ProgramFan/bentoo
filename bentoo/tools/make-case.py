@@ -2,6 +2,10 @@
 #
 
 
+from __future__ import division
+from builtins import range
+from builtins import object
+from past.utils import old_div
 class ScalingCaseMaker(object):
     '''A test vector generator for scaling tests'''
     def __init__(self, ref_mem_mb, ref_nnodes, min_mem, max_mem):
@@ -31,7 +35,7 @@ class ScalingCaseMaker(object):
 
         mem = self.ref_mem
         nnodes = self.ref_nnodes
-        mpn = mem / nnodes
+        mpn = old_div(mem, nnodes)
         while mpn <= self.max_mpn:
             ratio += 1
             mpn *= 2
@@ -55,7 +59,7 @@ class ScalingCaseMaker(object):
         max_start_nnodes = min_nodes
         while max_start_nnodes * 2**(max_node_multipler - steping) <= max_nodes:
             max_start_nnodes = max_start_nnodes * 2**steping
-        max_start_nnodes = max_start_nnodes / 2**steping
+        max_start_nnodes = old_div(max_start_nnodes, 2**steping)
         while nnodes <= max_start_nnodes:
             cases.extend((ratio, nnodes * 2**x)
                         for x in range(0, max_node_multipler, steping))

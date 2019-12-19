@@ -8,7 +8,10 @@ bentoo-calltree-analyser.py - Bottleneck analysis based on calltree
 This tool computes relative/absolute percentage for selected events based on
 calltree structure.
 '''
+from __future__ import division
 
+from builtins import map
+from past.utils import old_div
 import sqlite3
 import argparse
 import pandas
@@ -118,7 +121,7 @@ def compute_percentage(ref_db, calltree_file, out_db,
     calltree = json.load(file(calltree_file))
     timer_names = extract_timer_names(calltree)
 
-    sql = map(quote, index_columns + data_columns + append_columns)
+    sql = list(map(quote, index_columns + data_columns + append_columns))
     sql = "SELECT %s FROM result WHERE " % ", ".join(sql)
     sql += " OR ".join("%s = \"%s\"" % (timer_column, x) for x in timer_names)
     sql += " ORDER BY %s" % ", ".join(map(quote, index_columns))
@@ -134,7 +137,7 @@ def compute_percentage(ref_db, calltree_file, out_db,
             if c == timer_column:
                 continue
             values = {}
-            for k, v in parents.iteritems():
+            for k, v in parents.items():
                 if k == top_timer:
                     values[k] = group[group[timer_column] == k][c].max()
                 else:
@@ -142,15 +145,15 @@ def compute_percentage(ref_db, calltree_file, out_db,
             top_value = values[top_timer]
             abs_c = "%s_abs_percent" % c
             rel_c = "%s_rel_percent" % c
-            result[abs_c] = result[c] / top_value
+            result[abs_c] = old_div(result[c], top_value)
             result[rel_c] = [values[x] for x in result[timer_column]]
-            result[rel_c] = result[c] / result[rel_c]
+            result[rel_c] = old_div(result[c], result[rel_c])
 
         def treelize(x):
             return "|" + "--" * level[x] + " " + x
         result["abs_seq"] = [abs_seq[x] for x in result[timer_column]]
         if treelize_timer_name:
-            result[timer_column] = map(treelize, result[timer_column])
+            result[timer_column] = list(map(treelize, result[timer_column]))
         else:
             result["level"] = [level[x] for x in result[timer_column]]
             result["parent"] = [parents[x] for x in result[timer_column]]

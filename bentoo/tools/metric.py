@@ -25,6 +25,9 @@ User defined metrics example:
 
 '''
 
+from builtins import zip
+from builtins import str
+from builtins import map
 import os
 import re
 import argparse
@@ -57,10 +60,10 @@ except ImportError:
 SQLITE_TYPE = {
     type(None): "NULL",
     int: "INTEGER",
-    long: "INTEGER",
+    int: "INTEGER",
     float: "REAL",
     str: "TEXT",
-    unicode: "TEXT",
+    str: "TEXT",
     buffer: "BLOB"
 }
 
@@ -96,7 +99,7 @@ def compute_metrics(input_db, output_db, spec):
     # structure.
     sql = "select * from result limit 1"
     r0 = conn0.execute(sql).fetchone()
-    input_columns = r0.keys()
+    input_columns = list(r0.keys())
     index_columns, data_columns = split_columns(input_columns)
     output_columns = list(index_columns)
     output_columns.extend(tokenize(x["name"]) for x in spec["metrics"])
@@ -106,7 +109,7 @@ def compute_metrics(input_db, output_db, spec):
     # Create output database
     conn1 = sqlite3.connect(output_db)
     conn1.execute("DROP TABLE IF EXISTS result")
-    type_pairs = zip(output_columns, output_types)
+    type_pairs = list(zip(output_columns, output_types))
     sql = ["\"{0}\" {1}".format(k, SQLITE_TYPE[v]) for k, v in type_pairs]
     sql = "CREATE TABLE result (%s)" % ", ".join(sql)
     conn1.execute(sql)
@@ -116,7 +119,7 @@ def compute_metrics(input_db, output_db, spec):
         var_values = dict(row)
         for item in spec["data"]:
             if isinstance(item, list):
-                k, v = map(str, item)
+                k, v = list(map(str, item))
                 var_values[v] = row[k]
         result = [row[k] for k in index_columns]
         for item in spec["metrics"]:
@@ -124,9 +127,9 @@ def compute_metrics(input_db, output_db, spec):
             result.append(value)
         return result
 
-    select = map(quote, input_columns)
+    select = list(map(quote, input_columns))
     select = ", ".join(select)
-    order_by = map(quote, index_columns)
+    order_by = list(map(quote, index_columns))
     order_by = ", ".join(order_by)
     select_sql = "SELECT {0} FROM result ORDER BY {1}".format(select, order_by)
     data = conn0.execute(select_sql)

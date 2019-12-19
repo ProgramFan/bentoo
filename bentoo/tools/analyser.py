@@ -20,7 +20,13 @@ Analyser tries to provide a simple CLI interface of pandas for simple use
 cases, namely tasks need to be done quick and often in command line. More
 sphosticated analysis need to be done directly in python using pandas etc.
 '''
+from __future__ import print_function
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import zip
+from builtins import str
+from builtins import object
 import argparse
 import fnmatch
 import os
@@ -131,7 +137,7 @@ class PandasReader(object):
             assert len(pivot_fields) in (2, 3)
             data = data.pivot(*pivot_fields)
 
-        print data.to_string()
+        print(data.to_string())
         if save:
             data.to_csv(save, index=True)
 
@@ -150,7 +156,7 @@ def print_table(header, rows):
     fmt = ["{:%s%d}" % (a, w) for a, w in zip(colalign, colwidth)]
     fmt = " | ".join(fmt)
     fmt = "| " + fmt + " |"
-    print fmt.format(*header)
+    print(fmt.format(*header))
     sep = ["-" * c for c in colwidth]
     for i, a in enumerate(colalign):
         if a == '<':
@@ -161,9 +167,9 @@ def print_table(header, rows):
             sep[i] = "-" + sep[i] + ':'
         else:
             raise RuntimeError("Invalid align spec '%s'" % a)
-    print "|" + "|".join(sep) + "|"
+    print("|" + "|".join(sep) + "|")
     for item in rows:
-        print fmt.format(*item)
+        print(fmt.format(*item))
 
 
 class SqliteReader(object):
@@ -171,10 +177,10 @@ class SqliteReader(object):
     types = {
         None: "NULL",
         int: "INTEGER",
-        long: "INTEGER",
+        int: "INTEGER",
         float: "REAL",
         str: "TEXT",
-        unicode: "TEXT",
+        str: "TEXT",
         buffer: "BLOB"
     }
 
@@ -212,7 +218,7 @@ class SqliteReader(object):
                 value = value.strip()
             if op == "=":
                 if isinstance(value, list):
-                    value = map(lambda x: quote(name, x), value)
+                    value = [quote(name, x) for x in value]
                     sql_seg = "{0} IN ({1})".format(name, ", ".join(value))
                 else:
                     value = quote(name, value)
@@ -234,7 +240,7 @@ class SqliteReader(object):
     def _build_select_clause(cls, column_types, columns, pivots):
         real_columns = []
         if not columns:
-            real_columns = column_types.keys()
+            real_columns = list(column_types.keys())
         else:
             for f in columns:
                 real_columns.extend(parse_list(f))
@@ -260,7 +266,7 @@ class SqliteReader(object):
         cur.execute("SELECT * FROM result ORDER BY ROWID ASC LIMIT 1")
         row = cur.fetchone()
         data_columns = [x[0] for x in cur.description]
-        data_types = OrderedDict(zip(data_columns, [type(x) for x in row]))
+        data_types = OrderedDict(list(zip(data_columns, [type(x) for x in row])))
         orderby = None
         pivot_fields = []
         if pivot:

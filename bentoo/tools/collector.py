@@ -13,7 +13,16 @@ stored in a table named 'result'. The data sheet is designed to be easily
 parsable by pandas, so the recommendation is to use pandas to investigate the
 data.
 '''
+from __future__ import print_function
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import next
+from builtins import zip
+from builtins import map
+from builtins import range
+from builtins import object
 import os
 import sys
 import re
@@ -23,7 +32,7 @@ import json
 import sqlite3
 import glob
 import csv
-import cStringIO
+import io
 import fnmatch
 import tarfile
 from collections import OrderedDict
@@ -143,15 +152,15 @@ class ResultScanner(object):
             result_files = case["spec"]["results"]
             result_selector = self.result_selector
             if not result_selector:
-                result_selector = xrange(len(result_files))
+                result_selector = range(len(result_files))
             for result_id in result_selector:
                 fn = os.path.join(fullpath, result_files[result_id])
                 short_fn = os.path.relpath(fn, self.project.project_root)
                 if not os.path.exists(fn):
                     print("WARNING: Result file '%s' not found" % short_fn)
                     continue
-                spec = zip(self.project.test_factors + ["result_id"],
-                           case["test_vector"] + [result_id])
+                spec = list(zip(self.project.test_factors + ["result_id"],
+                           case["test_vector"] + [result_id]))
                 spec = OrderedDict(spec)
                 yield {"spec": spec, "fullpath": fn, "short_fn": short_fn}
 
@@ -223,7 +232,7 @@ def parse_jasminlog(fn, use_table=None):
             continue
         # Extract table header
         header_ptn = re.compile(r"(Timer Name|Proc: \d+|Summed|Proc|Max)")
-        header = map(tokenlize, header_ptn.findall(log_table["header"]))
+        header = list(map(tokenlize, header_ptn.findall(log_table["header"])))
         assert (header[0] == "timer_name")
         header[0] = "TimerName"
         # Parse table rows
@@ -247,7 +256,7 @@ def parse_jasminlog(fn, use_table=None):
                     timer_rec[pn] = avail_types[pn](b[1:-2]) * 0.01
             table_contents.append(timer_rec)
         # Fix table header when there are XX% records
-        for k in table_contents[0].iterkeys():
+        for k in table_contents[0].keys():
             if k not in header:
                 header.append(k)
         # Make final result:
@@ -374,7 +383,7 @@ def parse_jasmin4log(fn, use_table=None):
                 m = re.match(r"({0})\(({0})%\)".format(flt_ptn), val)
                 if m:
                     pn = "{0}_percent".format(cn)
-                    a, b = map(float, [m.group(1), m.group(2)])
+                    a, b = list(map(float, [m.group(1), m.group(2)]))
                     b = b * 0.01
                     timer_rec[cn], timer_rec[pn] = a, b
                     continue
@@ -385,7 +394,7 @@ def parse_jasmin4log(fn, use_table=None):
                 timer_rec[cn] = avail_types[cn](val)
             table_contents.append(timer_rec)
         # Fix table header when there are XX% records
-        for k in table_contents[0].iterkeys():
+        for k in table_contents[0].keys():
             if k not in header:
                 header.append(k)
         # Make final result
@@ -521,24 +530,24 @@ class BlockReader(object):
         while True:
             try:
                 block = []
-                while not self.match_start(iterable.next()):
+                while not self.match_start(next(iterable)):
                     continue
-                line = iterable.next()
+                line = next(iterable)
                 while not self.match_end(line):
                     block.append(line)
-                    line = iterable.next()
+                    line = next(iterable)
                 yield block
             except StopIteration:
                 return
 
     def findblock(self, iterable):
         block = []
-        while not self.match_start(iterable.next()):
+        while not self.match_start(next(iterable)):
             continue
-        line = iterable.next()
+        line = next(iterable)
         while not self.match_end(line):
             block.append(line)
-            line = iterable.next()
+            line = next(iterable)
         return block
 
 
@@ -555,12 +564,12 @@ class LikwidBlockParser(object):
 
     def process(self, iterable):
         self.clear()
-        line1 = iterable.next()
-        line2 = iterable.next()
+        line1 = next(iterable)
+        line2 = next(iterable)
         cpu_model = line1.split(":")[-1].strip()
         cpu_cycles = float(line2.split(":")[-1].strip())
         other = [x for x in iterable]
-        other = cStringIO.StringIO("".join(other[1:-1]))
+        other = io.StringIO("".join(other[1:-1]))
         likwid_data = csv.DictReader(other)
         # NOTE: likwid output use RegionTag as TimerName, as well as a
         # different order. We fix it here.
@@ -569,7 +578,7 @@ class LikwidBlockParser(object):
         self.column_names.extend(start_columns)
         self.column_types.extend([int, str, float, int, float])
         other_columns = list(likwid_data.fieldnames[4:])
-        other_columns = filter(lambda x: x, other_columns)
+        other_columns = [x for x in other_columns if x]
         self.column_names.extend(other_columns)
         self.column_types.extend([float] * len(other_columns))
         self.data = []
@@ -626,7 +635,7 @@ class LikwidParser(object):
         files[0] = file(likwid_data[0])
 
         all_tables = []
-        for table_id in xrange(nblocks):
+        for table_id in range(nblocks):
             data = []
             for i, f in enumerate(files):
                 proc_id = int(os.path.basename(likwid_data[i]).split(".")[1])
@@ -669,13 +678,13 @@ class UdcBlockParser(object):
     def process(self, iterable):
         self.clear()
         content = [x for x in iterable]
-        content = cStringIO.StringIO("".join(content))
+        content = io.StringIO("".join(content))
         data = csv.DictReader(content)
         start_columns = "ThreadId,TimerName".split(",")
         self.column_names.extend(start_columns)
         self.column_types.extend([int, str])
         other_columns = list(data.fieldnames[2:])
-        other_columns = filter(lambda x: x, other_columns)
+        other_columns = [x for x in other_columns if x]
         self.column_names.extend(other_columns)
         self.column_types.extend([float] * len(other_columns))
         self.data = []
@@ -727,7 +736,7 @@ class UdcParser(object):
         files[0] = file(udc_data[0])
 
         all_tables = []
-        for table_id in xrange(nblocks):
+        for table_id in range(nblocks):
             data = []
             for i, f in enumerate(files):
                 proc_id = int(os.path.basename(udc_data[i]).split(".")[1])
@@ -801,18 +810,18 @@ class YamlParser(object):
             content = yaml.safe_load(match.group(1))
             if isinstance(content, dict):
                 # a single dict
-                cn = map(identifier, content.keys())
+                cn = list(map(identifier, list(content.keys())))
                 vals = list(content.values())
                 ct = [type(x) for x in vals]
                 data = [vals]
             elif isinstance(content, list):
                 # a list of dicts
                 assert content
-                cn = map(identifier, content[0].keys())
-                ct = [type(x) for x in content[0].itervalues()]
+                cn = list(map(identifier, list(content[0].keys())))
+                ct = [type(x) for x in content[0].values()]
                 data = []
                 for item in content:
-                    assert set(cn) == set(item.iterkeys())
+                    assert set(cn) == set(item.keys())
                     val = [item[x] for x in cn]
                     data.append(val)
             else:
@@ -841,7 +850,7 @@ def guess_type(data):
     type_hierarchy = [int, float, str]  # start from int, str for all
 
     def promote_type(val, type_index):
-        for i in xrange(type_index, len(type_hierarchy) + 1):
+        for i in range(type_index, len(type_hierarchy) + 1):
             t = type_hierarchy[i]
             try:
                 v = t(val)
@@ -894,8 +903,7 @@ class PipetableParser(object):
             r"(?:^|\n)" + r"(\s*\|.+\|\s*\n)" + r"\s*\|[-:| ]+\|\s*\n" +
             r"((?:\s*\|.+\|\s*\n)+)" + r"(?:\n|$)")
         for i, match in enumerate(table_regex.finditer(file(fn).read())):
-            parse_row = lambda x: map(lambda y: y.strip(),
-                                      x.strip().strip('|').split('|'))
+            parse_row = lambda x: [y.strip() for y in x.strip().strip('|').split('|')]
             header = match.group(1)
             content = match.group(2)
             header = parse_row(header)
@@ -965,8 +973,7 @@ class DsvParser(object):
         table_regex = re.compile(
             r"\s*\|={3,}\s*\n" + r"((?:[^|]+\n){2,})" + r"\s*\|={3,}\n")
         for i, match in enumerate(table_regex.finditer(file(fn).read())):
-            parse_row = lambda x: map(lambda y: y.strip(),
-                                      re.split(self.args['sep'], x.strip()))
+            parse_row = lambda x: [y.strip() for y in re.split(self.args['sep'], x.strip())]
             content = match.group(1).split('\n')
             header = content[0]
             header = parse_row(header)
@@ -1010,7 +1017,7 @@ class ParserFactory(object):
 
     @staticmethod
     def create(name, namespace):
-        use_table = map(int, namespace.use_table)
+        use_table = list(map(int, namespace.use_table))
         if name == "jasmin3":
             args = JasminParser.retrive_cmd_args(namespace)
             return JasminParser(use_table, args)
@@ -1067,10 +1074,10 @@ class SqliteSerializer(object):
     typemap = {
         type(None): "NULL",
         int: "INTEGER",
-        long: "INTEGER",
+        int: "INTEGER",
         float: "REAL",
         str: "TEXT",
-        unicode: "TEXT",
+        str: "TEXT",
         buffer: "BLOB"
     }
 
@@ -1203,8 +1210,8 @@ class DataAggregator(object):
 
         table_id = first_table["id"]
         table_content = first_table["content"]
-        all_names = table_id.keys() + table_content["column_names"]
-        all_types = [type(x) for x in table_id.values()]
+        all_names = list(table_id.keys()) + table_content["column_names"]
+        all_types = [type(x) for x in list(table_id.values())]
         all_types.extend(table_content["column_types"])
 
         ds = [i for i, n in enumerate(all_names) if self.filter.valid(n)]
@@ -1214,12 +1221,12 @@ class DataAggregator(object):
         def data_generator():
             table_id = first_table["id"]
             for item in first_table["content"]["data"]:
-                all_values = table_id.values() + item
+                all_values = list(table_id.values()) + item
                 yield [all_values[i] for i in ds]
             for table in tables:
                 table_id = table["id"]
                 for item in table["content"]["data"]:
-                    all_values = table_id.values() + item
+                    all_values = list(table_id.values()) + item
                     yield [all_values[i] for i in ds]
 
         return {
@@ -1352,7 +1359,7 @@ def main():
     else:
         case_filter = None
         filter_mode = "exclude"
-    use_result = map(int, args.use_result)
+    use_result = list(map(int, args.use_result))
     scanner = ResultScanner(args.project_root, case_filter, filter_mode,
                             use_result)
     # make parser

@@ -4,6 +4,7 @@
 
 from __future__ import print_function
 
+from builtins import input
 import argparse
 import os
 import re
@@ -19,7 +20,7 @@ def wrap_print(msg):
 
 
 def wrap_input(msg):
-    return raw_input(
+    return input(
         textwrap.fill(
             msg, width=TEXT_WIDTH, drop_whitespace=False))
 
@@ -73,7 +74,7 @@ def get_list(message, default="nnodes"):
         print(SEP_LINE)
         if not result:
             result = default
-        return map(lambda x: x.strip(), result.split(","))
+        return [x.strip() for x in result.split(",")]
 
 
 def get_input(message):
@@ -110,7 +111,7 @@ TEST_PROJECT_CONFIG_JSON_TPL = '''{
 
 def make_config(project_dir, project_desc, binary_name, test_factors,
                 vector_gen, case_gen):
-    test_factors_repr = ", ".join(map(lambda x: "\"%s\"" % x, test_factors))
+    test_factors_repr = ", ".join(["\"%s\"" % x for x in test_factors])
     if vector_gen == "cart_product":
         vector_generator_config = '''"cart_product_vector_generator": {
         "test_factor_values": {\n'''
@@ -251,7 +252,7 @@ def make_custom_script(template, project_dir, binary_name, test_factors):
         binary_name=binary_name, test_factors_repr=test_factors_repr)
     outfn = os.path.join(project_dir, "make-case.py")
     file(outfn, "w").write(out)
-    os.chmod(outfn, 0755)
+    os.chmod(outfn, 0o755)
 
 
 def main():
