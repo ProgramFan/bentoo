@@ -1,20 +1,23 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 #
-
 
 from __future__ import division
 from builtins import range
 from builtins import object
 from past.utils import old_div
+
+
 class ScalingCaseMaker(object):
     '''A test vector generator for scaling tests'''
+
     def __init__(self, ref_mem_mb, ref_nnodes, min_mem, max_mem):
         self.min_mem = min_mem
         self.max_mem = max_mem
         self.ref_mem = ref_mem
         self.multiplier = 2
 
-    def make_strong_scaling_stress_cases(self, min_nodes, max_nodes, max_steps):
+    def make_strong_scaling_stress_cases(self, min_nodes, max_nodes,
+                                         max_steps):
         '''Generate cases for strong scaling limit test
 
         Strong scaling limit tests uses a series of strong scaling tests from
@@ -45,7 +48,7 @@ class ScalingCaseMaker(object):
         ratio = 0
         while mpn >= min_mpn:
             cases.extend((ratio, min_nodes * 2**x)
-                        for x in range(0, max_node_multipler, steping))
+                         for x in range(0, max_node_multipler, steping))
             ratio = ratio - steping
             mpn = max_mpn * 2.0**ratio
         #print(cases)
@@ -57,12 +60,13 @@ class ScalingCaseMaker(object):
         # Find the maximal possible starting nnodes so that the largest case won't
         # exceed max_nodes.
         max_start_nnodes = min_nodes
-        while max_start_nnodes * 2**(max_node_multipler - steping) <= max_nodes:
+        while max_start_nnodes * 2**(max_node_multipler -
+                                     steping) <= max_nodes:
             max_start_nnodes = max_start_nnodes * 2**steping
         max_start_nnodes = old_div(max_start_nnodes, 2**steping)
         while nnodes <= max_start_nnodes:
             cases.extend((ratio, nnodes * 2**x)
-                        for x in range(0, max_node_multipler, steping))
+                         for x in range(0, max_node_multipler, steping))
             ratio = ratio + steping
             nnodes = nnodes * 2**steping
 
@@ -86,7 +90,7 @@ class ScalingCaseMaker(object):
         max_weak_portion = max_weak_portion - steping
         for item in chosen:
             cases.extend((ratio + n, min_nodes * 2**n)
-                        for n in range(0, max_weak_portion + 1, steping))
+                         for n in range(0, max_weak_portion + 1, steping))
 
         cases = sorted(list(set(cases)))
 
