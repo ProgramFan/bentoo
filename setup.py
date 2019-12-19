@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
 setup(
     name="bentoo",
-    description="Benchmarking tools",
+    description="Parallel Benchmark Tools",
     version="0.21.dev",
-    packages=find_packages(),
+    packages=find_packages("scripts"),
+    package_dir={'': 'scripts'},
     scripts=["scripts/bentoo-generator.py", "scripts/bentoo-runner.py",
              "scripts/bentoo-collector.py", "scripts/bentoo-analyser.py",
              "scripts/bentoo-aggregator.py", "scripts/bentoo-metric.py",
