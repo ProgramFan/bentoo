@@ -4,8 +4,9 @@
 from setuptools import find_packages, setup
 
 setup(name="bentoo",
-      description="Parallel Benchmark Tools",
-      version="0.21.dev1",
+      description=
+      "Benchmark Tools for Reproducible (Parallel) Performance Evaluation",
+      version="0.21.0",
       packages=find_packages("bentoo"),
       package_dir={'': 'bentoo'},
       entry_points={
