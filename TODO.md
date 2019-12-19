@@ -8,6 +8,9 @@
 - [x] Add an option to runner to generate running scripts instead of real run
 - [ ] Add result parser spec support in generator
 - [ ] Refactor runner for better extensibility
+- [ ] Compatible with both python 2.7 and python 3.6+
+- [ ] Internal refactor to use common project reader
+- [ ] Ship a simple portable scripts generator
 
 # Future Ideas
 

@@ -12,47 +12,29 @@ import string
 import sys
 from collections import OrderedDict
 
-try:
-    import bentoo.yaml
+import bentoo.yaml
 
-    def dict_representer(dumper, data):
-        return dumper.represent_dict(data.iteritems())
-    def dict_constructor(loader, node):
-        return OrderedDict(loader.construct_pairs(node))
-    bentoo.yaml.add_representer(OrderedDict, dict_representer)
-    bentoo.yaml.add_constructor(bentoo.yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-                         dict_constructor)
 
-    def load(fileobj, *args, **kwargs):
-        return bentoo.yaml.load(fileobj, Loader=bentoo.yaml.RoundTripLoader, *args, **kwargs)
+def load(fileobj, *args, **kwargs):
+    return bentoo.yaml.load(fileobj,
+                            Loader=bentoo.yaml.RoundTripLoader,
+                            *args,
+                            **kwargs)
 
-    def loads(string, *args, **kwargs):
-        return bentoo.yaml.load(string, Loader=bentoo.yaml.RoundTripLoader, *args, **kwargs)
 
-    def dump(data, fileobj, *args, **kwargs):
-        fileobj.write(bentoo.yaml.dump(data), *args, **kwargs)
+def loads(string, *args, **kwargs):
+    return bentoo.yaml.load(string,
+                            Loader=bentoo.yaml.RoundTripLoader,
+                            *args,
+                            **kwargs)
 
-    def dumps(data, *args, **kwargs):
-        return bentoo.yaml.dump(data, *args, **kwargs)
 
-except ImportError:
-    import json
+def dump(data, fileobj, *args, **kwargs):
+    fileobj.write(bentoo.yaml.dump(data), *args, **kwargs)
 
-    def load(fileobj, *args, **kwargs):
-        return json.load(
-            fileobj, object_pairs_hook=OrderedDict, *args, **kwargs)
 
-    def loads(string, *args, **kwargs):
-        return json.loads(
-            string, object_pairs_hook=OrderedDict, *args, **kwargs)
-
-    def dump(data, fileobj, *args, **kwargs):
-        kwargs["indent"] = 2
-        json.dump(data, fileobj, *args, **kwargs)
-
-    def dumps(data, *args, **kwargs):
-        kwargs["indent"] = 2
-        return json.dumps(data, *args, **kwargs)
+def dumps(data, *args, **kwargs):
+    return bentoo.yaml.dump(data, *args, **kwargs)
 
 
 def parse_json(fn):
@@ -69,7 +51,6 @@ def parse_json(fn):
         OrderedDict: A dict representing the file content.
 
     '''
-
     def ununicodify(obj):
         result = None
         if isinstance(obj, OrderedDict):
@@ -115,7 +96,6 @@ class SimpleVectorGenerator:
             SimpleVectorGenerator(["A", "B"], [[1, [2, 3]], [2, 3]])
 
     '''
-
     def __init__(self, test_factors, raw_vectors=None):
         self.test_factors = test_factors
         self.raw_vectors = raw_vectors if raw_vectors else []
@@ -149,7 +129,6 @@ class CartProductVectorGenerator:
             (k, v) denotes (test factor name, test factor values)
 
     '''
-
     def __init__(self, test_factors, factor_values):
         self.test_factors = test_factors
         self.factor_values = factor_values
@@ -180,7 +159,6 @@ class CustomVectorGenerator:
         spec (dict): generator definition.
 
     '''
-
     def __init__(self, test_factors, spec, project_root):
         self.test_factors = test_factors
 
@@ -198,8 +176,8 @@ class CustomVectorGenerator:
         module_name = os.path.splitext(os.path.basename(module))[0]
         mod = importlib.import_module(module_name)
         if not hasattr(mod, func):
-            raise RuntimeError("Can not find function '%s' in '%s'" % (func,
-                                                                       module))
+            raise RuntimeError("Can not find function '%s' in '%s'" %
+                               (func, module))
         fun = getattr(mod, func)
         real_args = dict(args)
         real_args["conf_root"] = os.path.abspath(project_root)
@@ -339,8 +317,8 @@ class TemplateCaseGenerator(object):
             if v is not None:
                 cmd[i] = v
             elif i == 0:
-                raise ValueError(
-                    "Command binary '%s' does not exists" % cmd[0])
+                raise ValueError("Command binary '%s' does not exists" %
+                                 cmd[0])
 
         run_template = spec_template["run"]
         run = OrderedDict()
@@ -394,8 +372,8 @@ class CustomCaseGenerator:
         module_name = os.path.splitext(os.path.basename(module))[0]
         mod = importlib.import_module(module_name)
         if not hasattr(mod, func):
-            raise RuntimeError("Can not find function '%s' in '%s'" % (func,
-                                                                       module))
+            raise RuntimeError("Can not find function '%s' in '%s'" %
+                               (func, module))
         fun = getattr(mod, func)
 
         self.func = fun
@@ -528,8 +506,8 @@ class TestProjectBuilder:
             template = spec["template_case_generator"]
             self.test_case_generator = TemplateCaseGenerator(template)
         else:
-            raise RuntimeError(
-                "Unknown test case generator '%s'" % test_case_generator_name)
+            raise RuntimeError("Unknown test case generator '%s'" %
+                               test_case_generator_name)
 
         # Build output organizer
         self.output_organizer = OutputOrganizer(version=1)
@@ -549,8 +527,8 @@ class TestProjectBuilder:
             srcpath = os.path.join(self.conf_root, path)
             dstpath = os.path.join(output_root, path)
             if not os.path.exists(srcpath):
-                raise RuntimeError(
-                    "Data file specified but not found: '%s'" % path)
+                raise RuntimeError("Data file specified but not found: '%s'" %
+                                   path)
             if os.path.isdir(srcpath):
                 dstdir = os.path.dirname(dstpath)
                 if not os.path.exists(dstdir):
@@ -599,8 +577,8 @@ class TestProjectBuilder:
                 if not os.path.isabs(path):
                     srcpath = os.path.join(self.conf_root, path)
                 if not os.path.isfile(srcpath):
-                    raise ValueError(
-                        "Common case file '%s' is not a file." % path)
+                    raise ValueError("Common case file '%s' is not a file." %
+                                     path)
                 if not os.path.exists(srcpath):
                     raise ValueError("Common case file '%s' not found" % path)
                 dstpath = os.path.join(case_fullpath, os.path.basename(path))
@@ -621,8 +599,8 @@ class TestProjectBuilder:
             json.dump(case_spec, open(case_spec_fullpath, "w"), indent=2)
 
         # Write project config
-        info = [("version", 1), ("name", self.name), ("test_factors",
-                                                      self.test_factors)]
+        info = [("version", 1), ("name", self.name),
+                ("test_factors", self.test_factors)]
         info = OrderedDict(info)
         info["data_files"] = self.data_files
         test_defs = []
@@ -641,10 +619,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("conf_root", help="Project configuration directory")
     parser.add_argument("output_root", help="Output directory")
-    parser.add_argument(
-        "--link-files",
-        action="store_true",
-        help="Sympolic link data files instead of copy")
+    parser.add_argument("--link-files",
+                        action="store_true",
+                        help="Sympolic link data files instead of copy")
 
     config = parser.parse_args()
     project = TestProjectBuilder(config.conf_root)
