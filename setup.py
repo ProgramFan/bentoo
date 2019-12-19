@@ -3,24 +3,31 @@
 
 from setuptools import find_packages, setup
 
-setup(
-    name="bentoo",
-    description="Parallel Benchmark Tools",
-    version="0.21.dev",
-    packages=find_packages("scripts"),
-    package_dir={'': 'scripts'},
-    scripts=["scripts/bentoo-generator.py", "scripts/bentoo-runner.py",
-             "scripts/bentoo-collector.py", "scripts/bentoo-analyser.py",
-             "scripts/bentoo-aggregator.py", "scripts/bentoo-metric.py",
-             "scripts/bentoo-quickstart.py", "scripts/bentoo-calltree.py",
-             "scripts/bentoo-merge.py", "scripts/bentoo-calltree-analyser.py",
-             "scripts/bentoo-viewer.py", "scripts/bentoo-svgconvert.py",
-             "scripts/bentoo-confreader.py"],
-    package_data={
-        '': ['*.adoc', '*.rst', '*.md']
-    },
-    author="Zhang YANG",
-    author_email="zyangmath@gmail.com",
-    license="PSF",
-    keywords="Benchmark;Performance Analysis",
-    url="http://github.com/ProgramFan/bentoo")
+setup(name="bentoo",
+      description="Parallel Benchmark Tools",
+      version="0.21.dev1",
+      packages=find_packages("bentoo"),
+      package_dir={'': 'bentoo'},
+      entry_points={
+          "console_scripts": [
+              "bentoo-generator = bentoo.tools.generator:main",
+              "bentoo-runner = bentoo.tools.runner:main",
+              "bentoo-collector = bentoo.tools.collector:main",
+              "bentoo-analyser = bentoo.tools.analyser:main",
+              "bentoo-aggregator = bentoo.tools.aggregator:main",
+              "bentoo-metric = bentoo.tools.metric:main",
+              "bentoo-quickstart = bentoo.tools.quickstart:main",
+              "bentoo-calltree = bentoo.tools.calltree:main",
+              "bentoo-merge = bentoo.tools.merge:main",
+              "bentoo-calltree-analyser = bentoo.tools.calltree_analyser:main",
+              "bentoo-viewer = bentoo.tools.viewer:main",
+              "bentoo-svgconvert = bentoo.tools.svgconvert:main",
+              "bentoo-confreader = bentoo.tools.confreader:main"
+          ]
+      },
+      package_data={'': ['*.adoc', '*.rst', '*.md']},
+      author="Yang Zhang",
+      author_email="zyangmath@gmail.com",
+      license="PSF",
+      keywords="Benchmark;Performance Analysis",
+      url="http://github.com/ProgramFan/bentoo")
