@@ -8,35 +8,32 @@ import json
 import os
 import re
 import shutil
-import sys
 import string
-
+import sys
 from collections import OrderedDict
 
 try:
-    import yaml
+    import bentoo.yaml
 
     def dict_representer(dumper, data):
         return dumper.represent_dict(data.iteritems())
-
     def dict_constructor(loader, node):
         return OrderedDict(loader.construct_pairs(node))
-
-    yaml.add_representer(OrderedDict, dict_representer)
-    yaml.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    bentoo.yaml.add_representer(OrderedDict, dict_representer)
+    bentoo.yaml.add_constructor(bentoo.yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
                          dict_constructor)
 
     def load(fileobj, *args, **kwargs):
-        return yaml.load(fileobj, Loader=yaml.FullLoader, *args, **kwargs)
+        return bentoo.yaml.load(fileobj, Loader=bentoo.yaml.RoundTripLoader, *args, **kwargs)
 
     def loads(string, *args, **kwargs):
-        return yaml.load(string, Loader=yaml.FullLoader, *args, **kwargs)
+        return bentoo.yaml.load(string, Loader=bentoo.yaml.RoundTripLoader, *args, **kwargs)
 
     def dump(data, fileobj, *args, **kwargs):
-        fileobj.write(yaml.dump(data), *args, **kwargs)
+        fileobj.write(bentoo.yaml.dump(data), *args, **kwargs)
 
     def dumps(data, *args, **kwargs):
-        return yaml.dump(data, *args, **kwargs)
+        return bentoo.yaml.dump(data, *args, **kwargs)
 
 except ImportError:
     import json
