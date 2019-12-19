@@ -1,26 +1,40 @@
 # # header
 # coding: utf-8
 
+from __future__ import unicode_literals
+
 if False:  # MYPY
-    from typing import Any, Dict, Optional, List  # NOQA
+    from typing import Text, Any, Dict, Optional, List  # NOQA
+    from .error import StreamMark  # NOQA
+
+SHOWLINES = True
 
 
 class Token(object):
-    __slots__ = 'start_mark', 'end_mark', '_comment',
+    __slots__ = 'start_mark', 'end_mark', '_comment'
 
     def __init__(self, start_mark, end_mark):
-        # type: (Any, Any) -> None
+        # type: (StreamMark, StreamMark) -> None
         self.start_mark = start_mark
         self.end_mark = end_mark
 
     def __repr__(self):
         # type: () -> Any
-        attributes = [key for key in self.__slots__ if not key.endswith('_mark') and
-                      hasattr('self', key)]
+        # attributes = [key for key in self.__slots__ if not key.endswith('_mark') and
+        #               hasattr('self', key)]
+        attributes = [key for key in self.__slots__ if not key.endswith('_mark')]
         attributes.sort()
-        arguments = ', '.join(['%s=%r' % (key, getattr(self, key))
-                               for key in attributes])
-        return '%s(%s)' % (self.__class__.__name__, arguments)
+        arguments = ', '.join(['%s=%r' % (key, getattr(self, key)) for key in attributes])
+        if SHOWLINES:
+            try:
+                arguments += ', line: ' + str(self.start_mark.line)
+            except:  # NOQA
+                pass
+        try:
+            arguments += ', comment: ' + str(self._comment)
+        except:  # NOQA
+            pass
+        return '{}({})'.format(self.__class__.__name__, arguments)
 
     def add_post_comment(self, comment):
         # type: (Any) -> None
@@ -55,9 +69,7 @@ class Token(object):
         if c is None:
             return
         # don't push beyond last element
-        if isinstance(target, StreamEndToken):
-            return
-        if isinstance(self, ValueToken) and isinstance(target, BlockEntryToken):
+        if isinstance(target, (StreamEndToken, DocumentStartToken)):
             return
         delattr(self, '_comment')
         tc = target.comment
@@ -66,9 +78,10 @@ class Token(object):
             if empty:
                 c = [c[0], c[1], None, None, c[0]]
             target._comment = c
+            # nprint('mco2:', self, target, target.comment, empty)
             return self
         if c[0] and tc[0] or c[1] and tc[1]:
-            raise NotImplementedError('overlap in comment %r %r' % c, tc)
+            raise NotImplementedError('overlap in comment %r %r' % (c, tc))
         if c[0]:
             tc[0] = c[0]
         if c[1]:
@@ -95,8 +108,9 @@ class Token(object):
 # class BOMToken(Token):
 #     id = '<byte order mark>'
 
+
 class DirectiveToken(Token):
-    __slots__ = 'name', 'value',
+    __slots__ = 'name', 'value'
     id = '<directive>'
 
     def __init__(self, name, value, start_mark, end_mark):
@@ -117,7 +131,7 @@ class DocumentEndToken(Token):
 
 
 class StreamStartToken(Token):
-    __slots__ = 'encoding',
+    __slots__ = ('encoding',)
     id = '<stream start>'
 
     def __init__(self, start_mark=None, end_mark=None, encoding=None):
@@ -170,6 +184,10 @@ class KeyToken(Token):
     __slots__ = ()
     id = '?'
 
+    # def x__repr__(self):
+    #     return 'KeyToken({})'.format(
+    #         self.start_mark.buffer[self.start_mark.index:].split(None, 1)[0])
+
 
 class ValueToken(Token):
     __slots__ = ()
@@ -187,7 +205,7 @@ class FlowEntryToken(Token):
 
 
 class AliasToken(Token):
-    __slots__ = 'value',
+    __slots__ = ('value',)
     id = '<alias>'
 
     def __init__(self, value, start_mark, end_mark):
@@ -197,7 +215,7 @@ class AliasToken(Token):
 
 
 class AnchorToken(Token):
-    __slots__ = 'value',
+    __slots__ = ('value',)
     id = '<anchor>'
 
     def __init__(self, value, start_mark, end_mark):
@@ -207,7 +225,7 @@ class AnchorToken(Token):
 
 
 class TagToken(Token):
-    __slots__ = 'value',
+    __slots__ = ('value',)
     id = '<tag>'
 
     def __init__(self, value, start_mark, end_mark):
@@ -217,7 +235,7 @@ class TagToken(Token):
 
 
 class ScalarToken(Token):
-    __slots__ = 'value', 'plain', 'style',
+    __slots__ = 'value', 'plain', 'style'
     id = '<scalar>'
 
     def __init__(self, value, plain, start_mark, end_mark, style=None):
@@ -229,7 +247,7 @@ class ScalarToken(Token):
 
 
 class CommentToken(Token):
-    __slots__ = 'value', 'pre_done',
+    __slots__ = 'value', 'pre_done'
     id = '<comment>'
 
     def __init__(self, value, start_mark, end_mark):
@@ -241,3 +259,28 @@ class CommentToken(Token):
         # type: () -> None
         if hasattr(self, 'pre_done'):
             delattr(self, 'pre_done')
+
+    def __repr__(self):
+        # type: () -> Any
+        v = '{!r}'.format(self.value)
+        if SHOWLINES:
+            try:
+                v += ', line: ' + str(self.start_mark.line)
+                v += ', col: ' + str(self.start_mark.column)
+            except:  # NOQA
+                pass
+        return 'CommentToken({})'.format(v)
+
+    def __eq__(self, other):
+        # type: (Any) -> bool
+        if self.start_mark != other.start_mark:
+            return False
+        if self.end_mark != other.end_mark:
+            return False
+        if self.value != other.value:
+            return False
+        return True
+
+    def __ne__(self, other):
+        # type: (Any) -> bool
+        return not self.__eq__(other)
