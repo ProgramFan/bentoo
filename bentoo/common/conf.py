@@ -1,6 +1,7 @@
-#!/usr/bin/env python2.7
-#
+#!/usr/bin/env python
+# coding: utf-8
 
+from builtins import str
 import bentoo.yaml
 import re
 from collections import OrderedDict
@@ -42,18 +43,19 @@ def load_conf(fn):
         OrderedDict: A dict representing the file content.
 
     '''
+
     def ununicodify(obj):
         result = None
         if isinstance(obj, OrderedDict):
             result = OrderedDict()
-            for k, v in obj.iteritems():
-                k1 = str(k) if isinstance(k, unicode) else k
+            for k, v in obj.items():
+                k1 = str(k) if not isinstance(k, str) else k
                 result[k1] = ununicodify(v)
         elif isinstance(obj, list):
             result = []
             for v in obj:
                 result.append(ununicodify(v))
-        elif isinstance(obj, unicode):
+        elif isinstance(obj, str):
             result = str(obj)
         else:
             result = obj
