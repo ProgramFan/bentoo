@@ -1,3 +1,3 @@
-import yaml
-import common
-import tools
+import bentoo.yaml
+import bentoo.common
+import bentoo.tools

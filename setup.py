@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 # coding: utf-8
 
 from setuptools import find_packages, setup
@@ -7,8 +7,7 @@ setup(name="bentoo",
       description=
       "Benchmark Tools for Reproducible (Parallel) Performance Evaluation",
       version="0.22.dev",
-      packages=find_packages("bentoo"),
-      package_dir={'': 'bentoo'},
+      packages=find_packages(),
       entry_points={
           "console_scripts": [
               "bentoo-generator = bentoo.tools.generator:main",

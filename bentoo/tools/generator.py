@@ -44,7 +44,7 @@ class SimpleVectorGenerator(object):
         self.test_factors = test_factors
         self.raw_vectors = raw_vectors if raw_vectors else []
 
-    def iteritems(self):
+    def items(self):
         '''An iterator over the range of test vectors
 
         Yields:
@@ -77,7 +77,7 @@ class CartProductVectorGenerator(object):
         self.test_factors = test_factors
         self.factor_values = factor_values
 
-    def iteritems(self):
+    def items(self):
         '''An iterator over the range of test vectors
 
         Yields:
@@ -128,7 +128,7 @@ class CustomVectorGenerator(object):
         real_args["test_factors"] = self.test_factors
         self.test_vectors = fun(**real_args)
 
-    def iteritems(self):
+    def items(self):
         '''An iterator over the range of test vectors
 
         Yields:

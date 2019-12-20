@@ -25,11 +25,11 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
     mode, nnodes, test_id = test_vector.values()
 
     # Make input file by substitute templates
-    content = file(
+    content = open(
         os.path.join(conf_root, "templates", "3d.input.template")).read()
     output = os.path.join(output_root, case_path, "3d.input")
     var_values = dict(zip(["nx", "ny", "nz"], [NX, NY, NZ]))
-    file(output,
+    open(output,
          "w").write(string.Template(content).safe_substitute(var_values))
     # Link data file to case dir since main3d requires it in current working dir
     data_fn = os.path.join(conf_root, "data", "Model.stl")
