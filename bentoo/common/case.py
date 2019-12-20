@@ -1,10 +1,6 @@
-#!/usr/bin/env python
-#
+# coding: utf-8
 
-from __future__ import division
-from builtins import range
-from builtins import object
-from past.utils import old_div
+from __future__ import division, unicode_literals, print_function
 
 
 class ScalingCaseMaker(object):
@@ -88,7 +84,7 @@ class ScalingCaseMaker(object):
         while min_nodes * 2**max_weak_portion <= max_nodes:
             max_weak_portion = max_weak_portion + steping
         max_weak_portion = max_weak_portion - steping
-        for item in chosen:
+        for _ in chosen:
             cases.extend((ratio + n, min_nodes * 2**n)
                          for n in range(0, max_weak_portion + 1, steping))
 
