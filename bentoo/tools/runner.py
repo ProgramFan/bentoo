@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # coding: utf-8
 #
 ''' bentoo-runner - Testcase runner
@@ -8,13 +7,8 @@ high performance computing platforms.  It features test case filters, results
 validator, timeout etc. It supports slurm, pbs, yhrun (tianhe), bsub (sunway),
 and plain mpirun at the moment. More backends will be added overtime.
 '''
-from __future__ import division
+from __future__ import division, unicode_literals, print_function
 
-from builtins import zip
-from builtins import map
-from builtins import str
-from past.utils import old_div
-from builtins import object
 import os
 import sys
 import argparse
@@ -25,136 +19,8 @@ import string
 import subprocess
 import time
 from collections import OrderedDict
-
-
-class TestProjectReader(object):
-    '''Scan a test project for test cases'''
-
-    def __init__(self, project_root):
-        '''Create a scanner object for project at 'project_dir' '''
-        self.project_root = os.path.abspath(project_root)
-        conf_fn = os.path.join(self.project_root, "TestProject.json")
-        if not os.path.exists(conf_fn):
-            raise RuntimeError("Invalid project directory: %s" % project_root)
-        conf = json.load(file(conf_fn))
-        version = conf.get("version", 1)
-        if version != 1:
-            raise RuntimeError(
-                "Unsupported project version '%s': Only 1 " % version)
-        self.name = conf["name"]
-        self.test_factors = conf["test_factors"]
-        self.data_files = conf["data_files"]
-        self.test_cases = conf["test_cases"]
-
-        self.last_stats = None
-        stats_fn = os.path.join(self.project_root, "run_stats.json")
-        if os.path.exists(stats_fn):
-            self.last_stats = json.load(file(stats_fn))
-
-    def check(self):
-        '''Check project's validity
-
-        Check project's validity by checking the existance of each case's
-        working directories and specification file. Specification content may
-        be checked in the future.
-
-        Exceptions:
-            RuntimeError: Any error found in the check
-
-            This shall be refined in the future.
-
-        '''
-        for k, v in self.test_cases.items():
-            case_fullpath = os.path.join(self.project_root, v)
-            if not os.path.exists(case_fullpath):
-                raise RuntimeError("Test case '%s' not found in '%s'" %
-                                   (k, case_fullpath))
-            case_spec_fullpath = os.path.join(case_fullpath, "TestCase.json")
-            if not os.path.exists(case_spec_fullpath):
-                raise RuntimeError(
-                    "Test case spec for '%s' is not found in '%s'" %
-                    (k, case_fullpath))
-            # TODO: check the content of case spec (better with json-schema)
-
-    def itercases(self):
-        '''Build an iterator for all test cases'''
-        for case in self.test_cases:
-            case_spec_fullpath = os.path.join(self.project_root, case["path"],
-                                              "TestCase.json")
-            case_spec = json.load(file(case_spec_fullpath))
-            yield {
-                "test_vector": case["test_vector"],
-                "path": os.path.join(self.project_root, case["path"]),
-                "spec": case_spec
-            }
-
-    def count_cases(self):
-        return len(self.test_cases)
-
-
-def has_program(cmd):
-    '''Check if a program exists in $PATH'''
-    try:
-        subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        return True
-    except OSError:
-        return False
-    except subprocess.CalledProcessError:
-        return True
-
-
-def shell_quote(var):
-    '''Quote a string so it appears as a whole in bash commands'''
-    var = str(var)
-    if any(i in var for i in set("*?[]${}(); ")):
-        return "\"%s\"" % var
-    return var
-
-
-def make_bash_script(prolog, envs, cmds, outfile):
-    '''Make a bash script
-
-    The produced bash script looks like:
-
-        #!/bin/bash
-        #
-        #PBS -l xxx
-        #...
-
-        export ENV=value
-        export ENV=value
-        ...
-
-        cmd arg
-        cmd arg
-        ...
-
-    The first part is the `prolog`, the second part is the envs, the thirdpart
-    is the cmds.
-
-    Arguments:
-        prolog: list of strings, each is a line without `#`
-        envs: dictionary of (string, string) pairs, each is an env variable
-        cmds: list of lists, each is a line of command
-    '''
-
-    content = []
-    content.append("#!/bin/bash")
-    content.append("#")
-    if prolog:
-        content.extend("#{}".format(x) for x in prolog)
-        content.append("#")
-    content.append("")
-    if envs:
-        for key, value in envs.items():
-            content.append("export {0}={1}".format(key, shell_quote(value)))
-        content.append("")
-    assert isinstance(cmds, list)
-    for cmd in cmds:
-        content.append(" ".join(map(shell_quote, cmd)))
-    file(outfile, "w").write("\n".join(content))
-    os.chmod(outfile, 0o755)
-
+from bentoo.common.utils import has_program, shell_quote, make_bash_script
+from bentoo.common.project import TestProjectReader
 
 #
 # Interfaces of a job launcher:
@@ -187,7 +53,6 @@ def make_bash_script(prolog, envs, cmds, outfile):
 
 class MpirunLauncher(object):
     '''Job launcher for mpirun (plain mpi)'''
-
     @classmethod
     def is_available(cls):
         if has_program(["mpirun", "-h"]):
@@ -198,18 +63,16 @@ class MpirunLauncher(object):
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument(
-            "--mpirun-hosts",
-            default=None,
-            metavar="HOSTS",
-            dest="mpirun_hosts",
-            help="Comma seperated host list")
-        argparser.add_argument(
-            "--mpirun-ppn",
-            default=None,
-            metavar="PPN",
-            dest="mpirun_ppn",
-            help="Processes per node")
+        argparser.add_argument("--mpirun-hosts",
+                               default=None,
+                               metavar="HOSTS",
+                               dest="mpirun_hosts",
+                               help="Comma seperated host list")
+        argparser.add_argument("--mpirun-ppn",
+                               default=None,
+                               metavar="PPN",
+                               dest="mpirun_ppn",
+                               help="Processes per node")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -225,7 +88,6 @@ class MpirunLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
         assert os.path.isabs(path)
@@ -256,23 +118,22 @@ class MpirunLauncher(object):
         err_fn = os.path.join(path, "STDERR")
 
         if verbose:
-            proc1 = subprocess.Popen(
-                cmd,
-                env=env,
-                cwd=path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT)
-            proc2 = subprocess.Popen(
-                ["tee", out_fn], cwd=path, stdin=proc1.stdout)
+            proc1 = subprocess.Popen(cmd,
+                                     env=env,
+                                     cwd=path,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT)
+            proc2 = subprocess.Popen(["tee", out_fn],
+                                     cwd=path,
+                                     stdin=proc1.stdout)
             proc1.stdout.close()
             ret = proc2.wait()
         else:
-            ret = subprocess.call(
-                cmd,
-                env=env,
-                cwd=path,
-                stdout=file(out_fn, "w"),
-                stderr=file(err_fn, "w"))
+            ret = subprocess.call(cmd,
+                                  env=env,
+                                  cwd=path,
+                                  stdout=open(out_fn, "w"),
+                                  stderr=open(err_fn, "w"))
 
         if ret == 0:
             return "success"
@@ -283,7 +144,6 @@ class MpirunLauncher(object):
 
 class YhrunLauncher(object):
     '''Job launcher for yhrun (slurm variants on tianhe)'''
-
     @classmethod
     def is_available(cls):
         if has_program(["yhrun", "-h"]):
@@ -292,33 +152,28 @@ class YhrunLauncher(object):
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument(
-            "--yhrun-p",
-            "--yhrun-partition",
-            metavar="PARTITION",
-            dest="yhrun_partition",
-            help="Select job partition to use")
-        argparser.add_argument(
-            "--yhrun-x",
-            metavar="NODELIST",
-            dest="yhrun_excluded_nodes",
-            help="Exclude nodes from job allocation")
-        argparser.add_argument(
-            "--yhrun-w",
-            metavar="NODELIST",
-            dest="yhrun_only_nodes",
-            help="Use only selected nodes")
-        argparser.add_argument(
-            "--yhrun-yhbatch",
-            action="store_true",
-            dest="yhrun_yhbatch",
-            help="Use yhbatch instead of yhrun")
-        argparser.add_argument(
-            "--yhrun-fix-glex",
-            choices=("none", "v0", "v1"),
-            default="none",
-            dest="yhrun_fix_glex",
-            help="Fix GLEX settings (default: none)")
+        argparser.add_argument("--yhrun-p",
+                               "--yhrun-partition",
+                               metavar="PARTITION",
+                               dest="yhrun_partition",
+                               help="Select job partition to use")
+        argparser.add_argument("--yhrun-x",
+                               metavar="NODELIST",
+                               dest="yhrun_excluded_nodes",
+                               help="Exclude nodes from job allocation")
+        argparser.add_argument("--yhrun-w",
+                               metavar="NODELIST",
+                               dest="yhrun_only_nodes",
+                               help="Use only selected nodes")
+        argparser.add_argument("--yhrun-yhbatch",
+                               action="store_true",
+                               dest="yhrun_yhbatch",
+                               help="Use yhbatch instead of yhrun")
+        argparser.add_argument("--yhrun-fix-glex",
+                               choices=("none", "v0", "v1"),
+                               default="none",
+                               dest="yhrun_fix_glex",
+                               help="Fix GLEX settings (default: none)")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -340,7 +195,6 @@ class YhrunLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
         assert os.path.isabs(path)
@@ -432,23 +286,22 @@ class YhrunLauncher(object):
             err_fn = os.path.join(path, "STDERR")
 
             if verbose:
-                proc1 = subprocess.Popen(
-                    cmd,
-                    env=env,
-                    cwd=path,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT)
-                proc2 = subprocess.Popen(
-                    ["tee", out_fn], cwd=path, stdin=proc1.stdout)
+                proc1 = subprocess.Popen(cmd,
+                                         env=env,
+                                         cwd=path,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT)
+                proc2 = subprocess.Popen(["tee", out_fn],
+                                         cwd=path,
+                                         stdin=proc1.stdout)
                 proc1.stdout.close()
                 ret = proc2.wait()
             else:
-                ret = subprocess.call(
-                    cmd,
-                    env=env,
-                    cwd=path,
-                    stdout=file(out_fn, "w"),
-                    stderr=file(err_fn, "w"))
+                ret = subprocess.call(cmd,
+                                      env=env,
+                                      cwd=path,
+                                      stdout=open(out_fn, "w"),
+                                      stderr=open(err_fn, "w"))
 
             if ret == 0:
                 return "success"
@@ -460,7 +313,6 @@ class YhrunLauncher(object):
 
 class MpiHandler(object):
     '''Vendor MPI handler'''
-
     def __init__(self, vendor="mpich"):
         self.vendor = vendor
 
@@ -533,7 +385,6 @@ class MpiHandler(object):
 
 class SlurmLauncher(object):
     '''Job launcher for general slurm'''
-
     @classmethod
     def is_available(cls):
         if has_program(["sbatch", "-h"]):
@@ -542,23 +393,21 @@ class SlurmLauncher(object):
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument(
-            "--slurm-partition",
-            metavar="PARTITION",
-            dest="slurm_partition",
-            help="Select job partition to use")
-        argparser.add_argument(
-            "--slurm-sbatch",
-            action="store_true",
-            dest="slrum_use_batch",
-            help="Use sbatch instead of srun")
-        argparser.add_argument(
-            "--slurm-mpi",
-            metavar="MPI",
-            dest="slurm_mpi",
-            choices=("openmpi", "mpich", "mvapich", "intelmpi"),
-            default="openmpi",
-            help="Select the MPI to use (default: openmpi)")
+        argparser.add_argument("--slurm-partition",
+                               metavar="PARTITION",
+                               dest="slurm_partition",
+                               help="Select job partition to use")
+        argparser.add_argument("--slurm-sbatch",
+                               action="store_true",
+                               dest="slrum_use_batch",
+                               help="Use sbatch instead of srun")
+        argparser.add_argument("--slurm-mpi",
+                               metavar="MPI",
+                               dest="slurm_mpi",
+                               choices=("openmpi", "mpich", "mvapich",
+                                        "intelmpi"),
+                               default="openmpi",
+                               help="Select the MPI to use (default: openmpi)")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -626,8 +475,8 @@ class SlurmLauncher(object):
             prolog.append("SBATCH -o STDOUT")
             prolog.append("SBATCH -e STDERR")
             jobcmds = []
-            jobcmds.append(
-                srun_cmd + ["hostname"] + "> /tmp/hostfile-$$".split())
+            jobcmds.append(srun_cmd + ["hostname"] +
+                           "> /tmp/hostfile-$$".split())
             mpi_handler = MpiHandler(
                 self.args['mpi']).build_job_argument_handler(
                     nprocs, 1, "/tmp/hostfile-$$", None)
@@ -661,23 +510,22 @@ class SlurmLauncher(object):
             err_fn = os.path.join(path, "STDERR")
 
             if verbose:
-                proc1 = subprocess.Popen(
-                    cmd,
-                    env=env,
-                    cwd=path,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT)
-                proc2 = subprocess.Popen(
-                    ["tee", out_fn], cwd=path, stdin=proc1.stdout)
+                proc1 = subprocess.Popen(cmd,
+                                         env=env,
+                                         cwd=path,
+                                         stdout=subprocess.PIPE,
+                                         stderr=subprocess.STDOUT)
+                proc2 = subprocess.Popen(["tee", out_fn],
+                                         cwd=path,
+                                         stdin=proc1.stdout)
                 proc1.stdout.close()
                 ret = proc2.wait()
             else:
-                ret = subprocess.call(
-                    cmd,
-                    env=env,
-                    cwd=path,
-                    stdout=file(out_fn, "w"),
-                    stderr=file(err_fn, "w"))
+                ret = subprocess.call(cmd,
+                                      env=env,
+                                      cwd=path,
+                                      stdout=open(out_fn, "w"),
+                                      stderr=open(err_fn, "w"))
 
             if ret == 0:
                 return "success"
@@ -707,7 +555,6 @@ mpirun -np ${nprocs} -ppn ${procs_per_node} -machinefile \
 
 class PbsLauncher(object):
     '''Job launcher for PBS'''
-
     @classmethod
     def is_available(cls):
         if has_program(["qstat", "-h"]):
@@ -717,16 +564,14 @@ class PbsLauncher(object):
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument(
-            "--pbs-queue",
-            metavar="QUEUE",
-            dest="pbs_queue",
-            help="Select job queue to use")
-        argparser.add_argument(
-            "--pbs-iface",
-            metavar="IFACE",
-            dest="pbs_iface",
-            help="Network interface to use")
+        argparser.add_argument("--pbs-queue",
+                               metavar="QUEUE",
+                               dest="pbs_queue",
+                               help="Select job queue to use")
+        argparser.add_argument("--pbs-iface",
+                               metavar="IFACE",
+                               dest="pbs_iface",
+                               help="Network interface to use")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -742,7 +587,6 @@ class PbsLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
         assert os.path.isabs(path)
@@ -772,7 +616,7 @@ class PbsLauncher(object):
         if timeout:
             timeout = int(timeout)
             tplvars["timeout"] = "#PBS -l walltime={0:02d}:{1:02d}:00".format(
-                old_div(timeout, 60), timeout % 60)
+                timeout // 60, timeout % 60)
 
         envs_str = []
         for k, v in spec["envs"].items():
@@ -782,7 +626,7 @@ class PbsLauncher(object):
 
         pbs_file = os.path.join(path, "job_spec.pbs")
         tpl = string.Template(PBS_TEMPLATE)
-        file(pbs_file, "w").write(tpl.safe_substitute(tplvars))
+        open(pbs_file, "w").write(tpl.safe_substitute(tplvars))
 
         if make_script:
             script_file = os.path.join(path, "run.sh")
@@ -808,7 +652,6 @@ class PbsLauncher(object):
 
 class BsubLauncher(object):
     '''Job launcher for Sunway TaihuLight'''
-
     @classmethod
     def is_available(cls):
         if has_program(["bsub", "-h"]):
@@ -817,31 +660,26 @@ class BsubLauncher(object):
 
     @classmethod
     def register_cmdline_args(cls, argparser):
-        argparser.add_argument(
-            "--bsub-queue",
-            metavar="QUEUE",
-            dest="bsub_queue",
-            help="Select job queue to use")
-        argparser.add_argument(
-            "--bsub-b",
-            action="store_true",
-            dest="bsub_large_seg",
-            help="Use large segment support")
-        argparser.add_argument(
-            "--bsub-cgsp",
-            metavar="CGSP",
-            dest="bsub_cgsp",
-            help="Number of slave cores per core group")
-        argparser.add_argument(
-            "--bsub-share_size",
-            metavar="SIZE",
-            dest="bsub_share_size",
-            help="Share region size")
-        argparser.add_argument(
-            "--bsub-host_stack",
-            metavar="SIZE",
-            dest="bsub_host_stack",
-            help="Host stack size")
+        argparser.add_argument("--bsub-queue",
+                               metavar="QUEUE",
+                               dest="bsub_queue",
+                               help="Select job queue to use")
+        argparser.add_argument("--bsub-b",
+                               action="store_true",
+                               dest="bsub_large_seg",
+                               help="Use large segment support")
+        argparser.add_argument("--bsub-cgsp",
+                               metavar="CGSP",
+                               dest="bsub_cgsp",
+                               help="Number of slave cores per core group")
+        argparser.add_argument("--bsub-share_size",
+                               metavar="SIZE",
+                               dest="bsub_share_size",
+                               help="Share region size")
+        argparser.add_argument("--bsub-host_stack",
+                               metavar="SIZE",
+                               dest="bsub_host_stack",
+                               help="Host stack size")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -863,7 +701,6 @@ class BsubLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        test_vector = case["test_vector"]
         path = case["path"]
         spec = case["spec"]
         assert os.path.isabs(path)
@@ -906,23 +743,22 @@ class BsubLauncher(object):
         err_fn = os.path.join(path, "STDERR")
 
         if verbose:
-            proc1 = subprocess.Popen(
-                cmd,
-                env=env,
-                cwd=path,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT)
-            proc2 = subprocess.Popen(
-                ["tee", out_fn], cwd=path, stdin=proc1.stdout)
+            proc1 = subprocess.Popen(cmd,
+                                     env=env,
+                                     cwd=path,
+                                     stdout=subprocess.PIPE,
+                                     stderr=subprocess.STDOUT)
+            proc2 = subprocess.Popen(["tee", out_fn],
+                                     cwd=path,
+                                     stdin=proc1.stdout)
             proc1.stdout.close()
             ret = proc2.wait()
         else:
-            ret = subprocess.call(
-                cmd,
-                env=env,
-                cwd=path,
-                stdout=file(out_fn, "w"),
-                stderr=file(err_fn, "w"))
+            ret = subprocess.call(cmd,
+                                  env=env,
+                                  cwd=path,
+                                  stdout=open(out_fn, "w"),
+                                  stderr=open(err_fn, "w"))
 
         if ret == 0:
             return "success"
@@ -934,7 +770,6 @@ class BsubLauncher(object):
 
 class SimpleProgressReporter(object):
     '''A simple progress reporter'''
-
     def __init__(self):
         self.total_cases = 0
         self.finished_cases = 0
@@ -984,7 +819,7 @@ def validate_case(case):
             fullpath = os.path.join(case["path"], k)
             if not os.path.exists(fullpath):
                 return False
-            if not re.search(v, file(fullpath).read()):
+            if not re.search(v, open(fullpath).read()):
                 return False
     return True
 
@@ -1003,7 +838,8 @@ def run_project(project,
                 rerun_failed=False):
     '''Run a test project'''
     stats = OrderedDict(
-        list(zip(["success", "timeout", "failed", "skipped"], [[], [], [], []])))
+        list(zip(["success", "timeout", "failed", "skipped"],
+                 [[], [], [], []])))
     if skip_finished and project.last_stats:
         stats["success"] = project.last_stats["success"]
 
@@ -1036,12 +872,11 @@ def run_project(project,
             reporter.case_end(project, case, "skipped since in success")
             continue
         reporter.case_begin(project, case)
-        result = runner.run(
-            case,
-            verbose=verbose,
-            timeout=timeout,
-            make_script=make_script,
-            dryrun=dryrun)
+        result = runner.run(case,
+                            verbose=verbose,
+                            timeout=timeout,
+                            make_script=make_script,
+                            dryrun=dryrun)
         reporter.case_end(project, case, "dryrun" if dryrun else result)
         if result:
             stats[result].append(case_id)
@@ -1051,7 +886,7 @@ def run_project(project,
 
     if not dryrun:
         runlog_path = os.path.join(project.project_root, "run_stats.json")
-        json.dump(stats, file(runlog_path, "w"), indent=2)
+        json.dump(stats, open(runlog_path, "w"), indent=2)
 
 
 def main():
@@ -1059,28 +894,24 @@ def main():
 
     ag = parser.add_argument_group("Global options")
     ag.add_argument("project_root", help="Root directory of the test project")
-    ag.add_argument(
-        "--skip-finished",
-        action="store_true",
-        help="Skip already finished cases")
-    ag.add_argument(
-        "--rerun-failed",
-        action="store_true",
-        help="Rerun failed jobs (using validator to determine)")
+    ag.add_argument("--skip-finished",
+                    action="store_true",
+                    help="Skip already finished cases")
+    ag.add_argument("--rerun-failed",
+                    action="store_true",
+                    help="Rerun failed jobs (using validator to determine)")
 
     ag = parser.add_argument_group("Filter options")
-    ag.add_argument(
-        "-e",
-        "--exclude",
-        action="append",
-        default=[],
-        help="Excluded case paths, support shell wildcards")
-    ag.add_argument(
-        "-i",
-        "--include",
-        action="append",
-        default=[],
-        help="Included case paths, support shell wildcards")
+    ag.add_argument("-e",
+                    "--exclude",
+                    action="append",
+                    default=[],
+                    help="Excluded case paths, support shell wildcards")
+    ag.add_argument("-i",
+                    "--include",
+                    action="append",
+                    default=[],
+                    help="Included case paths, support shell wildcards")
 
     ag = parser.add_argument_group("Launcher options")
     ag.add_argument(
@@ -1088,27 +919,24 @@ def main():
         choices=["yhrun", "bsub", "slurm", "pbs", "mpirun", "auto"],
         default="auto",
         help="Job launcher (default: auto)")
-    ag.add_argument(
-        "-t",
-        "--timeout",
-        default=None,
-        help="Timeout for each case, in minites")
-    ag.add_argument(
-        "--sleep",
-        type=int,
-        default=0,
-        help="Sleep specified seconds between jobs")
-    ag.add_argument(
-        "--make-script",
-        action="store_true",
-        help="Generate job script for each case")
-    ag.add_argument(
-        "--dryrun", action="store_true", help="Don't actually run cases")
-    ag.add_argument(
-        "--verbose",
-        action="store_true",
-        default=False,
-        help="Be verbose (print jobs output currently)")
+    ag.add_argument("-t",
+                    "--timeout",
+                    default=None,
+                    help="Timeout for each case, in minites")
+    ag.add_argument("--sleep",
+                    type=int,
+                    default=0,
+                    help="Sleep specified seconds between jobs")
+    ag.add_argument("--make-script",
+                    action="store_true",
+                    help="Generate job script for each case")
+    ag.add_argument("--dryrun",
+                    action="store_true",
+                    help="Don't actually run cases")
+    ag.add_argument("--verbose",
+                    action="store_true",
+                    default=False,
+                    help="Be verbose (print jobs output currently)")
 
     ag = parser.add_argument_group("yhrun options")
     YhrunLauncher.register_cmdline_args(ag)
@@ -1155,19 +983,18 @@ def main():
                 "Failed to automatically determine launcher, please specify "
                 "one via --launcher")
 
-    run_project(
-        proj,
-        runner,
-        SimpleProgressReporter(),
-        timeout=config.timeout,
-        make_script=config.make_script,
-        dryrun=config.dryrun,
-        verbose=config.verbose,
-        exclude=config.exclude,
-        include=config.include,
-        skip_finished=config.skip_finished,
-        sleep=config.sleep,
-        rerun_failed=config.rerun_failed)
+    run_project(proj,
+                runner,
+                SimpleProgressReporter(),
+                timeout=config.timeout,
+                make_script=config.make_script,
+                dryrun=config.dryrun,
+                verbose=config.verbose,
+                exclude=config.exclude,
+                include=config.include,
+                skip_finished=config.skip_finished,
+                sleep=config.sleep,
+                rerun_failed=config.rerun_failed)
 
 
 if __name__ == "__main__":

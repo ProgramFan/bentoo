@@ -1,9 +1,10 @@
-#!/usr/bin/env python
 # coding: utf-8
 
-from builtins import str
+from __future__ import unicode_literals
+
 import bentoo.yaml
 import re
+import json
 from collections import OrderedDict
 
 
@@ -43,24 +44,15 @@ def load_conf(fn):
         OrderedDict: A dict representing the file content.
 
     '''
-
-    def ununicodify(obj):
-        result = None
-        if isinstance(obj, OrderedDict):
-            result = OrderedDict()
-            for k, v in obj.items():
-                k1 = str(k) if not isinstance(k, str) else k
-                result[k1] = ununicodify(v)
-        elif isinstance(obj, list):
-            result = []
-            for v in obj:
-                result.append(ununicodify(v))
-        elif isinstance(obj, str):
-            result = str(obj)
-        else:
-            result = obj
-        return result
-
-    content = open(fn).read()
-    content = re.sub(r"//.*$", "", content)
-    return ununicodify(loads(content))
+    if fn.endswith(".json") or fn.endswith(".jsonc"):
+        # json with "//" like line comments
+        content = open(fn).read()
+        content = re.sub(r"//.*$", "", content)
+        return json.loads(content, object_pairs_hook=OrderedDict)
+    elif fn.endswith(".yaml") or fn.endswith(".yml"):
+        # yaml
+        yaml = bentoo.yaml.YAML(pure=True)
+        return yaml.load(fn)
+    else:
+        # default to regular json
+        return json.load(fn, object_pairs_hook=OrderedDict)

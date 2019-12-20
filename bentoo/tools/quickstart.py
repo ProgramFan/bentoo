@@ -3,8 +3,6 @@
 #
 
 from __future__ import print_function
-
-from builtins import input
 import argparse
 import os
 import re
@@ -37,7 +35,7 @@ def get_choice(message, choices, default=0):
         if not choice:
             print(SEP_LINE)
             return default
-        if not re.match("\d+", choice):
+        if not re.match(r"\d+", choice):
             continue
         choice = int(choice)
         if choice < 0 or choice >= len(choices):
@@ -182,12 +180,13 @@ def make_config(project_dir, project_desc, binary_name, test_factors,
         vector_generator_config=vector_generator_config,
         case_generator_config=case_generator_config)
     outfn = os.path.join(project_dir, "TestProjectConfig.json")
-    file(outfn, "w").write(out)
+    open(outfn, "w").write(out)
 
 
 CUSTOM_PYTHON_SCRIPT_TPL_P1 = '''#!/usr/bin/env python
 #
 
+from __future__ import print_function, unicode_literials
 import os
 import string
 from collections import OrderedDict
@@ -251,7 +250,7 @@ def make_custom_script(template, project_dir, binary_name, test_factors):
     out = tpl.safe_substitute(
         binary_name=binary_name, test_factors_repr=test_factors_repr)
     outfn = os.path.join(project_dir, "make-case.py")
-    file(outfn, "w").write(out)
+    open(outfn, "w").write(out)
     os.chmod(outfn, 0o755)
 
 

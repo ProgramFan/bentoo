@@ -13,16 +13,8 @@ stored in a table named 'result'. The data sheet is designed to be easily
 parsable by pandas, so the recommendation is to use pandas to investigate the
 data.
 '''
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
-from builtins import next
-from builtins import zip
-from builtins import map
-from builtins import range
-from builtins import object
 import os
 import sys
 import re
@@ -58,40 +50,7 @@ from functools import reduce
 # ResultScanner
 #
 
-
-class TestProjectReader(object):
-    '''Scan a test project for test cases'''
-
-    def __init__(self, project_root):
-        '''Create a scanner object for project at 'project_dir' '''
-        self.project_root = os.path.abspath(project_root)
-        conf_fn = os.path.join(self.project_root, "TestProject.json")
-        if not os.path.exists(conf_fn):
-            raise RuntimeError("Invalid project directory: %s" % project_root)
-        conf = json.load(file(conf_fn))
-        version = conf.get("version", 1)
-        if version != 1:
-            raise RuntimeError(
-                "Unsupported project version '%s': Only 1 " % version)
-        self.name = conf["name"]
-        self.test_factors = conf["test_factors"]
-        self.test_cases = conf["test_cases"]
-        self.data_files = conf.get("data_files", [])
-
-    def itercases(self):
-        for case in self.test_cases:
-            case_spec_fullpath = os.path.join(self.project_root, case["path"],
-                                              "TestCase.json")
-            case_spec = json.load(file(case_spec_fullpath))
-            yield {
-                "id": case["path"],
-                "test_vector": case["test_vector"],
-                "fullpath": os.path.join(self.project_root, case["path"]),
-                "spec": case_spec
-            }
-
-    def count_cases(self):
-        return len(self.test_cases)
+from bentoo.common.project import TestProjectReader
 
 
 class FnmatchFilter(object):
@@ -159,8 +118,9 @@ class ResultScanner(object):
                 if not os.path.exists(fn):
                     print("WARNING: Result file '%s' not found" % short_fn)
                     continue
-                spec = list(zip(self.project.test_factors + ["result_id"],
-                           case["test_vector"] + [result_id]))
+                spec = list(
+                    zip(self.project.test_factors + ["result_id"],
+                        case["test_vector"] + [result_id]))
                 spec = OrderedDict(spec)
                 yield {"spec": spec, "fullpath": fn, "short_fn": short_fn}
 
@@ -198,12 +158,12 @@ def parse_jasminlog(fn, use_table=None):
     5.14626
 
     '''
-
     def tokenlize(s):
         '''Convert string into a valid lower case pythonic token'''
-        invalid_chars = ":-+*/#\n"
-        trans_table = string.maketrans(invalid_chars, " " * len(invalid_chars))
-        return "_".join(map(string.lower, s.translate(trans_table).split()))
+        invalid_chars = r"[:-+*/#\n]"
+        return "_".join(
+            map(lambda x: x.lower(),
+                re.sub(invalid_chars, " ", s).split()))
 
     avail_types = {
         "TimerName": str,
@@ -217,10 +177,10 @@ def parse_jasminlog(fn, use_table=None):
     }
 
     table_id = 0
-    content = file(fn, "r").read()
+    content = open(fn, "r").read()
     logtbl_ptn = re.compile(
-        "^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
-        "(?P<content>.*?)^\+{80}$", re.M + re.S)
+        r"^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
+        r"(?P<content>.*?)^\+{80}$", re.M + re.S)
     for match in logtbl_ptn.finditer(content):
         log_table = match.groupdict()
         table_name = tokenlize(log_table["name"])
@@ -344,7 +304,7 @@ def parse_jasmin4log(fn, use_table=None):
     }
 
     table_id = 0
-    content = file(fn, "r").read()
+    content = open(fn, "r").read()
     logtbl_ptn = re.compile(
         r"^\*+ (?P<name>.*?) \*+$\n-{10,}\n" +
         r"^(?P<header>^.*?$)\n-{10,}\n" + r"(?P<content>.*?)^-{10,}\n",
@@ -356,7 +316,6 @@ def parse_jasmin4log(fn, use_table=None):
         # TODO: use column width to better split columns. the columns names and
         # width can be determined from the header, everything is right aligned.
         log_table = match.groupdict()
-        table_name = log_table["name"]
         # Extract table header
         header = log_table["header"].split()
         assert (header[0] == "Name")
@@ -454,11 +413,11 @@ class UnifiedJasminParser(object):
             r"^(?P<header>^.*?$)\n-{10,}\n" + r"(?P<content>.*?)^-{10,}\n",
             re.M + re.S)
         jasmin3_ptn = re.compile(
-            "^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
-            "(?P<content>.*?)^\+{80}$", re.M + re.S)
+            r"^\+{80}$(?P<name>.*?)^\+{80}$" + ".*?(?P<header>^.*?$)" +
+            r"(?P<content>.*?)^\+{80}$", re.M + re.S)
 
         def detector(fn):
-            content = file(fn).read()
+            content = open(fn).read()
             if jasmin3_ptn.search(content):
                 return "jasmin3"
             elif jasmin4_ptn.search(content):
@@ -564,9 +523,8 @@ class LikwidBlockParser(object):
 
     def process(self, iterable):
         self.clear()
-        line1 = next(iterable)
+        next(iterable)
         line2 = next(iterable)
-        cpu_model = line1.split(":")[-1].strip()
         cpu_cycles = float(line2.split(":")[-1].strip())
         other = [x for x in iterable]
         other = io.StringIO("".join(other[1:-1]))
@@ -611,7 +569,6 @@ class LikwidParser(object):
         if not filename.startswith("LIKWID_"):
             raise RuntimeError(
                 "Invalid data file '%s', shall be 'LIKWID_${GROUP}'" % fn)
-        likwid_group = filename[7:]
         # Search for real likwid data file, it shall be of regex
         # 'likwid_counters.\d+.dat'
         result_dir = os.path.dirname(fn)
@@ -621,18 +578,18 @@ class LikwidParser(object):
             print("WARNING: No likwid data file found in '%s'" % result_dir)
             return
 
-        files = [file(path) for path in likwid_data]
+        files = [open(path) for path in likwid_data]
 
         parser = LikwidBlockParser()
         likwid_block = BlockReader("@start_likwid\n", "@end_likwid\n")
         # Count blocks to ease table_id generating
         nblocks = len(list(likwid_block.iterblocks(files[0])))
         if nblocks == 0:
-            print(
-                "WARNING: No likwid data table found in '%s'" % likwid_data[0])
+            print("WARNING: No likwid data table found in '%s'" %
+                  likwid_data[0])
             return
         # Reset files[0] as iterblocks have already arrive eof.
-        files[0] = file(likwid_data[0])
+        files[0] = open(likwid_data[0])
 
         all_tables = []
         for table_id in range(nblocks):
@@ -723,7 +680,7 @@ class UdcParser(object):
             print("WARNING: No data file found in '%s'" % result_dir)
             return
 
-        files = [file(path) for path in udc_data]
+        files = [open(path) for path in udc_data]
 
         parser = UdcBlockParser()
         block_reader = BlockReader("@start_udc\n", "@end_udc\n")
@@ -733,7 +690,7 @@ class UdcParser(object):
             print("WARNING: No udc data table found in '%s'" % udc_data[0])
             return
         # Reset files[0] as iterblocks have already arrive eof.
-        files[0] = file(udc_data[0])
+        files[0] = open(udc_data[0])
 
         all_tables = []
         for table_id in range(nblocks):
@@ -787,7 +744,6 @@ class YamlParser(object):
         mem_writes: 33449934
         ---
     '''
-
     @staticmethod
     def register_cmd_args(argparser):
         pass
@@ -806,7 +762,7 @@ class YamlParser(object):
 
         yamldoc_regex = re.compile(
             r"(?:^|\n)\s*---\s*\n(.+?)\n\s*(---|...)\s*\n", re.M + re.S)
-        for i, match in enumerate(yamldoc_regex.finditer(file(fn).read())):
+        for i, match in enumerate(yamldoc_regex.finditer(open(fn).read())):
             content = yaml.safe_load(match.group(1))
             if isinstance(content, dict):
                 # a single dict
@@ -853,7 +809,7 @@ def guess_type(data):
         for i in range(type_index, len(type_hierarchy) + 1):
             t = type_hierarchy[i]
             try:
-                v = t(val)
+                t(val)
                 return i
             except ValueError:
                 continue
@@ -879,7 +835,6 @@ class PipetableParser(object):
         |------|-----------|-----------|------------|
         | 13.3 | 334e5     | 3334456555| 334343434  |
     '''
-
     @staticmethod
     def register_cmd_args(argparser):
         pass
@@ -899,11 +854,13 @@ class PipetableParser(object):
         # `|` and end with `|` and seperate with other contents by new lines.
         # Note we match `\n` explicitly since we restrict each table row to one
         # line.
-        table_regex = re.compile(
-            r"(?:^|\n)" + r"(\s*\|.+\|\s*\n)" + r"\s*\|[-:| ]+\|\s*\n" +
-            r"((?:\s*\|.+\|\s*\n)+)" + r"(?:\n|$)")
-        for i, match in enumerate(table_regex.finditer(file(fn).read())):
-            parse_row = lambda x: [y.strip() for y in x.strip().strip('|').split('|')]
+        table_regex = re.compile(r"(?:^|\n)" + r"(\s*\|.+\|\s*\n)" +
+                                 r"\s*\|[-:| ]+\|\s*\n" +
+                                 r"((?:\s*\|.+\|\s*\n)+)" + r"(?:\n|$)")
+        for i, match in enumerate(table_regex.finditer(open(fn).read())):
+            parse_row = lambda x: [
+                y.strip() for y in x.strip().strip('|').split('|')
+            ]
             header = match.group(1)
             content = match.group(2)
             header = parse_row(header)
@@ -949,7 +906,6 @@ class DsvParser(object):
         13.3, 334e5, 3334456555, 334343434
         |===
     '''
-
     @staticmethod
     def register_cmd_args(argparser):
         argparser.add_argument(
@@ -970,10 +926,12 @@ class DsvParser(object):
     def itertables(self, fn):
         all_tables = []
 
-        table_regex = re.compile(
-            r"\s*\|={3,}\s*\n" + r"((?:[^|]+\n){2,})" + r"\s*\|={3,}\n")
-        for i, match in enumerate(table_regex.finditer(file(fn).read())):
-            parse_row = lambda x: [y.strip() for y in re.split(self.args['sep'], x.strip())]
+        table_regex = re.compile(r"\s*\|={3,}\s*\n" + r"((?:[^|]+\n){2,})" +
+                                 r"\s*\|={3,}\n")
+        for i, match in enumerate(table_regex.finditer(open(fn).read())):
+            parse_row = lambda x: [
+                y.strip() for y in re.split(self.args['sep'], x.strip())
+            ]
             content = match.group(1).split('\n')
             header = content[0]
             header = parse_row(header)
@@ -1078,7 +1036,7 @@ class SqliteSerializer(object):
         float: "REAL",
         str: "TEXT",
         str: "TEXT",
-        buffer: "BLOB"
+        bytes: "BLOB"
     }
 
     @staticmethod
@@ -1096,7 +1054,7 @@ class SqliteSerializer(object):
         '''Dump content to database
         '''
         conn = sqlite3.connect(self.dbfile)
-        obj = conn.execute("DROP TABLE IF EXISTS result")
+        conn.execute("DROP TABLE IF EXISTS result")
         conn.commit()
         self.conn = conn
         # Build table creation and insertion SQL statements
@@ -1125,11 +1083,10 @@ class SqliteSerializer(object):
 class PandasSerializer(object):
     @staticmethod
     def register_cmd_args(argparser):
-        argparser.add_argument(
-            "--pandas-format",
-            default="xlsx",
-            choices=("xls", "xlsx", "csv"),
-            help="Output file format")
+        argparser.add_argument("--pandas-format",
+                               default="xlsx",
+                               choices=("xls", "xlsx", "csv"),
+                               help="Output file format")
 
     @staticmethod
     def retrive_cmd_args(namespace):
@@ -1151,8 +1108,8 @@ class PandasSerializer(object):
         elif self.file_format == "csv":
             frame.to_csv(self.data_file, index=False)
         else:
-            raise RuntimeError(
-                "Unsupported output format '%s'" % self.file_format)
+            raise RuntimeError("Unsupported output format '%s'" %
+                               self.file_format)
 
 
 class SerializerFactory(object):
@@ -1276,76 +1233,67 @@ def main():
 
     group = parser.add_argument_group("Scanner Arguments")
     grp = group.add_mutually_exclusive_group()
-    grp.add_argument(
-        "-i",
-        "--include",
-        default=None,
-        nargs="+",
-        metavar="CASE_PATH",
-        help="Include only matched cases (shell wildcards)")
-    grp.add_argument(
-        "-e",
-        "--exclude",
-        default=None,
-        nargs="+",
-        metavar="CASE_PATH",
-        help="Excluded matched cases (shell wildcards)")
-    group.add_argument(
-        "--use-result",
-        default=[0],
-        nargs="+",
-        metavar="RESULT_ID",
-        help="Choose result files to use (as index)")
+    grp.add_argument("-i",
+                     "--include",
+                     default=None,
+                     nargs="+",
+                     metavar="CASE_PATH",
+                     help="Include only matched cases (shell wildcards)")
+    grp.add_argument("-e",
+                     "--exclude",
+                     default=None,
+                     nargs="+",
+                     metavar="CASE_PATH",
+                     help="Excluded matched cases (shell wildcards)")
+    group.add_argument("--use-result",
+                       default=[0],
+                       nargs="+",
+                       metavar="RESULT_ID",
+                       help="Choose result files to use (as index)")
 
     group = parser.add_argument_group("Parser Arguments")
-    group.add_argument(
-        "-p",
-        "--parser",
-        default=ParserFactory.default_parser(),
-        choices=ParserFactory.available_parsers(),
-        help="Parser for raw result files (default: jasmin)")
-    group.add_argument(
-        "--use-table",
-        default=[],
-        nargs="+",
-        metavar="TABLE_ID",
-        help="Choose which data table to use (as index)")
+    group.add_argument("-p",
+                       "--parser",
+                       default=ParserFactory.default_parser(),
+                       choices=ParserFactory.available_parsers(),
+                       help="Parser for raw result files (default: jasmin)")
+    group.add_argument("--use-table",
+                       default=[],
+                       nargs="+",
+                       metavar="TABLE_ID",
+                       help="Choose which data table to use (as index)")
     ParserFactory.register_cmd_args(parser)
 
     group = parser.add_argument_group("Aggregator Arguments")
     grp = group.add_mutually_exclusive_group()
-    grp.add_argument(
-        "-d",
-        "--drop-columns",
-        default=None,
-        nargs="+",
-        metavar="COLUMN_NAME",
-        help="Drop un-wanted table columns")
-    grp.add_argument(
-        "-k",
-        "--keep-columns",
-        default=None,
-        nargs="+",
-        metavar="COLUMN_NAME",
-        help="Keep only speciied table columns")
+    grp.add_argument("-d",
+                     "--drop-columns",
+                     default=None,
+                     nargs="+",
+                     metavar="COLUMN_NAME",
+                     help="Drop un-wanted table columns")
+    grp.add_argument("-k",
+                     "--keep-columns",
+                     default=None,
+                     nargs="+",
+                     metavar="COLUMN_NAME",
+                     help="Keep only speciied table columns")
 
     group = parser.add_argument_group("Serializer Arguments")
-    group.add_argument(
-        "-s",
-        "--serializer",
-        choices=SerializerFactory.available_serializers(),
-        default=SerializerFactory.default_serializer(),
-        help="Serializer to dump results (default: sqlite3)")
+    group.add_argument("-s",
+                       "--serializer",
+                       choices=SerializerFactory.available_serializers(),
+                       default=SerializerFactory.default_serializer(),
+                       help="Serializer to dump results (default: sqlite3)")
     SerializerFactory.register_cmd_args(parser)
 
     group = parser.add_argument_group("Archiver Arguments")
-    group.add_argument(
-        "-a",
-        "--archive",
-        metavar="FILE",
-        dest="archive",
-        default=None,
-        help="Archive output to a zip file")
+    group.add_argument("-a",
+                       "--archive",
+                       metavar="FILE",
+                       dest="archive",
+                       default=None,
+                       help="Archive output to a zip file")
 
     args = parser.parse_args()
 

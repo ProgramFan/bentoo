@@ -20,13 +20,8 @@ Analyser tries to provide a simple CLI interface of pandas for simple use
 cases, namely tasks need to be done quick and often in command line. More
 sphosticated analysis need to be done directly in python using pandas etc.
 '''
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 
-from future import standard_library
-standard_library.install_aliases()
-from builtins import zip
-from builtins import str
-from builtins import object
 import argparse
 import fnmatch
 import os
@@ -181,7 +176,7 @@ class SqliteReader(object):
         float: "REAL",
         str: "TEXT",
         str: "TEXT",
-        buffer: "BLOB"
+        bytes: "BLOB"
     }
 
     globops = {"fnmatchcase": "GLOB", "fnmatch": "GLOB", "regex": "REGEXP"}

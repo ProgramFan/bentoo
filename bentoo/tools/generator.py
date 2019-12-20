@@ -1,9 +1,7 @@
-#!/usr/bin/env python
 # coding: utf-8
 
-from builtins import str
-from builtins import zip
-from builtins import object
+from __future__ import division, print_function, unicode_literals
+
 import argparse
 import importlib
 import itertools
@@ -58,7 +56,7 @@ class SimpleVectorGenerator(object):
         for item in self.raw_vectors:
             iters = [x if isinstance(x, list) else [x] for x in item]
             for v in itertools.product(*iters):
-                yield OrderedDict(list(zip(self.test_factors, v)))
+                yield OrderedDict(zip(self.test_factors, v))
 
 
 class CartProductVectorGenerator(object):
@@ -89,7 +87,7 @@ class CartProductVectorGenerator(object):
         '''
         factor_values = [self.factor_values[k] for k in self.test_factors]
         for v in itertools.product(*factor_values):
-            yield OrderedDict(list(zip(self.test_factors, v)))
+            yield OrderedDict(zip(self.test_factors, v))
 
 
 class CustomVectorGenerator(object):
@@ -139,7 +137,7 @@ class CustomVectorGenerator(object):
 
         '''
         for v in self.test_vectors:
-            yield OrderedDict(list(zip(self.test_factors, v)))
+            yield OrderedDict(zip(self.test_factors, v))
 
 
 from bentoo.common.utils import safe_eval, replace_template
@@ -283,8 +281,8 @@ class TemplateCaseGenerator(object):
                     contains[k] = v
                 validator["contains"] = contains
         case_spec = OrderedDict(
-            list(zip(["cmd", "envs", "run", "results", "validator"],
-                [cmd, envs, run, results, validator])))
+            zip(["cmd", "envs", "run", "results", "validator"],
+                [cmd, envs, run, results, validator]))
 
         # create empty output file, so when output file is used for special
         # signal, it's ready and will not be ignored.
@@ -355,7 +353,7 @@ class CustomCaseGenerator(object):
 
 def identifier(value):
     '''Create a valid identifier out of a value'''
-    a = re.sub(r"\W", "_", str(value).strip().lower())
+    a = re.sub(r"\W", "_", repr(value).strip().lower())
     return re.sub(r"_+", "_", a)
 
 
@@ -387,6 +385,13 @@ class TestProjectBuilder(object):
         self.conf_root = conf_root
 
         spec_file = os.path.join(self.conf_root, "TestProjectConfig.json")
+        if not os.path.exists(spec_file):
+            spec_file = os.path.join(self.conf_root, "TestProjectConfig.yml")
+        if not os.path.exists(spec_file):
+            raise RuntimeError(
+                ("Either TestProjectConfig.json or " +
+                 "TestProjectConfig.yml shall exists under {}").format(
+                     self.conf_root))
         spec = load_conf(spec_file)
 
         # Do minimal sanity check
@@ -541,7 +546,7 @@ class TestProjectBuilder(object):
             vector = list(case.values())
             path = self.output_organizer.get_case_path(case)
             test_defs.append(
-                OrderedDict(list(zip(["test_vector", "path"], [vector, path]))))
+                OrderedDict(zip(["test_vector", "path"], [vector, path])))
         info["test_cases"] = test_defs
         project_info_path = self.output_organizer.get_project_info_path()
         project_info_fullpath = os.path.join(output_root, project_info_path)
