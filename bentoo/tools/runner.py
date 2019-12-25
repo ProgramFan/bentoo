@@ -7,20 +7,21 @@ high performance computing platforms.  It features test case filters, results
 validator, timeout etc. It supports slurm, pbs, yhrun (tianhe), bsub (sunway),
 and plain mpirun at the moment. More backends will be added overtime.
 '''
-from __future__ import division, unicode_literals, print_function
+from __future__ import division, print_function, unicode_literals
 
-import os
-import sys
 import argparse
-import re
 import fnmatch
 import json
+import os
+import re
 import string
 import subprocess
+import sys
 import time
 from collections import OrderedDict
-from bentoo.common.utils import has_program, shell_quote, make_bash_script
+
 from bentoo.common.project import TestProjectReader
+from bentoo.common.utils import has_program, make_bash_script, shell_quote
 
 #
 # Interfaces of a job launcher:
@@ -88,7 +89,7 @@ class MpirunLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        path = case["path"]
+        path = case["fullpath"]
         spec = case["spec"]
         assert os.path.isabs(path)
 
@@ -195,7 +196,7 @@ class YhrunLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        path = case["path"]
+        path = case["fullpath"]
         spec = case["spec"]
         assert os.path.isabs(path)
 
@@ -427,7 +428,7 @@ class SlurmLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        path = case["path"]
+        path = case["fullpath"]
         spec = case["spec"]
         assert os.path.isabs(path)
 
@@ -587,7 +588,7 @@ class PbsLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        path = case["path"]
+        path = case["fullpath"]
         spec = case["spec"]
         assert os.path.isabs(path)
 
@@ -701,7 +702,7 @@ class BsubLauncher(object):
             dryrun=False,
             verbose=False,
             **kwargs):
-        path = case["path"]
+        path = case["fullpath"]
         spec = case["spec"]
         assert os.path.isabs(path)
 
@@ -793,7 +794,7 @@ class SimpleProgressReporter(object):
         '''Notify the start of a test case run'''
         self.finished_cases += 1
         completed = float(self.finished_cases) / float(self.total_cases) * 100
-        pretty_case = os.path.relpath(case["path"], project.project_root)
+        pretty_case = os.path.relpath(case["fullpath"], project.project_root)
         sys.stdout.write("   [%3.0f%%] Run %s ... " % (completed, pretty_case))
         sys.stdout.flush()
 
@@ -811,12 +812,12 @@ def validate_case(case):
     validator = case["spec"]["validator"]
     if "exists" in validator:
         for f in validator["exists"]:
-            fullpath = os.path.join(case["path"], f)
+            fullpath = os.path.join(case["fullpath"], f)
             if not os.path.exists(fullpath):
                 return False
     if "contains" in validator:
         for k, v in validator["contains"].items():
-            fullpath = os.path.join(case["path"], k)
+            fullpath = os.path.join(case["fullpath"], k)
             if not os.path.exists(fullpath):
                 return False
             if not re.search(v, open(fullpath).read()):
@@ -851,7 +852,7 @@ def run_project(project,
 
     reporter.project_begin(project)
     for case in project.itercases():
-        case_path = os.path.relpath(case["path"], project.project_root)
+        case_path = os.path.relpath(case["fullpath"], project.project_root)
         case_id = {"test_vector": case["test_vector"], "path": case_path}
         if exclude and has_match(case_path, exclude):
             stats["skipped"].append(case_id)

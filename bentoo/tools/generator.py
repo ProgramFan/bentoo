@@ -12,7 +12,9 @@ import shutil
 import string
 import sys
 from collections import OrderedDict
+
 from bentoo.common.conf import load_conf
+from bentoo.common.utils import replace_template, safe_eval
 
 
 class SimpleVectorGenerator(object):
@@ -140,7 +142,6 @@ class CustomVectorGenerator(object):
             yield OrderedDict(zip(self.test_factors, v))
 
 
-from bentoo.common.utils import safe_eval, replace_template
 
 
 class TemplateCaseGenerator(object):

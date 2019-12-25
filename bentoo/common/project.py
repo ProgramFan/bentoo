@@ -59,8 +59,10 @@ class TestProjectReader(object):
                                               "TestCase.json")
             case_spec = json.load(open(case_spec_fullpath))
             yield {
+                "id": case["path"],
+                "path": case["path"],
+                "fullpath": os.path.join(self.project_root, case["path"]),
                 "test_vector": case["test_vector"],
-                "path": os.path.join(self.project_root, case["path"]),
                 "spec": case_spec
             }
 

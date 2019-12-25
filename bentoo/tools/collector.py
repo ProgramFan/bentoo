@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+# coding: utf-8
 #
 '''Collector - Test results collector
 
@@ -15,20 +15,22 @@ data.
 '''
 from __future__ import print_function, unicode_literals
 
-import os
-import sys
-import re
-import string
 import argparse
-import json
-import sqlite3
-import glob
 import csv
-import io
 import fnmatch
+import glob
+import io
+import json
+import os
+import re
+import sqlite3
+import string
+import sys
 import tarfile
 from collections import OrderedDict
 from functools import reduce
+
+from bentoo.common.project import TestProjectReader
 
 #
 # Design Of Collector
@@ -50,7 +52,6 @@ from functools import reduce
 # ResultScanner
 #
 
-from bentoo.common.project import TestProjectReader
 
 
 class FnmatchFilter(object):
