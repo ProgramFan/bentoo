@@ -53,7 +53,6 @@ from bentoo.common.project import TestProjectReader
 #
 
 
-
 class FnmatchFilter(object):
     def __init__(self, patterns, mode="include"):
         assert (mode in ("include", "exclude"))
@@ -104,12 +103,14 @@ class ResultScanner(object):
         self.case_filter = FnmatchFilter(case_filter, filter_mode)
         self.result_selector = result_selector
 
-    def iterfiles(self):
+    def iterfiles(self, with_stdout=False):
         for case in self.project.itercases():
             if not self.case_filter.valid(case["id"]):
                 continue
             fullpath = case["fullpath"]
-            result_files = case["spec"]["results"]
+            result_files = list(case["spec"]["results"])
+            if with_stdout and "STDOUT" not in result_files:
+                result_files.append("STDOUT")
             result_selector = self.result_selector
             if not result_selector:
                 result_selector = range(len(result_files))
@@ -1216,7 +1217,8 @@ class Collector(object):
                              final_table["column_types"])
 
         if archive:
-            fns = [(x["fullpath"], x["short_fn"]) for x in scanner.iterfiles()]
+            fns = [(x["fullpath"], x["short_fn"])
+                   for x in scanner.iterfiles(with_stdout=True)]
             with tarfile.open(archive, "w:gz") as tar:
                 for full_fn, short_fn in fns:
                     if not os.path.exists(full_fn):
