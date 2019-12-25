@@ -19,8 +19,8 @@ class TestProjectReader(object):
                                version)
         self.name = conf["name"]
         self.test_factors = conf["test_factors"]
-        self.data_files = conf["data_files"]
         self.test_cases = conf["test_cases"]
+        self.data_files = conf.get("data_files", [])
 
         self.last_stats = None
         stats_fn = os.path.join(self.project_root, "run_stats.json")
