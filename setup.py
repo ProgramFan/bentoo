@@ -6,7 +6,7 @@ from setuptools import find_packages, setup
 setup(name="bentoo",
       description=
       "Benchmark Tools for Reproducible (Parallel) Performance Evaluation",
-      version="0.22.0",
+      version="0.23.dev0",
       packages=find_packages(),
       entry_points={
           "console_scripts": [
