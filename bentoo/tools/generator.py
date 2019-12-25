@@ -142,8 +142,6 @@ class CustomVectorGenerator(object):
             yield OrderedDict(zip(self.test_factors, v))
 
 
-
-
 class TemplateCaseGenerator(object):
     def __init__(self, template):
         assert ("case_spec" in template)
@@ -354,7 +352,7 @@ class CustomCaseGenerator(object):
 
 def identifier(value):
     '''Create a valid identifier out of a value'''
-    a = re.sub(r"\W", "_", repr(value).strip().lower())
+    a = re.sub(r"\W", "_", str(value).strip().lower())
     return re.sub(r"_+", "_", a)
 
 
