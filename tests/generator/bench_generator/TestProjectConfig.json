@@ -2,7 +2,7 @@
   "version": 1,
   "project": {
     "name": "test project",
-    "test_factors": ["model", "bench", "mem_per_node", "nnodes", "ncores", "test_id"],
+    "test_factors": ["model", "bench", "mem_per_node", "series", "nnodes", "ncores", "test_id"],
     "test_vector_generator": "bench",
     "test_case_generator": "custom",
     "data_files": ["bin", "database"]
@@ -11,20 +11,20 @@
     "bench_config": {
       "onenode": {
         "min_ncores": 4,
-        "mem_per_node": ["500M", "5G", "50G"]
+        "mem_per_node": ["500M"]
       },
       "weak": {
         "nnodes": {
           "min": 1,
           "max": 3072
         },
-        "mem_per_node": ["500M", "5G", "50G"]
+        "mem_per_node": ["500M"]
       },
       "strong": {
         "base_nnodes": [1, 8, 64],
         "max_multiple": 128,
         "max_nnodes": 3072,
-        "mem_per_node": ["500M", "5G", "50G"]
+        "mem_per_node": ["500M"]
       }
     },
     "system_config": {
@@ -38,7 +38,7 @@
         "dim": 3,
         "grid": [1000, 1000, 1000],
         "total_mem": "5G",
-        "bench": ["onenode", "weak", "strong"]
+        "bench": ["onenode", "strong", "weak"]
       }
     },
     "other_factor_values": {

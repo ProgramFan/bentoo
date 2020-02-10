@@ -4,6 +4,73 @@
 import functools
 import math
 import re
+import copy
+
+
+def make_process_grid(n, dim):
+    def is_prime(x):
+        if x == 1:
+            return True
+        for i in range(2, x // 2 + 1):
+            if x % i == 0:
+                return False
+        return True
+
+    def prime_factors(x):
+        if is_prime(x):
+            return [x]
+        result = []
+        for v in range(2, x // 2 + 1):
+            if not is_prime(v):
+                continue
+            if n % v == 0:
+                result.append(v)
+        return result
+
+    def min_index(l):
+        v = l[0]
+        i = 0
+        for i1, v1 in enumerate(l):
+            if v1 < v:
+                i = i1
+                v = v1
+        return (i, v)
+
+    def max_index(l):
+        v = l[0]
+        i = 0
+        for i1, v1 in enumerate(l):
+            if v1 > v:
+                i = i1
+                v = v1
+        return (i, v)
+
+    all_primes = prime_factors(n)
+    result = [1 for i in range(dim)]
+    if n == 1:
+        return result
+    elif n == 2:
+        result[0] = n
+        return result
+    i = 0
+    n1 = n
+    for v in all_primes:
+        while n1 % v == 0:
+            result[i % dim] *= v
+            i += 1
+            n1 //= v
+    result = sorted(result, reverse=True)
+    for v in all_primes:
+        while True:
+            max_idx, max_val = max_index(result)
+            min_idx, min_val = min_index(result)
+            if max_val > min_val * v and max_val % v == 0:
+                result[max_idx] //= v
+                result[min_idx] *= v
+            else:
+                break
+    assert functools.reduce(lambda x, y: x * y, result) == n
+    return sorted(result, reverse=True)
 
 
 def sizeToFloat(s):
@@ -52,10 +119,11 @@ class StructuredGridModelResizer(object):
         self.dim = len(grid)
         self.total_mem = sizeToFloat(total_mem)
 
-    def resize(self, mem_per_node):
+    def resize(self, mem_per_node, nnodes=1):
         '''Resize the model to reach a certain memory per node
 
         :mem_per_node: The memory per node required, float or string.
+        :nnodes: The number of nodes required
 
         :return: The new grid and nnodes for the model.
         '''
@@ -67,15 +135,16 @@ class StructuredGridModelResizer(object):
         base_grid = [nx for i in range(self.dim)]
         new_ncells = functools.reduce(lambda x, y: x * y, base_grid)
         new_mem_per_node = bytes_per_cell * new_ncells
+        proc_grid = make_process_grid(nnodes, self.dim)
         return {
-            "nnodes": 1,
-            "grid": base_grid,
+            "nnodes": nnodes,
+            "grid": [x * y for x, y in zip(base_grid, proc_grid)],
             "mem_per_node": floatToSize(new_mem_per_node),
             "index_": 0
         }
 
     def next(self, model):
-        result = dict(model)
+        result = copy.deepcopy(model)
         result["nnodes"] *= 2
         result["grid"][result["index_"]] *= 2
         result["index_"] = (result["index_"] + 1) % self.dim
@@ -100,10 +169,11 @@ class UnstructuredGridModelResizer(object):
         self.total_mem = sizeToFloat(total_mem)
         self.stride = 2**self.dim
 
-    def resize(self, mem_per_node):
+    def resize(self, mem_per_node, nnodes=1):
         '''Resize the model to reach a certain memory per node
 
         :mem_per_node: The memory per node required, float or string.
+        :nnodes: The number of nodes required
 
         :return: The new grid and nnodes for the model.
         '''
@@ -151,11 +221,7 @@ class UnstructuredGridModelResizer(object):
             }
 
     def next(self, model):
-        result = dict(model)
+        result = copy.deepcopy(model)
         result["nnodes"] *= self.stride
         result["nrefines"] += 1
         return result
-
-
-def make_process_grid(n, dim):
-    pass

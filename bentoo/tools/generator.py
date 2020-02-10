@@ -117,7 +117,9 @@ class CartProductVectorGenerator(object):
         return None
 
 
-BENCH_TEST_FACTORS = ["model", "bench", "mem_per_node", "nnodes", "ncores"]
+BENCH_TEST_FACTORS = [
+    "model", "bench", "mem_per_node", "series", "nnodes", "ncores"
+]
 BENCH_TYPES = ["onenode", "weak", "strong"]
 
 
@@ -183,6 +185,7 @@ class BenchVectorGenerator(object):
                         "bench": bench,
                         "model": model_name,
                         "nnodes": 1,
+                        "series": 0
                     }
                     for mem_per_node_req in conf["mem_per_node"]:
                         model = resizer.resize(mem_per_node_req)
@@ -209,7 +212,7 @@ class BenchVectorGenerator(object):
                             self.bench_models.append(model)
                 elif bench == "weak":
                     # Generate internode weak-scaling benchmarks
-                    result = {"bench": bench, "model": model_name}
+                    result = {"bench": bench, "model": model_name, "series": 0}
                     for mem_per_node_req in conf["mem_per_node"]:
                         model = resizer.resize(mem_per_node_req)
                         mem_per_node = model["mem_per_node"]
@@ -232,25 +235,24 @@ class BenchVectorGenerator(object):
                     result = {"bench": bench, "model": model_name}
                     max_multiple = conf["max_multiple"]
                     for mem_per_node_req in conf["mem_per_node"]:
-                        model = resizer.resize(mem_per_node_req)
-                        mem_per_node = model["mem_per_node"]
-                        mem_per_node = helpers.sizeToFloat(mem_per_node)
-                        if mem_per_node > 0.75 * sys_node_mem:
-                            continue
-                        result["mem_per_node"] = model["mem_per_node"]
-                        for base_nnodes in conf["base_nnodes"]:
-                            # Skip impossible cases
+                        for i, base_nnodes in enumerate(conf["base_nnodes"]):
+                            model = resizer.resize(mem_per_node_req,
+                                                   base_nnodes)
+                            mem_per_node = model["mem_per_node"]
+                            mem_per_node = helpers.sizeToFloat(mem_per_node)
+                            if mem_per_node > 0.75 * sys_node_mem:
+                                continue
                             if base_nnodes * max_multiple <= model["nnodes"]:
                                 continue
+                            result["mem_per_node"] = model["mem_per_node"]
                             nnodes = model["nnodes"]
                             max_nnodes = min(nnodes * max_multiple, sys_nnodes)
+                            result["series"] = i
                             while nnodes <= max_nnodes:
                                 result["nnodes"] = nnodes
                                 result["ncores"] = nnodes * sys_cpn
-                                vector = [
-                                    result[f] for f in BENCH_TEST_FACTORS
-                                ]
-                                self.bench_vectors.append(vector)
+                                vec = [result[f] for f in BENCH_TEST_FACTORS]
+                                self.bench_vectors.append(vec)
                                 self.bench_models.append(model)
                                 nnodes *= 2
                 else:

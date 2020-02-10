@@ -10,6 +10,7 @@ from collections import OrderedDict
 
 
 def make_case(conf_root, output_root, case_path, test_vector, case_info, cpn):
+    print("{}: {}".format(list(test_vector.values()), case_info))
     cmd = ["ls", "-l"]
     run = {
         "nnodes": 1,
