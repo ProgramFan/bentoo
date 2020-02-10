@@ -158,7 +158,7 @@ class BenchVectorGenerator(object):
         self.bench_models = []  # stores model for the corresponding vector
         system = spec["system_config"]
         sys_nnodes = int(system["nnodes"])
-        sys_cpn = int(system["cpn"])
+        sys_cpn = int(system["cores_per_node"])
         sys_node_mem = helpers.sizeToFloat(system["mem_per_node"])
         bench_conf = spec["bench_config"]
         for model_name, model_spec in spec["model_config"].items():
@@ -201,7 +201,7 @@ class BenchVectorGenerator(object):
                         ncores.append(nc)
                         ncores.reverse()
                         for n in ncores:
-                            if n < conf["min_nnodes"]:
+                            if n < conf["min_ncores"]:
                                 continue
                             result["ncores"] = n
                             vector = [result[f] for f in BENCH_TEST_FACTORS]
@@ -218,10 +218,9 @@ class BenchVectorGenerator(object):
                             continue
                         result["mem_per_node"] = model["mem_per_node"]
                         nnodes_min = conf["nnodes"]["min"]
-                        nnodes_max = min(conf["nnodes"]["max"],
-                                         system["nnodes"])
+                        nnodes_max = min(conf["nnodes"]["max"], sys_nnodes)
                         while model["nnodes"] <= nnodes_max:
-                            if nnodes >= nnodes_min:
+                            if model["nnodes"] >= nnodes_min:
                                 result["nnodes"] = model["nnodes"]
                                 result["ncores"] = model["nnodes"] * sys_cpn
                                 vec = [result[f] for f in BENCH_TEST_FACTORS]
@@ -239,13 +238,12 @@ class BenchVectorGenerator(object):
                         if mem_per_node > 0.75 * sys_node_mem:
                             continue
                         result["mem_per_node"] = model["mem_per_node"]
-                        for base_nnodes in conf["nnodes"]:
+                        for base_nnodes in conf["base_nnodes"]:
                             # Skip impossible cases
                             if base_nnodes * max_multiple <= model["nnodes"]:
                                 continue
                             nnodes = model["nnodes"]
-                            max_nnodes = min(nnodes * max_multiple,
-                                             system["nnodes"])
+                            max_nnodes = min(nnodes * max_multiple, sys_nnodes)
                             while nnodes <= max_nnodes:
                                 result["nnodes"] = nnodes
                                 result["ncores"] = nnodes * sys_cpn

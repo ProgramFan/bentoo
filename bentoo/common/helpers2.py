@@ -7,7 +7,7 @@ import re
 
 
 def sizeToFloat(s):
-    if isinstance(s, int) or isinstance(s, float):
+    if isinstance(s, (int, float)):
         return float(s)
     unitValue = {"b": 1, "k": 1024, "m": 1024 * 1024, "g": 1024 * 1024 * 1024}
     regex = re.compile(
@@ -22,7 +22,7 @@ def sizeToFloat(s):
 
 
 def floatToSize(f):
-    if not isinstance(f, int) or not isinstance(f, float):
+    if not isinstance(f, (int, float)):
         return f
     if f < 1024:
         return "{:.1f}".format(f)
@@ -61,15 +61,16 @@ class StructuredGridModelResizer(object):
         '''
         mem_per_node = sizeToFloat(mem_per_node)
         ncells = functools.reduce(lambda x, y: x * y, self.grid)
-        bytes_per_cell = self.total_mem * ncells
+        bytes_per_cell = self.total_mem / ncells
         new_ncells = mem_per_node / bytes_per_cell
         nx = int(math.floor(new_ncells**(1.0 / self.dim)))
         base_grid = [nx for i in range(self.dim)]
         new_ncells = functools.reduce(lambda x, y: x * y, base_grid)
+        new_mem_per_node = bytes_per_cell * new_ncells
         return {
             "nnodes": 1,
             "grid": base_grid,
-            "mem_per_node": floatToSize(bytes_per_cell * new_ncells),
+            "mem_per_node": floatToSize(new_mem_per_node),
             "index_": 0
         }
 

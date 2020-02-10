@@ -10,7 +10,7 @@
   "bench_vector_generator": {
     "bench_config": {
       "onenode": {
-        "base_ncores": 1,
+        "min_ncores": 4,
         "mem_per_node": ["500M", "5G", "50G"]
       },
       "weak": {
@@ -36,13 +36,13 @@
       "model1": {
         "type": "structured_grid",
         "dim": 3,
-        "grid": [100, 100, 100],
-        "total_mem": "5.1G",
+        "grid": [1000, 1000, 1000],
+        "total_mem": "5G",
         "bench": ["onenode", "weak", "strong"]
       }
     },
-    "other_factors": {
-      "test_id": [0, 1, 2]
+    "other_factor_values": {
+      "test_id": [0]
     }
   },
   "custom_case_generator": {
