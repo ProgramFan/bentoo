@@ -62,6 +62,17 @@ class SimpleVectorGenerator(object):
             for v in itertools.product(*iters):
                 yield OrderedDict(zip(self.test_factors, v))
 
+    def case_info(self, case):
+        '''Return extra information associated with the case
+
+        Args:
+            case: The case identifier as returned by items()
+
+        Returns:
+            any python object, None if nothing is assiciated.
+        '''
+        return None
+
 
 class CartProductVectorGenerator(object):
     '''Cartetian product test vector generator
@@ -93,6 +104,17 @@ class CartProductVectorGenerator(object):
         factor_values = [self.factor_values[k] for k in self.test_factors]
         for v in itertools.product(*factor_values):
             yield OrderedDict(zip(self.test_factors, v))
+
+    def case_info(self, case):
+        '''Return extra information associated with the case
+
+        Args:
+            case: The case identifier as returned by items()
+
+        Returns:
+            any python object, None if nothing is assiciated.
+        '''
+        return None
 
 
 BENCH_TEST_FACTORS = ["model", "bench", "mem_per_node", "nnodes", "ncores"]
@@ -260,6 +282,19 @@ class BenchVectorGenerator(object):
                 ovals = [vals[f] for f in self.test_factors]
                 yield OrderedDict(zip(self.test_factors, ovals))
 
+    def case_info(self, case):
+        '''Return extra information associated with the case
+
+        Args:
+            case: The case identifier as returned by items()
+
+        Returns:
+            any python object, None if nothing is assiciated.
+        '''
+        bench_vec = [case[f] for f in BENCH_TEST_FACTORS]
+        case_index = self.bench_vectors.index(bench_vec)
+        return self.bench_models[case_index]
+
 
 class CustomVectorGenerator(object):
     '''Custom test vector generator
@@ -283,6 +318,7 @@ class CustomVectorGenerator(object):
         args = spec.get("args", {})
         if not os.path.exists(module):
             raise RuntimeError("Module '%s' does not exists" % module)
+        info_func = spec.get("info_func", None)
 
         module_path = os.path.dirname(module)
         if module_path not in sys.path:
@@ -298,6 +334,10 @@ class CustomVectorGenerator(object):
         real_args["test_factors"] = self.test_factors
         self.test_vectors = fun(**real_args)
 
+        self.info_func = None
+        if info_func:
+            self.info_func = getattr(mod, info_func)
+
     def items(self):
         '''An iterator over the range of test vectors
 
@@ -311,6 +351,20 @@ class CustomVectorGenerator(object):
         for v in self.test_vectors:
             yield OrderedDict(zip(self.test_factors, v))
 
+    def case_info(self, case):
+        '''Return extra information associated with the case
+
+        Args:
+            case: The case identifier as returned by items()
+
+        Returns:
+            any python object, None if nothing is assiciated.
+        '''
+        if self.info_func:
+            return self.info_func(case)
+        else:
+            return None
+
 
 class TemplateCaseGenerator(object):
     def __init__(self, template):
@@ -323,12 +377,20 @@ class TemplateCaseGenerator(object):
         if "inst_templates" not in self.template:
             self.template["inst_templates"] = OrderedDict()
 
-    def make_case(self, conf_root, output_root, case_path, test_vector):
+    def make_case(self,
+                  conf_root,
+                  output_root,
+                  case_path,
+                  test_vector,
+                  case_info=None):
         '''Generate a test case according to the specified test vector'''
         template_vars = dict(test_vector)
         template_vars["conf_root"] = conf_root
         template_vars["output_root"] = output_root
         template_vars["case_path"] = case_path
+        if case_info:
+            assert isinstance(case_info, dict)
+            template_vars.update(case_info)
         # copy case files: each file is defiend as (src, dst), where src is
         # relative to conf_root and dst is relative to case_path.
         for src, dst in self.template["copy_files"].items():
@@ -479,7 +541,12 @@ class CustomCaseGenerator(object):
         self.func = fun
         self.args = args
 
-    def make_case(self, conf_root, output_root, case_path, test_vector):
+    def make_case(self,
+                  conf_root,
+                  output_root,
+                  case_path,
+                  test_vector,
+                  case_info=None):
         '''Generate a test case according to the specified test vector
 
         Args:
@@ -487,6 +554,7 @@ class CustomCaseGenerator(object):
             output_root (str): Absolute path for the output root.
             case_path (str): Absolute path for the test case.
             test_vector (OrderedDict): Test case identification.
+            case_info (dict): Extra information for the case.
 
         Returns:
             dict: Test case specification
@@ -508,6 +576,8 @@ class CustomCaseGenerator(object):
         args["output_root"] = output_root
         args["case_path"] = case_path
         args["test_vector"] = test_vector
+        if case_info:
+            args["case_info"] = case_info
         case_spec = self.func(**args)
 
         # create empty output file, so when output file is used for special
@@ -678,6 +748,7 @@ class TestProjectBuilder(object):
         for case in self.test_vector_generator.items():
             case_path = self.output_organizer.get_case_path(case)
             case_fullpath = os.path.join(output_root, case_path)
+            case_info = self.test_vector_generator.case_info(case)
             if not os.path.exists(case_fullpath):
                 os.makedirs(case_fullpath)
 
@@ -701,7 +772,8 @@ class TestProjectBuilder(object):
             os.chdir(case_fullpath)
             try:
                 case_spec = self.test_case_generator.make_case(
-                    self.conf_root, output_root, case_fullpath, case)
+                    self.conf_root, output_root, case_fullpath, case,
+                    case_info)
             finally:
                 os.chdir(cwd)
 
