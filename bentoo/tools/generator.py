@@ -15,6 +15,7 @@ from collections import OrderedDict
 
 from bentoo.common.conf import load_conf
 from bentoo.common.utils import replace_template, safe_eval
+import bentoo.common.helpers2 as helpers
 
 
 class SimpleVectorGenerator(object):
@@ -40,6 +41,7 @@ class SimpleVectorGenerator(object):
             SimpleVectorGenerator(["A", "B"], [[1, [2, 3]], [2, 3]])
 
     '''
+
     def __init__(self, test_factors, raw_vectors=None):
         self.test_factors = test_factors
         self.raw_vectors = raw_vectors if raw_vectors else []
@@ -73,6 +75,7 @@ class CartProductVectorGenerator(object):
             (k, v) denotes (test factor name, test factor values)
 
     '''
+
     def __init__(self, test_factors, factor_values):
         self.test_factors = test_factors
         self.factor_values = factor_values
@@ -92,6 +95,172 @@ class CartProductVectorGenerator(object):
             yield OrderedDict(zip(self.test_factors, v))
 
 
+BENCH_TEST_FACTORS = ["model", "bench", "mem_per_node", "nnodes", "ncores"]
+BENCH_TYPES = ["onenode", "weak", "strong"]
+
+
+class BenchVectorGenerator(object):
+    '''Benchmarking test vector generator
+
+    Generate a collection of test vectors to cover a reproducible cross-system
+    performance benchmarks.
+
+    Args:
+        test_factors (list): test factor names.
+        factor_values (list): test factor value ranges.
+            (k, v) denotes (test factor name, test factor values)
+
+    '''
+
+    def __init__(self, test_factors, spec):
+        s0 = set(test_factors)
+        s1 = set(BENCH_TEST_FACTORS)
+        assert s0 >= s1
+        if s0 > s1:
+            assert "other_factor_values" in spec
+            self.other_factors = list(s0 - s1)
+            self.other_factor_values = spec["other_factor_values"]
+            for factor in self.other_factors:
+                assert factor in self.other_factor_values
+                assert isinstance(self.other_factor_values[factor], list)
+        else:
+            self.other_factors = None
+            self.other_factor_values = None
+        self.test_factors = test_factors
+
+        assert "bench_config" in spec
+        assert "model_config" in spec
+        assert "system_config" in spec
+
+        self.bench_vectors = []  # stores all vectors
+        self.bench_models = []  # stores model for the corresponding vector
+        system = spec["system_config"]
+        sys_nnodes = int(system["nnodes"])
+        sys_cpn = int(system["cpn"])
+        sys_node_mem = helpers.sizeToFloat(system["mem_per_node"])
+        bench_conf = spec["bench_config"]
+        for model_name, model_spec in spec["model_config"].items():
+            model_type = model_spec["type"]
+            assert model_type in {"structured_grid", "unstructured_grid"}
+            if model_type == "structured_grid":
+                grid = model_spec["grid"]
+                total_mem = model_spec["total_mem"]
+                resizer = helpers.StructuredGridModelResizer(grid, total_mem)
+            else:
+                dim = model_spec["dim"]
+                total_mem = model_spec["total_mem"]
+                resizer = helpers.UnstructuredGridModelResizer(dim, total_mem)
+            benchmarks = model_spec["bench"]
+            for bench in benchmarks:
+                assert bench in BENCH_TYPES
+                assert bench in bench_conf
+                conf = bench_conf[bench]
+                if bench == "onenode":
+                    # Generate intra-node benchmarks
+                    result = {
+                        "bench": bench,
+                        "model": model_name,
+                        "nnodes": 1,
+                    }
+                    for mem_per_node_req in conf["mem_per_node"]:
+                        model = resizer.resize(mem_per_node_req)
+                        if model["nnodes"] != 1:
+                            continue
+                        mem_per_node = model["mem_per_node"]
+                        mem_per_node = helpers.sizeToFloat(mem_per_node)
+                        if mem_per_node > 0.75 * sys_node_mem:
+                            continue
+                        result["mem_per_node"] = model["mem_per_node"]
+                        ncores = []
+                        nc = sys_cpn
+                        while nc % 2 == 0:
+                            ncores.append(nc)
+                            nc //= 2
+                        ncores.append(nc)
+                        ncores.reverse()
+                        for n in ncores:
+                            if n < conf["min_nnodes"]:
+                                continue
+                            result["ncores"] = n
+                            vector = [result[f] for f in BENCH_TEST_FACTORS]
+                            self.bench_vectors.append(vector)
+                            self.bench_models.append(model)
+                elif bench == "weak":
+                    # Generate internode weak-scaling benchmarks
+                    result = {"bench": bench, "model": model_name}
+                    for mem_per_node_req in conf["mem_per_node"]:
+                        model = resizer.resize(mem_per_node_req)
+                        mem_per_node = model["mem_per_node"]
+                        mem_per_node = helpers.sizeToFloat(mem_per_node)
+                        if mem_per_node > 0.75 * sys_node_mem:
+                            continue
+                        result["mem_per_node"] = model["mem_per_node"]
+                        nnodes_min = conf["nnodes"]["min"]
+                        nnodes_max = min(conf["nnodes"]["max"],
+                                         system["nnodes"])
+                        while model["nnodes"] <= nnodes_max:
+                            if nnodes >= nnodes_min:
+                                result["nnodes"] = model["nnodes"]
+                                result["ncores"] = model["nnodes"] * sys_cpn
+                                vec = [result[f] for f in BENCH_TEST_FACTORS]
+                                self.bench_vectors.append(vec)
+                                self.bench_models.append(model)
+                            model = resizer.next(model)
+                elif bench == "strong":
+                    # Generate internode strong-scaling benchmarks
+                    result = {"bench": bench, "model": model_name}
+                    max_multiple = conf["max_multiple"]
+                    for mem_per_node_req in conf["mem_per_node"]:
+                        model = resizer.resize(mem_per_node_req)
+                        mem_per_node = model["mem_per_node"]
+                        mem_per_node = helpers.sizeToFloat(mem_per_node)
+                        if mem_per_node > 0.75 * sys_node_mem:
+                            continue
+                        result["mem_per_node"] = model["mem_per_node"]
+                        for base_nnodes in conf["nnodes"]:
+                            # Skip impossible cases
+                            if base_nnodes * max_multiple <= model["nnodes"]:
+                                continue
+                            nnodes = model["nnodes"]
+                            max_nnodes = min(nnodes * max_multiple,
+                                             system["nnodes"])
+                            while nnodes <= max_nnodes:
+                                result["nnodes"] = nnodes
+                                result["ncores"] = nnodes * sys_cpn
+                                vector = [
+                                    result[f] for f in BENCH_TEST_FACTORS
+                                ]
+                                self.bench_vectors.append(vector)
+                                self.bench_models.append(model)
+                                nnodes *= 2
+                else:
+                    raise RuntimeError("Invalid benchmark type '%s'" % bench)
+
+    def items(self):
+        '''An iterator over the range of test vectors
+
+        Yields:
+            OrderedDict: a test vector.
+
+            OrderedDict.values() is the test factor values and
+            OrderedDict.keys() is the test factor names.
+
+        '''
+        if self.other_factors:
+            others = [self.other_factor_values[f] for f in self.other_factors]
+            for v in self.bench_vectors:
+                vals = dict(zip(BENCH_TEST_FACTORS, v))
+                for other_values in itertools.product(*others):
+                    vals.update(dict(zip(self.other_factors, other_values)))
+                    ovals = [vals[f] for f in self.test_factors]
+                    yield OrderedDict(zip(self.test_factors, ovals))
+        else:
+            for v in self.bench_vectors:
+                vals = dict(zip(BENCH_TEST_FACTORS, v))
+                ovals = [vals[f] for f in self.test_factors]
+                yield OrderedDict(zip(self.test_factors, ovals))
+
+
 class CustomVectorGenerator(object):
     '''Custom test vector generator
 
@@ -103,6 +272,7 @@ class CustomVectorGenerator(object):
         spec (dict): generator definition.
 
     '''
+
     def __init__(self, test_factors, spec, project_root):
         self.test_factors = test_factors
 
@@ -425,6 +595,10 @@ class TestProjectBuilder(object):
             args = spec["custom_vector_generator"]
             self.test_vector_generator = CustomVectorGenerator(
                 self.test_factors, args, conf_root)
+        elif test_vector_generator_name == "bench":
+            args = spec["bench_vector_generator"]
+            self.test_vector_generator = BenchVectorGenerator(
+                self.test_factors, args)
         else:
             raise RuntimeError("Unknown test vector generator '%s'" %
                                test_vector_generator_name)

@@ -69,8 +69,16 @@ class StructuredGridModelResizer(object):
         return {
             "nnodes": 1,
             "grid": base_grid,
-            "mem_per_node": floatToSize(bytes_per_cell * new_ncells)
+            "mem_per_node": floatToSize(bytes_per_cell * new_ncells),
+            "index_": 0
         }
+
+    def next(self, model):
+        result = dict(model)
+        result["nnodes"] *= 2
+        result["grid"][result["index_"]] *= 2
+        result["index_"] = (result["index_"] + 1) % self.dim
+        return result
 
 
 class UnstructuredGridModelResizer(object):
@@ -141,82 +149,12 @@ class UnstructuredGridModelResizer(object):
                 "mem_per_node": floatToSize(mem_per_node)
             }
 
+    def next(self, model):
+        result = dict(model)
+        result["nnodes"] *= self.stride
+        result["nrefines"] += 1
+        return result
+
 
 def make_process_grid(n, dim):
     pass
-
-
-conf = {
-    "template": {
-        "type": "predefined",
-        "instances": {
-            "model1": {
-                "dim": 3,
-                "total_mem": "500M"
-            },
-            "model2": {
-                "dim": 3,
-                "total_mem": "5G"
-            },
-            "model3": {
-                "dim": 3,
-                "total_mem": "50G"
-            },
-        }
-    },
-    "output": [{
-        "type": "fixed",
-        "mem_per_node": ["500M", "5G", "50G"]
-        "nnodes": [1, 2, 16, 128],
-    }, {
-        "type": "scaled",
-        "mem_per_node": ["500M", "5G", "50G"]
-        "nnodes": [3, 6, 12, 24, 48, 96, 192, 384, 768, 1536, 3072],
-    }]
-}
-
-conf = {
-    "template": {
-        "type": "predefined",
-        "instances": {
-            "model1": {
-                "type": "structured",
-                "dim": 3,
-                "grid": [100, 100, 100],
-                "total_mem": "500M",
-                "target": [
-                    {
-                        "type": "scaled",
-                        "mem_per_node": "500M",
-                        "nnodes": {
-                            "begin": 1,
-                            "end": 3072
-                        }
-                    },
-                    {
-                        "type": "fixed",
-                        "mem_per_node": "500M",
-                        "nnodes": [1, 16, 128, 512]
-                    },
-                ]
-            },
-            "model2": {
-                "dim": 3,
-                "total_mem": "5G"
-            },
-            "model3": {
-                "dim": 3,
-                "total_mem": "50G"
-            },
-        }
-    },
-    "output": [{
-        "type": "fixed",
-        "nnodes": [1, 2, 16, 128],
-        "mem_per_node": ["500M", "5G", "50G"]
-    }, {
-        "type": "scaled",
-        "nnodes": [3, 6, 12, 24, 48, 96, 192, 384, 768, 1536, 3072],
-        "mem_per_node": ["500M", "5G", "50G"]
-    }]
-}
