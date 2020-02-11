@@ -29,7 +29,3 @@ class TestHelpers2(unittest.TestCase):
                 self.assertEqual(get["nrefines"], expect[0])
                 self.assertEqual(get["nnodes"], expect[1])
                 self.assertEqual(get["mem_per_node"], expect[2])
-
-
-if __name__ == "__main__":
-    unittest.main()
