@@ -19,13 +19,20 @@ class TestHelpers2(unittest.TestCase):
             "total_mem": "5G",
             # Each case as: ((mem_per_node, nnodes), (nrefines, nnodes,
             # mem_per_node))
-            "cases": [(("4.5G", 1), (0, 1, "5.0G"))]
+            "cases": [
+                (("5.1G", 1), (0, 1, "5.0G")),
+                (("5.0G", 1), (0, 1, "5.0G")),
+                (("4.5G", 1), (0, 2, "2.5G")),
+                (("500M", 1), (0, 16, "320.0M")),
+                (("500M", 8), (0, 16, "320.0M")),
+                (("500M", 16), (0, 16, "320.0M")),
+                (("500M", 64), (1, 128, "320.0M")),
+            ]
         }]
         for conf in config:
             resizer = helpers.UnstructuredGridModelResizer(
                 conf["dim"], conf["total_mem"])
             for args, expect in conf["cases"]:
                 get = resizer.resize(*args)
-                self.assertEqual(get["nrefines"], expect[0])
-                self.assertEqual(get["nnodes"], expect[1])
-                self.assertEqual(get["mem_per_node"], expect[2])
+                get = [get[x] for x in ("nrefines", "nnodes", "mem_per_node")]
+                self.assertEqual(get, list(expect))
