@@ -178,44 +178,56 @@ class UnstructuredGridModelResizer(object):
         :return: The new grid and nnodes for the model.
         '''
         mem_per_node = sizeToFloat(mem_per_node)
-        rel = math.fabs((mem_per_node - self.total_mem) / self.total_mem)
-        # If the request is within 10% of the original model, use it.
-        if (rel < 0.1):
+        total_mem_req = mem_per_node * nnodes
+        rel = math.fabs(2 * (total_mem_req - self.total_mem) /
+                        (self.total_mem + total_mem_req))
+        # If the request is within 25% of the original model, use it.
+        if rel < 0.25:
+            print("direct return")
             return {
-                "nrefines": 1,
-                "nnodes": 1,
-                "mem_per_node": floatToSize(self.total_mem)
+                "nrefines": 0,
+                "nnodes": nnodes,
+                "mem_per_node": floatToSize(self.total_mem / nnodes)
             }
-        # If the request is bigger, enlarge it (may change the nnodes).
-        # Otherwise, change the nnodes to reduce the memory per node.
-        if mem_per_node > self.total_mem:
-            ratio = mem_per_node / self.total_mem
+        # If the request is bigger, enlarge the model (may change nnodes as
+        # well). Otherwise, change the nnodes to satisfy the memory per node.
+        if total_mem_req > self.total_mem:
+            ratio = total_mem_req / self.total_mem
             i = int(math.floor(math.log(ratio, self.stride)))
             real_mem = self.total_mem * self.stride**i
-            if real_mem * 2 < mem_per_node:
+            real_mem_per_node = real_mem / nnodes
+            if real_mem_per_node * 2 < mem_per_node:
+                print("adjust nnodes")
                 # The resized model is too small from the required size, we have
                 # to enlarge more and change the nnodes as well.
                 i += 1
                 real_mem = self.total_mem * self.stride**i
-                assert (real_mem > mem_per_node)
-                nnodes = int(math.ceil(real_mem / mem_per_node))
-                mem_per_node = real_mem / nnodes
+                real_mem_per_node = real_mem / nnodes
+                assert real_mem_per_node > mem_per_node
+                new_nnodes = int(math.ceil(real_mem / total_mem_req) * nnodes)
+                new_nnodes = 2 ** int(math.ceil(math.log2(new_nnodes)))
+                new_mem_per_node = real_mem / new_nnodes
+                return {
+                    "nrefines": i,
+                    "nnodes": new_nnodes,
+                    "mem_per_node": floatToSize(new_mem_per_node)
+                }
+            else:
+                print("No adjust nnodes")
                 return {
                     "nrefines": i,
                     "nnodes": nnodes,
-                    "mem_per_node": floatToSize(mem_per_node)
-                }
-            else:
-                return {
-                    "nrefines": i,
-                    "nnodes": 1,
-                    "mem_per_node": floatToSize(real_mem)
+                    "mem_per_node": floatToSize(real_mem_per_node)
                 }
         else:
+            print("simple nnodes adjust")
+            # compute nnodes for the nearest mem_per_node
             nnodes = int(math.ceil(self.total_mem / mem_per_node))
+            # find the nearest 2's multiple
+            nnodes = 2 ** int(math.ceil(math.log2(nnodes)))
             mem_per_node = self.total_mem / nnodes
             return {
-                "nrefines": 1,
+                "nrefines": 0,
                 "nnodes": nnodes,
                 "mem_per_node": floatToSize(mem_per_node)
             }

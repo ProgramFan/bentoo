@@ -34,11 +34,11 @@
     },
     "model_config": {
       "model1": {
-        "type": "structured_grid",
+        "type": "unstructured_grid",
         "dim": 3,
         "grid": [1000, 1000, 1000],
         "total_mem": "5G",
-        "bench": ["onenode", "strong", "weak"]
+        "bench": ["strong", "weak"]
       }
     },
     "other_factor_values": {
