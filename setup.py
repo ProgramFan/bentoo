@@ -7,7 +7,7 @@ setup(name="bentoo",
       description=
       "Benchmark Tools for Reproducible (Parallel) Performance Evaluation",
       version="0.23.dev0",
-      packages=find_packages(),
+      packages=find_packages(exclude=("tests",)),
       entry_points={
           "console_scripts": [
               "bentoo-generator = bentoo.tools.generator:main",
