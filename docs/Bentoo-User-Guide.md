@@ -244,7 +244,7 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
 
 ### 内置测试向量生成器
 
-在 `project` 中设置 `test_vector_generator` 为 `simple` 、`cart_product` 或 `bench` 时，可在 `TestProjectConfig.json` 中直接设定测试向量并通过 Bentoo 生成测试向量，无需编写 python 函数。
+在 `project` 中设置 `test_vector_generator` 为 `simple` 、`cart_product` 或 `bench` 时，可在 `TestProjectConfig.json` 中直接设定测试向量并通过 Bentoo 生成测试向量，无需编写 python 函数。
 
 #### cart_product_vector_generator
 
