@@ -244,7 +244,7 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
 
 ### 内置测试向量生成器
 
-在 `project` 中设置 `test_vector_generator` 为 `simple` 或 `cart_product` 时，可在 `TestProjectConfig.json` 中直接设定测试向量并通过 Bentoo 生成测试向量，无需编写 python 函数。
+在 `project` 中设置 `test_vector_generator` 为 `simple` 、`cart_product` 或 `bench` 时，可在 `TestProjectConfig.json` 中直接设定测试向量并通过 Bentoo 生成测试向量，无需编写 python 函数。
 
 #### cart_product_vector_generator
 
@@ -275,6 +275,80 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
       ["mpi-node", [1, 2, 4, 8, 16, 32, 64, 128], [0, 1, 2, 3, 4]]
     ]
   }
+}
+```
+
+#### bench_vector_generator
+
+当设置 `test_vector_generator` 为 `bench` 时，可使用并行测试用例集自动生成功能。该功能有两个要求：
+
+1. 需在 `TestProjectConfig.json` 中定义 `bench_vector_generator` 字典。该字典较为复杂，描述了需要生成的测试用例的各种约束。
+2. 需在 `test_factors` 字段中包含 `"model", "bench", "mem_per_node", "series", "nnodes", "ncores"` 六个测试因素。
+
+`bench_vector_generator` 字典的一个示例如下：其中，`bench_config` 配置三种不同类型的测试子集的并行规模和计算规模参数，`system_config` 配置并行机系统参数，`model_config` 配置参考物理模型，而 `other_factor_values` 则配置其他测试因素的取值。
+
+```json
+  "bench_vector_generator": {
+    "bench_config": {
+      "onenode": {
+        "min_ncores": 4,
+        "mem_per_node": ["500M", "5G", "50G"]
+      },
+      "weak": {
+        "nnodes": {
+          "min": 1,
+          "max": 3072
+        },
+        "mem_per_node": ["500M", "5G", "50G"]
+      },
+      "strong": {
+        "base_nnodes": [1, 4, 32, 256],
+        "max_multiple": 64,
+        "max_nnodes": 3072,
+        "mem_per_node": ["500M", "5G", "50G"]
+      }
+    },
+    "system_config": {
+      "nnodes": 3072,
+      "cores_per_node": 64,
+      "mem_per_node": "128G"
+    },
+    "model_config": {
+      "model1": {
+        "type": "unstructured_grid",
+        "dim": 3,
+        "total_mem": "5G",
+        "bench": ["onenode", "strong", "weak"]
+      }
+    },
+    "other_factor_values": {
+      "test_id": [0， 1， 2]
+    }
+  }
+```
+
+`bench_config` 包括 `onenode` 、`weak` 和 `strong` 三个键，代表单结点测试、弱扩展测试和强扩展测试三种类型，每个键对应一个字典，配置各种类型的并行规模和单结点内存规模，强扩展测试的单结点内存规模代表其起始结点数下的单结点内存规模。
+
+`system_config` 包括系统结点数、每结点核数和结点内存量，将被用于筛选测试用例并生成并行执行配置。
+
+`model_config` 包括若干键值对，每一个对代表一个计算场景，包括参考物理模型和待开展的测试类型。目前，参考物理模型包括结构网格模型和非结构网格模型两类，其描述结果如下：
+
+```json
+"model1": {
+  "type": "unstructured_grid",
+  "dim": 3,
+  "total_mem": "5G",
+  "bench": ["onenode", "strong", "weak"]
+}
+```
+
+```json
+"model2": {
+  "type": "structured_grid",
+  "dim": 3,
+  "grid": [1024, 1024, 1024],
+  "total_mem": "5G",
+  "bench": ["onenode", "strong", "weak"]
 }
 ```
 
@@ -554,7 +628,7 @@ Archiver Arguments:
 bentoo-collector -p jasmin4 --use-table -1 --use-result 0 <OUTPUT_ROOT> --archive results.tar.gz data.sqlite
 ```
 
-这里 `--use-result` 选项选择在 `results` 字段中定义的结果文件，为 python 语法接受的列表索引类型。`--use-table` 选项选择结果文件中的性能表格（一些测试输出多个性能表格）。`-p` 选项选择性能表格解析器。`--archive` 选项设置将原始数据文件打包为指定压缩包。
+这里 `--use-result` 选项选择在 `results` 字段中定义的结果文件，为 python 语法接受的列表索引类型。`--use-table` 选项选择结果文件中的性能表格（一些测试输出多个性能表格）。`-p` 选项选择性能表格解析器。`--archive` 选项设置将原始数据文件打包为指定压缩包。
 
 ### 过滤测试用例
 
