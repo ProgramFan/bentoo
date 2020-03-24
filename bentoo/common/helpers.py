@@ -7,7 +7,101 @@ import re
 import copy
 
 
-def make_process_grid(n, dim):
+def make_virtual_topology(numa_nodes, cpu_cores, nprocs, nthreads):
+    # First flatten threads into tasks and flatten all cores into a core list.
+    # Then map task to core round-robinly. Finally we compute the numa nodes
+    # and cpu cores of the procs.
+    tasks = range(nprocs * nthreads)
+    task_to_proc = [t // nthreads for t in tasks]
+    cores = []
+    for numa_node_id in numa_nodes:
+        cores.extend(cpu_cores[numa_node_id])
+    task_to_core = [cores[t % len(cores)] for t in tasks]
+    core_to_numa_node = dict()
+    for k, v in cpu_cores.items():
+        for c in v:
+            core_to_numa_node[c] = k
+    proc_numa_nodes = {p: [] for p in range(nprocs)}
+    proc_cores = {p: [] for p in range(nprocs)}
+    for t in tasks:
+        task_proc_id = task_to_proc[t]
+        task_core_id = task_to_core[t]
+        proc_numa_nodes[task_proc_id].append(core_to_numa_node[task_core_id])
+        proc_cores[task_proc_id].append(task_core_id)
+    result = []
+    for p in range(nprocs):
+        my_numa_nodes = sorted(list(set(proc_numa_nodes[p])))
+        my_cores = sorted(proc_cores[p])
+        my_topo = {n: [] for n in my_numa_nodes}
+        for c in my_cores:
+            my_topo[core_to_numa_node[c]].append(c)
+        for k, v in my_topo.items():
+            my_topo[k] = sorted(list(set(v)))
+        result.append(list((n, my_topo[n]) for n in my_numa_nodes))
+    return result
+
+
+def virtual_topology_to_str(topo):
+    def contract_numbers(seq):
+        if len(seq) == 1:
+            return [[seq[0], 1]]
+        segs = []
+        seq = sorted(seq)
+        s = seq[0]
+        l = 1
+        for i in seq[1:]:
+            if s + l == i:
+                l += 1
+            else:
+                segs.append((s, l))
+                s = i
+                l = 1
+        segs.append((s, l))
+        return segs
+
+    numa_nodes = []
+    node_cores = []
+    for v in topo:
+        for n, c in v:
+            numa_nodes.append(n)
+            node_cores.append(contract_numbers(c))
+    numa_nodes = contract_numbers(numa_nodes)
+
+    def seg_to_str(seg):
+        return "{}-{}".format(seg[0], seg[0] + seg[1] -
+                              1) if seg[1] > 1 else "{}".format(seg[0])
+
+    return {
+        "numa_nodes_list":
+        ",".join(map(seg_to_str, numa_nodes)),
+        "cpu_cores_list":
+        ";".join(",".join(map(seg_to_str, c)) for c in node_cores)
+    }
+
+
+def make_jolly_virtual_topology(topo, procs_per_node, nthreads):
+    def parse_int_list(s):
+        result = []
+        for seg in s.split(","):
+            rg = seg.split("-")
+            if len(rg) == 1:
+                result.append(int(rg[0]))
+            else:
+                result.extend(range(int(rg[0]), int(rg[1]) + 1))
+        return result
+
+    numa_nodes = parse_int_list(topo["numa_nodes"])
+    cpu_cores = {i: parse_int_list(topo["cpu_cores"][i]) for i in numa_nodes}
+    topo = make_virtual_topology(numa_nodes, cpu_cores, procs_per_node,
+                                 nthreads)
+    vtopo = virtual_topology_to_str(topo)
+    return {
+        "JOLLY_CPU_CORES_LIST": vtopo["cpu_cores_list"],
+        "JOLLY_NUMA_NODES_LIST": vtopo["numa_nodes_list"]
+    }
+
+
+def make_process_grid(n, dim=3):
     def is_prime(x):
         if x == 1:
             return True
@@ -107,7 +201,6 @@ class StructuredGridModelResizer(object):
     This resizer assumes the model uses a structured grid and the grid can be
     regrided arbitrarily to fit any total memory requirements.
     '''
-
     def __init__(self, grid, total_mem):
         '''Initialize the resizer
 
@@ -157,7 +250,6 @@ class UnstructuredGridModelResizer(object):
     This resizer assumes the grid is unstructured and one can only refine
     uniformlly the grid to reach a given size.
     '''
-
     def __init__(self, dim, total_mem):
         '''Initialize the resizer
 

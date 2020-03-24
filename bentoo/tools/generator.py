@@ -15,7 +15,7 @@ from collections import OrderedDict
 
 from bentoo.common.conf import load_conf
 from bentoo.common.utils import replace_template, safe_eval
-import bentoo.common.helpers2 as helpers
+import bentoo.common.helpers as helpers
 
 
 class SimpleVectorGenerator(object):
