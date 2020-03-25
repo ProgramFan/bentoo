@@ -241,10 +241,9 @@ class YhrunLauncher(object):
                 env["GLEX_USE_ZC_RNDV"] = "0"
         elif self.args["fix_glex"] == "v2":
             ppn = run.get("procs_per_node", 1)
-            ppn = int(ppn)
-            if ppn > 32:
+            if int(ppn) > 32:
                 env["MPICH_NEMESIS_NETMOD"] = "tcp"
-            if nnodes > 1:
+            if int(nnodes) > 1:
                 env["MPICH_CH3_NO_LOCAL"] = "1"
 
 
@@ -261,7 +260,7 @@ class YhrunLauncher(object):
             if "-p" in real_cmd:
                 idx = real_cmd.index("-p")
                 real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
-            make_bash_script(None, spec["envs"], [real_cmd],
+            make_bash_script(None, env, [real_cmd],
                              os.path.join(path, "batch_spec.sh"))
             # build yhbatch command line
             yhbatch_cmd = ["yhbatch", "-N", str(nnodes)]
@@ -286,7 +285,7 @@ class YhrunLauncher(object):
 
         else:
             if make_script:
-                make_bash_script(None, spec["envs"], [cmd],
+                make_bash_script(None, env, [cmd],
                                  os.path.join(path, "run.sh"))
             if dryrun:
                 return None
