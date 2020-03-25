@@ -223,7 +223,7 @@ class YhrunLauncher(object):
         cmd = yhrun_cmd + exec_cmd
         cmd = list(map(str, cmd))
 
-        env = dict(os.environ)
+        env = {}
         for k, v in spec["envs"].items():
             env[k] = str(v)
 
@@ -293,6 +293,7 @@ class YhrunLauncher(object):
             out_fn = os.path.join(path, "STDOUT")
             err_fn = os.path.join(path, "STDERR")
 
+            env.update(os.environ)
             if verbose:
                 proc1 = subprocess.Popen(cmd,
                                          env=env,
