@@ -220,6 +220,11 @@ class StructuredGridModelResizer(object):
         self.dim = len(grid)
         self.total_mem = sizeToFloat(total_mem)
 
+    def exactResize(self):
+        '''Test if the resizer can resize exactly to the required mem_per_node
+        and nnodes'''
+        return True
+
     def resize(self, mem_per_node, nnodes=1):
         '''Resize the model to reach a certain memory per node
 
@@ -268,6 +273,11 @@ class UnstructuredGridModelResizer(object):
         self.dim = int(dim)
         self.total_mem = sizeToFloat(total_mem)
         self.stride = 2**self.dim
+
+    def exactResize(self):
+        '''Test if the resizer can resize exactly to the required mem_per_node
+        and nnodes'''
+        return False
 
     def resize(self, mem_per_node, nnodes=1):
         '''Resize the model to reach a certain memory per node

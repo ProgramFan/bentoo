@@ -41,7 +41,6 @@ class SimpleVectorGenerator(object):
             SimpleVectorGenerator(["A", "B"], [[1, [2, 3]], [2, 3]])
 
     '''
-
     def __init__(self, test_factors, raw_vectors=None):
         self.test_factors = test_factors
         self.raw_vectors = raw_vectors if raw_vectors else []
@@ -86,7 +85,6 @@ class CartProductVectorGenerator(object):
             (k, v) denotes (test factor name, test factor values)
 
     '''
-
     def __init__(self, test_factors, factor_values):
         self.test_factors = test_factors
         self.factor_values = factor_values
@@ -135,7 +133,6 @@ class BenchVectorGenerator(object):
             (k, v) denotes (test factor name, test factor values)
 
     '''
-
     def __init__(self, test_factors, spec):
         s0 = set(test_factors)
         s1 = set(BENCH_TEST_FACTORS)
@@ -231,6 +228,17 @@ class BenchVectorGenerator(object):
                                 self.bench_vectors.append(vec)
                                 self.bench_models.append(model)
                             model = resizer.next(model)
+                        # Add the tail case where the system nodes sit in
+                        # between the resize interval.
+                        if result["nnodes"] < nnodes_max and resizer.exactResize():
+                            model = resizer.resize(mem_per_node, nnodes_max)
+                            assert model["nnodes"] == nnodes_max
+                            result["nnodes"] = model["nnodes"]
+                            result["ncores"] = model["nnodes"] * sys_cpn
+                            vec = [result[f] for f in BENCH_TEST_FACTORS]
+                            self.bench_vectors.append(vec)
+                            self.bench_models.append(model)
+
                 elif bench == "strong":
                     # Generate internode strong-scaling benchmarks
                     result = {"bench": bench, "model": model_name}
@@ -256,6 +264,14 @@ class BenchVectorGenerator(object):
                                 self.bench_vectors.append(vec)
                                 self.bench_models.append(model)
                                 nnodes *= 2
+                            # append the tail case where system nodes are
+                            # between the power-of-2 interval.
+                            if result["nnodes"] < max_nnodes:
+                                result["nnodes"] = max_nnodes
+                                result["ncores"] = max_nnodes * sys_cpn
+                                vec = [result[f] for f in BENCH_TEST_FACTORS]
+                                self.bench_vectors.append(vec)
+                                self.bench_models.append(model)
                 else:
                     raise RuntimeError("Invalid benchmark type '%s'" % bench)
 
@@ -312,7 +328,6 @@ class CustomVectorGenerator(object):
         spec (dict): generator definition.
 
     '''
-
     def __init__(self, test_factors, spec, project_root):
         self.test_factors = test_factors
 
@@ -779,6 +794,8 @@ class TestProjectBuilder(object):
                 case_spec = self.test_case_generator.make_case(
                     self.conf_root, output_root, case_fullpath, case,
                     case_info)
+                if case_info:
+                    case_spec["case_info"] = case_info
             finally:
                 os.chdir(cwd)
 
@@ -795,8 +812,12 @@ class TestProjectBuilder(object):
         for case in self.test_vector_generator.items():
             vector = list(case.values())
             path = self.output_organizer.get_case_path(case)
-            test_defs.append(
-                OrderedDict(zip(["test_vector", "path"], [vector, path])))
+            test_def = OrderedDict(zip(["test_vector", "path"],
+                                       [vector, path]))
+            case_info = self.test_vector_generator.case_info(case)
+            if case_info:
+                test_def["case_info"] = case_info
+            test_defs.append(test_def)
         info["test_cases"] = test_defs
         project_info_path = self.output_organizer.get_project_info_path()
         project_info_fullpath = os.path.join(output_root, project_info_path)
