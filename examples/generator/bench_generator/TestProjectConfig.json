@@ -30,7 +30,10 @@
     "system_config": {
       "nnodes": 3072,
       "cores_per_node": 64,
-      "mem_per_node": "128G"
+      "mem_per_node": "128G",
+      "node_cpu_cores": "0-7;8-15;16-23;24-31;32-39;40-47;48-55;56-63",
+      "node_numa_nodes": "0-7",
+      "node_numa_mem": "16G,16G,16G,16G,16G,16G,16G,16G"
     },
     "model_config": {
       "model1": {

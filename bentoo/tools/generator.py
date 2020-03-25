@@ -159,6 +159,7 @@ class BenchVectorGenerator(object):
         self.bench_vectors = []  # stores all vectors
         self.bench_models = []  # stores model for the corresponding vector
         system = spec["system_config"]
+        self.system_config = system
         sys_nnodes = int(system["nnodes"])
         sys_cpn = int(system["cores_per_node"])
         sys_node_mem = helpers.sizeToFloat(system["mem_per_node"])
@@ -289,11 +290,15 @@ class BenchVectorGenerator(object):
             case: The case identifier as returned by items()
 
         Returns:
-            any python object, None if nothing is assiciated.
+            A python dict with a model and a system config. The model is used to
+            guide model generation and the system is used to guide system
+            adaptation.
         '''
         bench_vec = [case[f] for f in BENCH_TEST_FACTORS]
         case_index = self.bench_vectors.index(bench_vec)
-        return self.bench_models[case_index]
+        info = dict(self.bench_models[case_index])
+        info.update(self.system_config)
+        return info
 
 
 class CustomVectorGenerator(object):
