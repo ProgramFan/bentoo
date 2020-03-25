@@ -171,7 +171,7 @@ class YhrunLauncher(object):
                                dest="yhrun_yhbatch",
                                help="Use yhbatch instead of yhrun")
         argparser.add_argument("--yhrun-fix-glex",
-                               choices=("none", "v0", "v1"),
+                               choices=("none", "v0", "v1", "v2"),
                                default="none",
                                dest="yhrun_fix_glex",
                                help="Fix GLEX settings (default: none)")
@@ -239,6 +239,14 @@ class YhrunLauncher(object):
                 env["MPICH_NO_LOCAL"] = "1"
                 env["GLEX_BYPASS_ER"] = "1"
                 env["GLEX_USE_ZC_RNDV"] = "0"
+        elif self.args["fix_glex"] == "v2":
+            ppn = run.get("procs_per_node", 1)
+            ppn = int(ppn)
+            if ppn > 32:
+                env["MPICH_NEMESIS_NETMOD"] = "tcp"
+            if nnodes > 1:
+                env["MPICH_CH3_NO_LOCAL"] = "1"
+
 
         if self.args["use_batch"]:
             # build batch job script: we need to remove job control parameters
