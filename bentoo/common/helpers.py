@@ -79,7 +79,7 @@ def virtual_topology_to_str(topo):
     }
 
 
-def make_jolly_virtual_topology(topo, procs_per_node, nthreads):
+def parse_topology(cpu_cores, numa_nodes):
     def parse_int_list(s):
         result = []
         for seg in s.split(","):
@@ -90,8 +90,16 @@ def make_jolly_virtual_topology(topo, procs_per_node, nthreads):
                 result.extend(range(int(rg[0]), int(rg[1]) + 1))
         return result
 
-    numa_nodes = parse_int_list(topo["numa_nodes"])
-    cpu_cores = {i: parse_int_list(topo["cpu_cores"][i]) for i in numa_nodes}
+    numa_nodes = parse_int_list(numa_nodes)
+    if not isinstance(cpu_cores, list):
+        cpu_cores = cpu_cores.split(";")
+    cpu_cores = {i: parse_int_list(cpu_cores[i]) for i in numa_nodes}
+    return (cpu_cores, numa_nodes)
+
+
+def make_jolly_virtual_topology(topo, procs_per_node, nthreads):
+    cpu_cores, numa_nodes = parse_topology(topo["cpu_cores"],
+                                           topo["numa_nodes"])
     topo = make_virtual_topology(numa_nodes, cpu_cores, procs_per_node,
                                  nthreads)
     vtopo = virtual_topology_to_str(topo)
