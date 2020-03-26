@@ -160,6 +160,8 @@ class BenchVectorGenerator(object):
         sys_nnodes = int(system["nnodes"])
         sys_cpn = int(system["cores_per_node"])
         sys_node_mem = helpers.sizeToFloat(system["mem_per_node"])
+        sys_free_node_men = helpers.sizeToFloat(system["free_mem_per_node"])
+        sys_max_app_mem_ratio = sys_free_node_men / sys_node_mem
         bench_conf = spec["bench_config"]
         for model_name, model_spec in spec["model_config"].items():
             model_type = model_spec["type"]
@@ -191,7 +193,7 @@ class BenchVectorGenerator(object):
                             continue
                         mem_per_node = model["mem_per_node"]
                         mem_per_node = helpers.sizeToFloat(mem_per_node)
-                        if mem_per_node > 0.75 * sys_node_mem:
+                        if mem_per_node > sys_max_app_mem_ratio * sys_node_mem:
                             continue
                         result["mem_per_node"] = model["mem_per_node"]
                         ncores = []
@@ -215,7 +217,7 @@ class BenchVectorGenerator(object):
                         model = resizer.resize(mem_per_node_req)
                         mem_per_node = model["mem_per_node"]
                         mem_per_node = helpers.sizeToFloat(mem_per_node)
-                        if mem_per_node > 0.75 * sys_node_mem:
+                        if mem_per_node > sys_max_app_mem_ratio * sys_node_mem:
                             continue
                         result["mem_per_node"] = model["mem_per_node"]
                         nnodes_min = conf["nnodes"]["min"]
@@ -230,7 +232,9 @@ class BenchVectorGenerator(object):
                             model = resizer.next(model)
                         # Add the tail case where the system nodes sit in
                         # between the resize interval.
-                        if result["nnodes"] < nnodes_max and resizer.exactResize():
+                        has_tail_case = result["nnodes"] < nnodes_max
+                        has_tail_case = has_tail_case and resizer.exactResize()
+                        if has_tail_case:
                             model = resizer.resize(mem_per_node, nnodes_max)
                             assert model["nnodes"] == nnodes_max
                             result["nnodes"] = model["nnodes"]
@@ -249,7 +253,7 @@ class BenchVectorGenerator(object):
                                                    base_nnodes)
                             mem_per_node = model["mem_per_node"]
                             mem_per_node = helpers.sizeToFloat(mem_per_node)
-                            if mem_per_node > 0.75 * sys_node_mem:
+                            if mem_per_node > sys_max_app_mem_ratio * sys_node_mem:
                                 continue
                             if base_nnodes * max_multiple <= model["nnodes"]:
                                 continue
