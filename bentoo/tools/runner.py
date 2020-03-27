@@ -273,11 +273,9 @@ class YhrunLauncher(object):
             if self.args["use_yhbcast"] and "mirror_files" in spec:
                 bcast_cmds = []
                 cleanup_cmds = []
-                for k, v in spec["mirror_files"]:
-                    bcast_cmds.append(["yhbcast", k, os.path.join(v, k)])
-                    cleanup_cmds.append(
-                        yhrun_cmd +
-                        ["rm", "-f", os.path.join(v, k)])
+                for k, v in spec["mirror_files"].items():
+                    bcast_cmds.append(["yhbcast", k, v])
+                    cleanup_cmds.append(yhrun_cmd + ["rm", "-f", v])
                 script_cmds = cleanup_cmds + bcast_cmds
                 script_cmds += [real_cmd] + cleanup_cmds
             make_bash_script(None, env, script_cmds,
