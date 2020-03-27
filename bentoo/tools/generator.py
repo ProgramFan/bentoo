@@ -538,6 +538,9 @@ class TemplateCaseGenerator(object):
         case_spec = OrderedDict(
             zip(["cmd", "envs", "run", "results", "validator"],
                 [cmd, envs, run, results, validator]))
+        mirror_files = spec_template.get("mirror_files", None)
+        if mirror_files:
+            case_spec["mirror_files"] = mirror_files
 
         # create empty output file, so when output file is used for special
         # signal, it's ready and will not be ignored.

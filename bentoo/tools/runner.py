@@ -175,6 +175,11 @@ class YhrunLauncher(object):
                                default="none",
                                dest="yhrun_fix_glex",
                                help="Fix GLEX settings (default: none)")
+        argparser.add_argument(
+            "--yhrun-yhbcast",
+            action="store_true",
+            dest="yhrun_yhbcast",
+            help="Use yhbcast to prepare a node-local directory")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -183,7 +188,8 @@ class YhrunLauncher(object):
             "excluded_nodes": namespace.yhrun_excluded_nodes,
             "only_nodes": namespace.yhrun_only_nodes,
             "use_batch": namespace.yhrun_yhbatch,
-            "fix_glex": namespace.yhrun_fix_glex
+            "fix_glex": namespace.yhrun_fix_glex,
+            "use_yhbcast": namespace.yhrun_yhbcast,
         }
 
     def __init__(self, args):
@@ -246,6 +252,9 @@ class YhrunLauncher(object):
             if int(nnodes) > 1:
                 env["MPICH_CH3_NO_LOCAL"] = "1"
 
+        # Force use_batch if yhbcast is required.
+        if self.args["use_yhbcast"]:
+            self.args["use_batch"] = True
 
         if self.args["use_batch"]:
             # build batch job script: we need to remove job control parameters
@@ -260,7 +269,18 @@ class YhrunLauncher(object):
             if "-p" in real_cmd:
                 idx = real_cmd.index("-p")
                 real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
-            make_bash_script(None, env, [real_cmd],
+            script_cmds = [real_cmd]
+            if self.args["use_yhbcast"] and "mirror_files" in spec:
+                bcast_cmds = []
+                cleanup_cmds = []
+                for k, v in spec["mirror_files"]:
+                    bcast_cmds.append(["yhbcast", k, os.path.join(v, k)])
+                    cleanup_cmds.append(
+                        yhrun_cmd +
+                        ["rm", "-f", os.path.join(v, k)])
+                script_cmds = cleanup_cmds + bcast_cmds
+                script_cmds += [real_cmd] + cleanup_cmds
+            make_bash_script(None, env, script_cmds,
                              os.path.join(path, "batch_spec.sh"))
             # build yhbatch command line
             yhbatch_cmd = ["yhbatch", "-N", str(nnodes)]
