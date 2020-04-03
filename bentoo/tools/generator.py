@@ -170,10 +170,16 @@ class BenchVectorGenerator(object):
                 grid = model_spec["grid"]
                 total_mem = model_spec["total_mem"]
                 resizer = helpers.StructuredGridModelResizer(grid, total_mem)
-            else:
+            elif model_type == "unstructured_grid":
                 dim = model_spec["dim"]
                 total_mem = model_spec["total_mem"]
                 resizer = helpers.UnstructuredGridModelResizer(dim, total_mem)
+            elif model_type == "omni":
+                model_db = model_spec["candidates"]
+                resizer = helpers.OmniModelResizer(model_db, sys_nnodes)
+            else:
+                raise RuntimeError("Invalid model type '%s' in '%s'" %
+                                   (model_type, model_name))
             benchmarks = model_spec["bench"]
             for bench in benchmarks:
                 assert bench in BENCH_TYPES
