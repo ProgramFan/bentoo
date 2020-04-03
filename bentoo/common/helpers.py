@@ -370,6 +370,7 @@ class OmniModelResizer(object):
         :model_db: The database of available models
         '''
         self.resizers = []
+        self.resizer_tags = []
         self.fixed_models = []
         self.can_resize_exactly = False
         for model in model_db:
@@ -385,11 +386,13 @@ class OmniModelResizer(object):
                 resizer = StructuredGridModelResizer(model["grid"],
                                                      model["total_mem"])
                 self.resizers.append(resizer)
+                self.resizer_tags.append(model["tag"])
                 self.can_resize_exactly = True
             else:
                 resizer = UnstructuredGridModelResizer(model["dim"],
                                                        model["total_mem"])
                 self.resizers.append(resizer)
+                self.resizer_tags.append(model["tag"])
 
     def exactResize(self):
         '''Test if the resizer can resize exactly to the required mem_per_node
@@ -430,6 +433,7 @@ class OmniModelResizer(object):
         for i, resizer in enumerate(self.resizers):
             m = resizer.resize(mem_per_node, nnodes)
             m["resizer_id_"] = i
+            m["tag"] = self.resizer_tags[i]
             candidates.append(m)
         # Indication of how good a candidate matches the request. Smaller is
         # better.
@@ -463,6 +467,7 @@ class OmniModelResizer(object):
         if model.get("resizer_id_", None) is not None:
             m = self.resizers[model["resizer_id_"]].next(model)
             m["resizer_id_"] = model["resizer_id_"]
+            m["tag"] = model["tag"]
             return m
         curr_mem_per_node = sizeToFloat(model["mem_per_node"])
         curr_nnodes = model["nnodes"]
@@ -503,6 +508,7 @@ class OmniModelResizer(object):
 
             if candidates:
                 result = min(candidates, key=deviation)
+                result["tag"] = model["tag"]
                 return result
 
         raise StopIteration("No more proper cases for mem_per_node %s" %

@@ -331,26 +331,101 @@ def make_case(conf_root, output_root, case_path, test_vector, **kwargs):
 
 `system_config` 包括系统结点数、每结点核数和结点内存量，将被用于筛选测试用例并生成并行执行配置。
 
-`model_config` 包括若干键值对，每一个对代表一个计算场景，包括参考物理模型和待开展的测试类型。目前，参考物理模型包括结构网格模型和非结构网格模型两类，其描述结果如下：
+`model_config` 包括若干键值对，每一个对代表一个计算场景，包括物理模型和待开展的测试类型。目前，物理模型包括参考结构网格模型、参考非结构网格模型和自定义模型三类，其描述方式如下：
 
-```json
-"model1": {
-  "type": "unstructured_grid",
-  "dim": 3,
-  "total_mem": "5G",
-  "bench": ["onenode", "strong", "weak"]
-}
-```
+- 参考结构网格模型
 
-```json
-"model2": {
-  "type": "structured_grid",
-  "dim": 3,
-  "grid": [1024, 1024, 1024],
-  "total_mem": "5G",
-  "bench": ["onenode", "strong", "weak"]
-}
-```
+  参考结构网格模型描述一个结构网格计算模型，`type` 设置为 `structured_grid`，分别用键 `dim`、`grid`、`total_mem` 和 `bench` 描述其维度、网格、总内存量和测试类型。测试向量生成器将根据这些描述，通过自动调整网格大小，生成符合要求的测试用例，并通过 `case_info` 字典传递给测试用例生成器。例如：配置为如下模型
+
+  ```json
+  "planewave": {
+    "type": "structured_grid",
+    "dim": 3,
+    "grid": [1024, 1024, 1024],
+    "total_mem": "5G",
+    "bench": ["onenode", "strong", "weak"]
+  }
+  ```
+
+  将为测试用例生成器传入 `case_info` 参数，某个测试用例收到的结果是：
+  
+  ```python
+  {
+    "dim": 3,
+    "grid": [1000, 1000, 1000],
+    "mem_per_node": "4.9G",
+    "nnodes": 1
+  }
+  ```
+  
+- 参考非结构网格模型
+
+  参考非结构网格模型描述一个非结构网格计算模型，`type` 设置为 `unstructured_grid`，分别用键 `dim`、`total_mem` 和 `bench` 描述其维度、总内存量和测试类型。测试向量生成器将根据这些描述，通过自动调整网格对分次数，生成符合要求的测试用例，并通过 `case_info` 字典传递给测试用例生成器。例如：配置为如下模型
+
+  ```json
+  "model1": {
+    "type": "unstructured_grid",
+    "dim": 3,
+    "total_mem": "5G",
+    "bench": ["onenode", "strong", "weak"]
+  }
+  ```
+  将为测试用例生成器传入 `case_info` 参数，某个测试用例收到的结果是：
+
+  ```python
+  {
+    "dim": 3,
+    "nrefines": 1,
+    "mem_per_node": "40G",
+    "nnodes": 1
+  }
+  ```
+
+- 自定义模型
+
+  参考结构网格模型可较好地自动生成结构网格的测试用例。但非结构网格模型则受限于仅调整网格对分次数，不容易生成符合测试要求的测试用例。自定义模型描述一系列不同结点数不同内存量的模型变种，测试向量生成器将从这些变种中选择最符合测试要求的变种，并通过 `case_info` 字典将该变种的附加信息传递给测试用例生成器。非结构网格应用可手动生成不同内存规模的模型变种，通过自定义模型来生成测试向量。
+
+  自定义模型 `type` 设置为 `omni`，包括 `bench` 和 `variants`两个键，代表测试类型和模型变种。模型变种为一个字典数组，每一个字典至少包含 `tag`、`mem_per_node` 和 `nnodes` 三个键，分别代表该变种的标签、平均单结点内存量和结点数。一个示例如下：
+
+  ```json
+  "sanxia": {
+    "type": "omni",
+    "bench": ["onenode", "strong", "weak"],
+    "variants": [
+      {
+        "nnodes": 1,
+        "mem_per_node": "5G",
+        "tag": "mesh1-r2.k"
+      },
+      {
+        "nnodes": 1,
+        "mem_per_node": "50G",
+        "tag": "mesh2-r2.k"
+      },
+      {
+        "nnodes": 4,
+        "mem_per_node": "5G",
+        "tag": "mesh3.k"
+      },
+      {
+        "nnodes": 16,
+        "mem_per_node": "5G",
+        "tag": "mesh3.k"
+      },
+      {
+        "nnodes": 4,
+        "mem_per_node": "50G",
+        "resizable": true,
+        "dim": "3",
+        "type": "unstructured_grid",
+        "total_memory": "200G",
+        "tag": "mesh4.k"
+      }
+    ]
+  }
+  ```
+
+  字典若包括 `resizable`且其值为 `true` 的时候，代表一个参考结构网格或参考非结构网格类型，需要额外提供两者需要的参数。在这种情况下，测试向量生成器将为每种情况在包括生成器能生成的全部变种在内的所有变种中选择最优变种。该字典将作为`case_info`传入到测试用例生成器。参考结构网格和参考非结构网格还将传入两者的附加信息。
 
 ### 内置测试用例生成器
 
