@@ -271,11 +271,13 @@ class YhrunLauncher(object):
                 real_cmd = real_cmd[:idx] + real_cmd[idx + 2:]
             script_cmds = [real_cmd]
             if self.args["use_yhbcast"] and "mirror_files" in spec:
+                assert nnodes is not None
+                yhrun_cmd_new = ["yhrun", "-N", nnodes, "-n", nnodes]
                 bcast_cmds = []
                 cleanup_cmds = []
                 for k, v in spec["mirror_files"].items():
                     bcast_cmds.append(["yhbcast", k, v])
-                    cleanup_cmds.append(yhrun_cmd + ["rm", "-f", v])
+                    cleanup_cmds.append(yhrun_cmd_new + ["rm", "-f", v])
                 script_cmds = cleanup_cmds + bcast_cmds
                 script_cmds += [real_cmd] + cleanup_cmds
             make_bash_script(None, env, script_cmds,
