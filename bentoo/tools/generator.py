@@ -165,7 +165,6 @@ class BenchVectorGenerator(object):
         bench_conf = spec["bench_config"]
         for model_name, model_spec in spec["model_config"].items():
             model_type = model_spec["type"]
-            assert model_type in {"structured_grid", "unstructured_grid"}
             if model_type == "structured_grid":
                 grid = model_spec["grid"]
                 total_mem = model_spec["total_mem"]
@@ -323,7 +322,8 @@ class BenchVectorGenerator(object):
         bench_vec = [case[f] for f in BENCH_TEST_FACTORS]
         case_index = self.bench_vectors.index(bench_vec)
         info = dict(self.bench_models[case_index])
-        info.update(self.system_config)
+        for k, v in self.system_config.items():
+            info["sys_%s" % k] = v
         return info
 
 
