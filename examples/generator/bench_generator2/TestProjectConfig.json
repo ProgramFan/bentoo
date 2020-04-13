@@ -11,26 +11,27 @@
     "bench_config": {
       "onenode": {
         "min_ncores": 4,
-        "mem_per_node": ["500M", "5G", "50G"]
+        "mem_per_node": ["5G", "25G", "50G", "100G"]
       },
       "weak": {
         "nnodes": {
           "min": 1,
           "max": 3072
         },
-        "mem_per_node": ["500M", "5G", "50G"]
+        "mem_per_node": ["5G", "25G", "40G", "100G"]
       },
       "strong": {
-        "base_nnodes": [1, 8, 64],
-        "max_multiple": 128,
-        "max_nnodes": 3072,
-        "mem_per_node": ["500M", "5G", "50G"]
+        "base_nnodes": [1, 4, 32, 256],
+        "max_multiple": 64,
+        "max_nnodes": 4096,
+        "mem_per_node": ["5G", "25G", "50G", "100G"]
       }
     },
     "system_config": {
-      "nnodes": 3072,
+      "nnodes": 3328,
       "cores_per_node": 64,
       "mem_per_node": "128G",
+      "free_mem_per_node": "120G",
       "node_cpu_cores": "0-7;8-15;16-23;24-31;32-39;40-47;48-55;56-63",
       "node_numa_nodes": "0-7",
       "node_numa_mem": "16G,16G,16G,16G,16G,16G,16G,16G"
@@ -39,7 +40,7 @@
       "model1": {
         "type": "omni",
         "bench": ["onenode", "strong", "weak"],
-        "variants": [
+        "candidates": [
           {
             "nnodes": 1,
             "mem_per_node": "5G",
@@ -51,23 +52,31 @@
             "tag": "mesh2.k"
           },
           {
-            "nnodes": 4,
+            "nnodes": 1,
             "mem_per_node": "5G",
-            "tag": "mesh3.k"
-          },
-          {
-            "nnodes": 16,
-            "mem_per_node": "5G",
-            "tag": "mesh3.k"
-          },
-          {
-            "nnodes": 4,
-            "mem_per_node": "50G",
             "resizable": true,
             "dim": "3",
             "type": "unstructured_grid",
-            "total_mem": "200G",
-            "tag": "mesh4.k"
+            "total_mem": "5G",
+            "tag": "mesh_5g.k"
+          },
+          {
+            "nnodes": 1,
+            "mem_per_node": "10G",
+            "resizable": true,
+            "dim": "3",
+            "type": "unstructured_grid",
+            "total_mem": "10G",
+            "tag": "mesh_10g.k"
+          },
+          {
+            "nnodes": 1,
+            "mem_per_node": "20G",
+            "resizable": true,
+            "dim": "3",
+            "type": "unstructured_grid",
+            "total_mem": "20G",
+            "tag": "mesh_20g.k"
           }
         ]
       }
