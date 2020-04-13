@@ -369,10 +369,12 @@ class OmniModelResizer(object):
 
         :model_db: The database of available models
         '''
+        # resizers is a list of tuple (resizer object, associated model tag,
+        # whether it can exactly resize)
         self.resizers = []
-        self.resizer_tags = []
         self.fixed_models = []
         self.can_resize_exactly = False
+        self.first_exact_resizer = None
         for model in model_db:
             assert isinstance(model, dict)
             assert "tag" in model
@@ -385,14 +387,22 @@ class OmniModelResizer(object):
             if model["type"] == "structured_grid":
                 resizer = StructuredGridModelResizer(model["grid"],
                                                      model["total_mem"])
-                self.resizers.append(resizer)
-                self.resizer_tags.append(model["tag"])
+                self.resizers.append({
+                    "object": resizer,
+                    "tag": model["tag"],
+                    "exact": True
+                })
                 self.can_resize_exactly = True
+                if self.first_exact_resizer is None:
+                    self.first_exact_resizer = len(self.resizers) - 1
             else:
                 resizer = UnstructuredGridModelResizer(model["dim"],
                                                        model["total_mem"])
-                self.resizers.append(resizer)
-                self.resizer_tags.append(model["tag"])
+                self.resizers.append({
+                    "object": resizer,
+                    "tag": model["tag"],
+                    "exact": False
+                })
 
     def exactResize(self):
         '''Test if the resizer can resize exactly to the required mem_per_node
@@ -409,47 +419,44 @@ class OmniModelResizer(object):
 
         Note: memory per node shall never exceed the requested.
         '''
-        # The logic of resize: the model database contains two kinds of models:
-        # models with fixed nnodes and mem_per_node, and resizers. On any resize
-        # request, the fixed models are searched first, the results with the
-        # best match (within 20% of the requested size) is returned. Otherwise,
-        # the resizers are tried and the best result (with the best mem_per_node
-        # and nnodes match) is returned. If Nothing is found, an error will
-        # occur.
-        mem_per_node_req = sizeToFloat(mem_per_node)
+        # Firstly, if there are any exactly resizers, the first exactly resizer
+        # is used to satisfy the request.
+        if self.can_resize_exactly:
+            resizer = self.resizers[self.first_exact_resizer]
+            m = resizer["object"].resize(mem_per_node, nnodes)
+            m["resizer_id_"] = self.first_exact_resizer
+            m["tag"] = resizer["tag"]
+            return m
+
+        # Then all models meeting the criteria are collected and a best match is
+        # chosen among them. The criteria is that the mem_per_node matches the
+        # request and the mem_per_node is within 80%-100% of the requested size.
         candidates = []
-        for model in self.fixed_models:
-            mem_per_node_real = sizeToFloat(model["mem_per_node"])
-            nnodes_real = model["nnodes"]
+        mem_per_node_req = sizeToFloat(mem_per_node)
+        for m in self.fixed_models:
+            mem_per_node_real = sizeToFloat(m["mem_per_node"])
+            nnodes_real = m["nnodes"]
             ratio = mem_per_node_real / mem_per_node_req
-            if nnodes_real == nnodes and ratio > 0.8 and ratio <= 1:
-                candidates.append(model)
-        if candidates:
-            result = max(candidates,
-                         key=lambda x: sizeToFloat(x["mem_per_node"]) /
-                         mem_per_node_req)
-            return copy.deepcopy(result)
-
+            if nnodes_real == nnodes and ratio >= 0.8 and ratio <= 1:
+                candidates.append(copy.deepcopy(m))
         for i, resizer in enumerate(self.resizers):
-            m = resizer.resize(mem_per_node, nnodes)
+            m = resizer["object"].resize(mem_per_node, nnodes)
             m["resizer_id_"] = i
-            m["tag"] = self.resizer_tags[i]
-            candidates.append(m)
-        # Indication of how good a candidate matches the request. Smaller is
-        # better.
-        def deviation(x):
-            s1 = 1 - sizeToFloat(x["mem_per_node"]) / mem_per_node_req
-            assert s1 >= 0
-            s2 = 1 - math.fabs(x["nnodes"] - nnodes) / (x["nnodes"] + nnodes)
-            return 0.4 * s1 + 0.6 * s2
-
+            m["tag"] = resizer["tag"]
+            mem_per_node_real = sizeToFloat(m["mem_per_node"])
+            nnodes_real = m["nnodes"]
+            ratio = mem_per_node_real / mem_per_node_req
+            if nnodes_real == nnodes and ratio >= 0.8 and ratio <= 1:
+                candidates.append(m)
         if candidates:
-            result = min(candidates, key=deviation)
+            result = min(candidates,
+                         key=lambda x: mem_per_node_req - sizeToFloat(x[
+                             "mem_per_node"]))
             return result
         else:
             raise RuntimeError(
-                "Can not find proper cases for mem_per_node %s with %d nodes" %
-                (mem_per_node, nnodes))
+                "Can not find a proper model for %d nodes of %s mem_per_node" %
+                (nnodes, mem_per_node))
 
     def next(self, model):
         '''Find the next model with the same mem_per_node in the reference model
@@ -457,59 +464,42 @@ class OmniModelResizer(object):
         The next model will be the model with the same mem_per_node but a
         larger nnodes.
         '''
-        # The logic of resize: The model recorded it is fixed or the index of
-        # resizer. In case of a resizer, the resizer will respond a next. In
-        # case of fixed, the fixed models are searched first, the results with
-        # the best match (just larger than nnodes and within 5% of the requested
-        # size) is returned. Otherwise, all resizers are tried and the best
-        # result (with the best mem_per_node and nnodes match) is returned. If
-        # Nothing is found, an error will occur.
-        if model.get("resizer_id_", None) is not None:
-            m = self.resizers[model["resizer_id_"]].next(model)
-            m["resizer_id_"] = model["resizer_id_"]
-            m["tag"] = model["tag"]
-            return m
+
+        # We gather all possible models and chosen a model with the least
+        # nnodes. A possible model is a model where mem_per_node is within 95%
+        # of the reference model and the nnodes is larger than the reference
+        # model.
+        def model_valid(m):
+            mem_per_node = sizeToFloat(m["mem_per_node"])
+            ratio = mem_per_node / curr_mem_per_node
+            if m["nnodes"] <= curr_nnodes:
+                return False
+            return ratio > 0.95 and ratio < 1.05
+
+        candidates = []
         curr_mem_per_node = sizeToFloat(model["mem_per_node"])
         curr_nnodes = model["nnodes"]
-        candidates = []
-        for m in self.fixed_models:
-            mem_per_node = sizeToFloat(m["mem_per_node"])
-            nnodes = m["nnodes"]
-            ratio = mem_per_node / curr_mem_per_node
-            if nnodes > curr_nnodes and ratio > 0.95 and ratio <= 1.05:
+        if model.get("resizer_id_", None) is not None:
+            m = self.resizers[model["resizer_id_"]]["object"].next(model)
+            m["resizer_id_"] = model["resizer_id_"]
+            m["tag"] = model["tag"]
+            if model_valid(m):
                 candidates.append(m)
-        if candidates:
-            result = min(candidates, key=lambda x: int(x["nnodes"]))
-            return copy.deepcopy(result)
-        if self.resizers:
+        for m in self.fixed_models:
+            if model_valid(m):
+                candidates.append(copy.deepcopy(m))
+        for i, resizer in enumerate(self.resizers):
             mem_per_node_req = sizeToFloat(model["mem_per_node"])
-            for i, resizer in enumerate(self.resizers):
-                m = resizer.resize(mem_per_node_req, curr_nnodes * 2)
-                ratio = sizeToFloat(m["mem_per_node"]) / curr_mem_per_node
-                if m["nnodes"] > curr_nnodes and ratio >= 0.95 and ratio <= 1.05:
-                    m["resizer_id_"] = i
+            for multiplier in [2, 4, 8]:
+                asked_nnodes = curr_nnodes * multiplier
+                m = resizer["object"].resize(mem_per_node_req, asked_nnodes)
+                m["resizer_id_"] = i
+                m["tag"] = resizer["tag"]
+                if model_valid(m):
                     candidates.append(m)
-                    continue
-                m = resizer.resize(mem_per_node_req, curr_nnodes * 4)
-                ratio = sizeToFloat(m["mem_per_node"]) / curr_mem_per_node
-                if m["nnodes"] > curr_nnodes and ratio >= 0.95 and ratio <= 1.05:
-                    m["resizer_id_"] = i
-                    candidates.append(m)
-                    continue
-                m = resizer.resize(mem_per_node_req, curr_nnodes * 8)
-                ratio = sizeToFloat(m["mem_per_node"]) / curr_mem_per_node
-                if m["nnodes"] > curr_nnodes and ratio >= 0.95 and ratio <= 1.05:
-                    m["resizer_id_"] = i
-                    candidates.append(m)
+        if candidates:
+            result = min(candidates, key=lambda x: x["nnodes"] - curr_nnodes)
+            result["tag"] = model["tag"]
+            return result
 
-            def deviation(x):
-                s1 = 1 - sizeToFloat(x["mem_per_node"]) / mem_per_node_req
-                return s1
-
-            if candidates:
-                result = min(candidates, key=deviation)
-                result["tag"] = model["tag"]
-                return result
-
-        raise StopIteration("No more proper cases for mem_per_node %s" %
-                            model["mem_per_node"])
+        raise StopIteration("Can not find a proper next model for %s" % model)
