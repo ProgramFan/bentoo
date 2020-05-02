@@ -375,9 +375,17 @@ class OmniModelResizer(object):
         self.fixed_models = []
         self.can_resize_exactly = False
         self.first_exact_resizer = None
+
+        # make_info is used to extract user-defined information in resizable
+        # models. All user-defined keys are extracted except the keys has
+        # special meanings to bentoo.
+        reserved_keys = ["type", "resizable", "nnodes", "mem_per_node",
+                         "resizer_id_", "nrefines", "grid", "dim", "total_mem"]
+        def make_info(m):
+            return {k: v for k, v in m.items() if k not in reserved_keys}
+
         for model in model_db:
             assert isinstance(model, dict)
-            assert "tag" in model
             if not model.get("resizable", False):
                 m = copy.deepcopy(model)
                 m["resizer_id_"] = None
@@ -389,7 +397,7 @@ class OmniModelResizer(object):
                                                      model["total_mem"])
                 self.resizers.append({
                     "object": resizer,
-                    "tag": model["tag"],
+                    "info": make_info(model),
                     "exact": True
                 })
                 self.can_resize_exactly = True
@@ -400,7 +408,7 @@ class OmniModelResizer(object):
                                                        model["total_mem"])
                 self.resizers.append({
                     "object": resizer,
-                    "tag": model["tag"],
+                    "info": make_info(model),
                     "exact": False
                 })
 
@@ -425,7 +433,7 @@ class OmniModelResizer(object):
             resizer = self.resizers[self.first_exact_resizer]
             m = resizer["object"].resize(mem_per_node, nnodes)
             m["resizer_id_"] = self.first_exact_resizer
-            m["tag"] = resizer["tag"]
+            m.update(resizer["info"]) # preserve user-defined keys in the model
             return m
 
         # Then all models meeting the criteria are collected and a best match is
@@ -442,7 +450,7 @@ class OmniModelResizer(object):
         for i, resizer in enumerate(self.resizers):
             m = resizer["object"].resize(mem_per_node, nnodes)
             m["resizer_id_"] = i
-            m["tag"] = resizer["tag"]
+            m.update(resizer["info"])
             mem_per_node_real = sizeToFloat(m["mem_per_node"])
             nnodes_real = m["nnodes"]
             ratio = mem_per_node_real / mem_per_node_req
@@ -464,6 +472,8 @@ class OmniModelResizer(object):
         The next model will be the model with the same mem_per_node but a
         larger nnodes.
         '''
+        curr_mem_per_node = sizeToFloat(model["mem_per_node"])
+        curr_nnodes = model["nnodes"]
 
         # We gather all possible models and chosen a model with the least
         # nnodes. A possible model is a model where mem_per_node is within 95%
@@ -477,29 +487,27 @@ class OmniModelResizer(object):
             return ratio > 0.95 and ratio < 1.05
 
         candidates = []
-        curr_mem_per_node = sizeToFloat(model["mem_per_node"])
-        curr_nnodes = model["nnodes"]
         if model.get("resizer_id_", None) is not None:
-            m = self.resizers[model["resizer_id_"]]["object"].next(model)
+            resizer = self.resizers[model["resizer_id_"]]
+            m = resizer["object"].next(model)
             m["resizer_id_"] = model["resizer_id_"]
-            m["tag"] = model["tag"]
+            m.update(resizer["info"])
             if model_valid(m):
                 candidates.append(m)
         for m in self.fixed_models:
             if model_valid(m):
                 candidates.append(copy.deepcopy(m))
         for i, resizer in enumerate(self.resizers):
-            mem_per_node_req = sizeToFloat(model["mem_per_node"])
+            mem_per_node_req = curr_mem_per_node
             for multiplier in [2, 4, 8]:
                 asked_nnodes = curr_nnodes * multiplier
                 m = resizer["object"].resize(mem_per_node_req, asked_nnodes)
                 m["resizer_id_"] = i
-                m["tag"] = resizer["tag"]
+                m.update(resizer["info"])
                 if model_valid(m):
                     candidates.append(m)
         if candidates:
             result = min(candidates, key=lambda x: x["nnodes"] - curr_nnodes)
-            result["tag"] = model["tag"]
             return result
 
         raise StopIteration("Can not find a proper next model for %s" % model)
