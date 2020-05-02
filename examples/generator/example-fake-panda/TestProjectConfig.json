@@ -43,17 +43,6 @@
         "candidates": [
           {
             "nnodes": 1,
-            "mem_per_node": "5G",
-            "tag": "mesh1.k"
-          },
-          {
-            "nnodes": 1,
-            "mem_per_node": "50G",
-            "tag": "mesh2.k"
-          },
-          {
-            "nnodes": 1,
-            "mem_per_node": "5G",
             "resizable": true,
             "dim": "3",
             "type": "unstructured_grid",
@@ -62,7 +51,6 @@
           },
           {
             "nnodes": 1,
-            "mem_per_node": "10G",
             "resizable": true,
             "dim": "3",
             "type": "unstructured_grid",
@@ -71,7 +59,6 @@
           },
           {
             "nnodes": 1,
-            "mem_per_node": "20G",
             "resizable": true,
             "dim": "3",
             "type": "unstructured_grid",
@@ -89,7 +76,7 @@
     "import": "make_case.py",
     "func": "make_case",
     "args": {
-      "cpn": 64,
+      "nthreads": 4,
       "mirror_files": "/tmp"
     }
   }
