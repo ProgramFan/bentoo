@@ -30,7 +30,7 @@ def make_case(conf_root, output_root, case_path, test_vector, case_info,
         "nrefines":
         nrefines
     }
-    print(list(test_vector.values()), ": ", var_values)
+    print(list(test_vector.values()), ": ", case_info)
     with open(os.path.join(case_path, input_fn), 'w') as f:
         f.write(input_tpl.safe_substitute(var_values))
 
