@@ -635,7 +635,7 @@ class PbsLauncher(object):
             "iface": "",
             "queue": "",
             "jobname": os.path.basename(spec["cmd"][0]),
-            "ppn": 1,
+            "ppn": procs_per_node * run.get("tasks_per_proc",1),
             "timeout": "",
         }
         if self.args["iface"]:
