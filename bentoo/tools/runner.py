@@ -1,4 +1,5 @@
 # coding: utf-8
+# vim: set expandtab sw=4 ts=4:
 #
 ''' bentoo-runner - Testcase runner
 
@@ -376,8 +377,9 @@ class MpiHandler(object):
         elif self.vendor == "openmpi":
             return {
                 "cmd": [
-                    "mpirun", "-n",
-                    str(nprocs), "--map-by", "slot", "-hostfile",
+                    "mpirun", "-n", str(nprocs),
+                    "-N", str(procs_per_node),
+                    "--map-by", "slot", "-hostfile",
                     str(hostfile)
                 ],
                 "envs": {
@@ -428,15 +430,18 @@ class SlurmLauncher(object):
                                help="Select job partition to use")
         argparser.add_argument("--slurm-sbatch",
                                action="store_true",
-                               dest="slrum_use_batch",
+                               dest="slurm_use_batch",
                                help="Use sbatch instead of srun")
         argparser.add_argument("--slurm-mpi",
                                metavar="MPI",
                                dest="slurm_mpi",
                                choices=("openmpi", "mpich", "mvapich",
-                                        "intelmpi"),
+                                        "intelmpi"), 
                                default="openmpi",
                                help="Select the MPI to use (default: openmpi)")
+        argparser.add_argument("--slurm-gres",
+                               dest="slurm_gres",
+                               help="Slurm general resource specifier")
 
     @classmethod
     def parse_cmdline_args(cls, namespace):
@@ -444,6 +449,7 @@ class SlurmLauncher(object):
             "partition": namespace.slurm_partition,
             "use_batch": namespace.slurm_use_batch,
             "mpi": namespace.slurm_mpi,
+            "gres": namespace.slurm_gres
         }
 
     def __init__(self, args):
@@ -501,6 +507,8 @@ class SlurmLauncher(object):
                 prolog.append("SBATCH -t {}".format(timeout))
             if self.args["partition"]:
                 prolog.append("SBATCH -p {}".format(self.args["partition"]))
+            if self.args["gres"]:
+                prolog.append("SBATCH --gres={}".format(self.args["gres"]))
             prolog.append("SBATCH -o STDOUT")
             prolog.append("SBATCH -e STDERR")
             jobcmds = []
@@ -508,7 +516,7 @@ class SlurmLauncher(object):
                            "> /tmp/hostfile-$$".split())
             mpi_handler = MpiHandler(
                 self.args['mpi']).build_job_argument_handler(
-                    nprocs, 1, "/tmp/hostfile-$$", None)
+                    nprocs, procs_per_node, "/tmp/hostfile-$$", None)
             jobcmds.append(mpi_handler['cmd'] + exec_cmd)
             jobcmds.append("rm -f /tmp/hostfile-$$".split())
 
